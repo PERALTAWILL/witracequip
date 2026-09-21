@@ -223,6 +223,22 @@
     font-family:ui-monospace, SFMono-Regular, Menlo, monospace; color:var(--text-dim);
   }
 
+  /* ---- modèles métiers ---- */
+  .modeles{
+    display:grid; grid-template-columns:repeat(auto-fit, minmax(230px, 1fr));
+    gap:10px; margin-top:14px;
+  }
+  .modele{
+    background:var(--surface-2); border:1px solid var(--border); border-radius:var(--radius);
+    padding:14px; display:flex; flex-direction:column; gap:4px;
+  }
+  .modele-nom{font-weight:650; font-size:14.5px;}
+  .modele-types{
+    font-size:12px; color:var(--text-dim); line-height:1.45;
+    margin:6px 0 10px; flex:1;
+  }
+  .modele .btn{align-self:flex-start;}
+
   /* ---- field builder (types) ---- */
   .champ-row{display:grid; grid-template-columns:1fr 110px 32px; gap:8px; margin-bottom:8px; align-items:center;}
 
@@ -348,6 +364,173 @@ function champMotDePasse(autocomplete){
               aria-label="Afficher le mot de passe" title="Afficher le mot de passe">${ICONE_OEIL}</button>
     </div>`;
 }
+
+/* =========================================================================
+   MODÈLES MÉTIERS
+   Parcs types des secteurs visés, avec les champs qui comptent pour la
+   traçabilité réglementaire. Un administrateur les déploie en un clic chez
+   un nouveau client, puis ajuste librement.
+   ========================================================================= */
+const MODELES_METIERS = [
+  {
+    cle: 'hotellerie',
+    nom: 'Hôtellerie & résidences',
+    description: "Le parc technique d'un établissement recevant du public.",
+    types: [
+      { nom: 'Climatisation / groupe froid', champs: [
+        {label:'Marque', type:'text'}, {label:'Modèle', type:'text'},
+        {label:'Puissance (kW)', type:'number'}, {label:'Emplacement', type:'text'},
+        {label:'Fluide frigorigène', type:'text'},
+        {label:"Dernier contrôle d'étanchéité", type:'date'},
+        {label:'Prochaine inspection', type:'date'} ]},
+      { nom: 'Groupe électrogène', champs: [
+        {label:'Marque', type:'text'}, {label:'Modèle', type:'text'},
+        {label:'Puissance (kVA)', type:'number'}, {label:'Emplacement', type:'text'},
+        {label:'Heures de fonctionnement', type:'number'},
+        {label:'Dernier essai en charge', type:'date'}, {label:'Prochain essai', type:'date'} ]},
+      { nom: 'Extincteur', champs: [
+        {label:'Type (eau, CO2, poudre)', type:'text'}, {label:'Capacité', type:'text'},
+        {label:'Emplacement', type:'text'}, {label:'Date de fabrication', type:'date'},
+        {label:'Dernière vérification annuelle', type:'date'},
+        {label:'Prochaine révision décennale', type:'date'} ]},
+      { nom: 'Ascenseur', champs: [
+        {label:'Marque', type:'text'}, {label:"N° d'appareil", type:'text'},
+        {label:'Emplacement', type:'text'}, {label:'Société de maintenance', type:'text'},
+        {label:'Dernier contrôle technique', type:'date'}, {label:'Prochain contrôle', type:'date'} ]},
+      { nom: 'Équipement de cuisine', champs: [
+        {label:'Type', type:'text'}, {label:'Marque', type:'text'}, {label:'Modèle', type:'text'},
+        {label:'Emplacement', type:'text'}, {label:'Dernier entretien', type:'date'} ]},
+      { nom: 'Installation électrique', champs: [
+        {label:'Emplacement (TGBT, tableau divisionnaire)', type:'text'},
+        {label:'Bureau de contrôle', type:'text'},
+        {label:'Dernière vérification annuelle', type:'date'},
+        {label:'Observations levées', type:'textarea'} ]},
+    ],
+  },
+  {
+    cle: 'btp',
+    nom: 'BTP & levage',
+    description: 'Matériel de chantier soumis à vérification générale périodique.',
+    types: [
+      { nom: 'Engin de chantier', champs: [
+        {label:'Marque', type:'text'}, {label:'Modèle', type:'text'},
+        {label:'Année', type:'number'}, {label:'Heures', type:'number'},
+        {label:'Dernière VGP', type:'date'}, {label:'Prochaine VGP', type:'date'} ]},
+      { nom: 'Nacelle élévatrice', champs: [
+        {label:'Marque', type:'text'}, {label:'Modèle', type:'text'},
+        {label:'Hauteur de travail (m)', type:'number'},
+        {label:'Dernière VGP', type:'date'}, {label:'Prochaine VGP', type:'date'},
+        {label:'Organisme de contrôle', type:'text'} ]},
+      { nom: 'Chariot élévateur', champs: [
+        {label:'Marque', type:'text'}, {label:'Modèle', type:'text'},
+        {label:'Capacité (kg)', type:'number'}, {label:'Heures', type:'number'},
+        {label:'Dernière VGP', type:'date'}, {label:'Prochaine VGP', type:'date'} ]},
+      { nom: 'Échafaudage', champs: [
+        {label:'Type', type:'text'}, {label:'Hauteur (m)', type:'number'},
+        {label:'Chantier', type:'text'}, {label:'Date de montage', type:'date'},
+        {label:'Dernière vérification', type:'date'} ]},
+      { nom: 'EPI antichute', champs: [
+        {label:'Type (harnais, longe, antichute)', type:'text'}, {label:'Taille', type:'text'},
+        {label:'Attribué à', type:'text'}, {label:'Date de mise en service', type:'date'},
+        {label:'Dernière vérification annuelle', type:'date'} ]},
+      { nom: 'Groupe électrogène de chantier', champs: [
+        {label:'Marque', type:'text'}, {label:'Puissance (kVA)', type:'number'},
+        {label:'Heures', type:'number'}, {label:'Dernier entretien', type:'date'} ]},
+    ],
+  },
+  {
+    cle: 'sante',
+    nom: 'Santé & biomédical',
+    description: 'Parc d\'un établissement de soins ou d\'un cabinet.',
+    types: [
+      { nom: 'Dispositif médical', champs: [
+        {label:'Fabricant', type:'text'}, {label:'Modèle', type:'text'},
+        {label:'Service / localisation', type:'text'}, {label:'Classe', type:'text'},
+        {label:'Date de mise en service', type:'date'},
+        {label:'Prochaine maintenance préventive', type:'date'} ]},
+      { nom: 'Défibrillateur (DAE)', champs: [
+        {label:'Marque', type:'text'}, {label:'Modèle', type:'text'},
+        {label:'Emplacement', type:'text'},
+        {label:'Péremption des électrodes', type:'date'},
+        {label:'Péremption de la batterie', type:'date'},
+        {label:'Dernière vérification', type:'date'} ]},
+      { nom: 'Lit médicalisé', champs: [
+        {label:'Marque', type:'text'}, {label:'Modèle', type:'text'},
+        {label:'Service', type:'text'}, {label:'Dernière vérification électrique', type:'date'} ]},
+      { nom: 'Équipement de stérilisation', champs: [
+        {label:'Marque', type:'text'}, {label:'Modèle', type:'text'},
+        {label:'Service', type:'text'}, {label:'Dernier contrôle de charge', type:'date'},
+        {label:'Prochaine requalification', type:'date'} ]},
+      { nom: 'Groupe électrogène de secours', champs: [
+        {label:'Marque', type:'text'}, {label:'Puissance (kVA)', type:'number'},
+        {label:'Emplacement', type:'text'}, {label:'Dernier essai en charge', type:'date'},
+        {label:'Prochain essai', type:'date'} ]},
+      { nom: 'Climatisation zone sensible', champs: [
+        {label:'Emplacement (bloc, pharmacie, labo)', type:'text'},
+        {label:'Puissance (kW)', type:'number'},
+        {label:'Dernier contrôle', type:'date'}, {label:'Prochain contrôle', type:'date'} ]},
+    ],
+  },
+  {
+    cle: 'industrie',
+    nom: 'Industrie & logistique',
+    description: 'Atelier, ligne de production, entrepôt, chaîne du froid.',
+    types: [
+      { nom: 'Machine de production', champs: [
+        {label:'Fabricant', type:'text'}, {label:'Modèle', type:'text'},
+        {label:"N° d'inventaire", type:'text'}, {label:'Ligne / atelier', type:'text'},
+        {label:'Date de mise en service', type:'date'},
+        {label:'Prochaine maintenance préventive', type:'date'} ]},
+      { nom: 'Chariot élévateur', champs: [
+        {label:'Marque', type:'text'}, {label:'Modèle', type:'text'},
+        {label:'Capacité (kg)', type:'number'}, {label:'Heures', type:'number'},
+        {label:'Dernière VGP', type:'date'}, {label:'Prochaine VGP', type:'date'} ]},
+      { nom: 'Pont roulant / palan', champs: [
+        {label:'Marque', type:'text'}, {label:'Capacité (t)', type:'number'},
+        {label:'Emplacement', type:'text'},
+        {label:'Dernière VGP', type:'date'}, {label:'Prochaine VGP', type:'date'} ]},
+      { nom: 'Compresseur / appareil à pression', champs: [
+        {label:'Marque', type:'text'}, {label:'Volume (L)', type:'number'},
+        {label:'Pression de service (bar)', type:'number'}, {label:'Emplacement', type:'text'},
+        {label:'Dernière inspection', type:'date'},
+        {label:'Prochaine requalification', type:'date'} ]},
+      { nom: 'Chambre froide', champs: [
+        {label:'Emplacement', type:'text'}, {label:'Volume (m3)', type:'number'},
+        {label:'Fluide frigorigène', type:'text'},
+        {label:"Dernier contrôle d'étanchéité", type:'date'},
+        {label:'Prochain contrôle', type:'date'} ]},
+      { nom: 'Installation électrique', champs: [
+        {label:'Emplacement', type:'text'}, {label:'Bureau de contrôle', type:'text'},
+        {label:'Dernière vérification annuelle', type:'date'},
+        {label:'Observations levées', type:'textarea'} ]},
+    ],
+  },
+  {
+    cle: 'flotte',
+    nom: 'Flotte & atelier automobile',
+    description: 'Véhicules de service, location, garage ou concession.',
+    types: [
+      { nom: 'Véhicule', champs: [
+        {label:'Marque', type:'text'}, {label:'Modèle', type:'text'},
+        {label:'Kilométrage', type:'number'},
+        {label:'Prochain contrôle technique', type:'date'},
+        {label:'Prochaine révision', type:'date'},
+        {label:'Conducteur attribué', type:'text'} ]},
+      { nom: 'Élévateur de garage / pont', champs: [
+        {label:'Marque', type:'text'}, {label:'Capacité (t)', type:'number'},
+        {label:'Emplacement', type:'text'},
+        {label:'Dernière VGP', type:'date'}, {label:'Prochaine VGP', type:'date'} ]},
+      { nom: 'Outillage de diagnostic', champs: [
+        {label:'Marque', type:'text'}, {label:'Modèle', type:'text'},
+        {label:'Version logicielle', type:'text'},
+        {label:'Dernière mise à jour', type:'date'} ]},
+      { nom: "Compresseur d'atelier", champs: [
+        {label:'Marque', type:'text'}, {label:'Volume (L)', type:'number'},
+        {label:'Pression (bar)', type:'number'},
+        {label:'Dernière inspection', type:'date'} ]},
+    ],
+  },
+];
 
 function roleLabel(r){ return ROLE_LABELS[r] || r || '—'; }
 function isAdmin(){ return state.profile?.role === 'admin'; }
@@ -807,6 +990,46 @@ function refreshDashboard(){
 /* ---------------------------------------------------------------------- */
 
 let typeForm = { open:false, id:null, nom:'', champs:[], busy:false, error:'' };
+let modeleState = { ouvert:false, busy:false };
+
+async function appliquerModele(cle){
+  const modele = MODELES_METIERS.find(m => m.cle === cle);
+  if(!modele) return;
+
+  // On ne recrée pas ce qui existe déjà : le modèle complète, il n'écrase jamais.
+  const existants = new Set(state.types.map(t => (t.nom||'').trim().toLowerCase()));
+  const aCreer = modele.types.filter(t => !existants.has(t.nom.trim().toLowerCase()));
+
+  if(!aCreer.length){
+    alert('Tous les types de ce modèle sont déjà présents dans cette organisation.');
+    return;
+  }
+
+  const resume = aCreer.map(t => '  • ' + t.nom).join('\n');
+  const ignores = modele.types.length - aCreer.length;
+  if(!confirm(
+      `Ajouter ${aCreer.length} type(s) d'équipement :\n\n${resume}\n\n` +
+      (ignores ? `${ignores} type(s) déjà présent(s) seront ignorés.\n\n` : '') +
+      `Vous pourrez ensuite renommer, ajouter ou retirer des champs librement.`)) return;
+
+  modeleState.busy = true; render();
+  try{
+    const lignes = aCreer.map(t => ({
+      organization_id: state.profile.organization_id,
+      nom: t.nom,
+      champs: t.champs.map(c => ({ key: slugify(c.label), label: c.label, type: c.type })),
+    }));
+    const { error } = await sb.from('equipment_types').insert(lignes);
+    if(error) throw error;
+    await loadTypes(true);
+    modeleState = { ouvert:false, busy:false };
+    dashboardCache.items = null;
+    render();
+  }catch(e){
+    modeleState.busy = false; render();
+    alert('Erreur : ' + e.message);
+  }
+}
 
 function ouvrirTypeForm(type){
   typeForm = type
@@ -840,6 +1063,35 @@ function viewTypes(){
     </div>
 
     ${typeForm.open && isAdmin() ? renderTypeForm() : ''}
+
+    ${(isAdmin() && !typeForm.open) ? `
+      <div class="card" style="margin-bottom:14px;">
+        <div class="row between wrap" style="gap:10px;">
+          <div style="flex:1;min-width:200px;">
+            <h3>Partir d'un modèle métier</h3>
+            <div class="hint" style="margin:4px 0 0;">
+              Crée d'un coup le parc type d'un secteur, avec les champs qui comptent
+              pour la traçabilité. Rien n'est écrasé, tout reste modifiable ensuite.
+            </div>
+          </div>
+          <button class="btn btn-sm" data-action="toggle-modeles">
+            ${modeleState.ouvert ? 'Masquer' : 'Voir les modèles'}
+          </button>
+        </div>
+        ${modeleState.ouvert ? `
+          <div class="modeles">
+            ${MODELES_METIERS.map(m => `
+              <div class="modele">
+                <div class="modele-nom">${esc(m.nom)}</div>
+                <div class="small muted">${esc(m.description)}</div>
+                <div class="modele-types">${m.types.map(t => esc(t.nom)).join(' · ')}</div>
+                <button class="btn btn-sm btn-primary" data-action="appliquer-modele"
+                        data-cle="${m.cle}" ${modeleState.busy?'disabled':''}>
+                  ${modeleState.busy ? 'Création…' : `Ajouter ces ${m.types.length} types`}
+                </button>
+              </div>`).join('')}
+          </div>` : ''}
+      </div>` : ''}
 
     <div class="card" style="padding:0 18px;">
       ${state.types.length ? rows : `<div class="empty"><div class="big">🏷️</div>Aucun type d'équipement.<br><span class="small">${isAdmin() ? 'Créez-en un (ex. « Véhicule », « Dispositif médical », « Équipement industriel »…) pour commencer à ajouter des équipements.' : 'Aucun type ne vous a été attribué. Contactez votre administrateur.'}</span></div>`}
@@ -1012,6 +1264,10 @@ function viewEquipe(){
           <button class="btn btn-sm ${m.active?'btn-danger':''}"
                   data-action="member-active" data-id="${m.id}" data-active="${m.active?'0':'1'}">
             ${m.active ? 'Suspendre' : 'Réactiver'}
+          </button>
+          <button class="btn btn-sm btn-danger" data-action="member-supprimer"
+                  data-id="${m.id}" data-nom="${esc(m.full_name || 'ce profil')}">
+            Supprimer
           </button>`}
         ${blocAcces}
       </div>`;
@@ -1160,6 +1416,24 @@ async function actionRoleMembre(id, role){
     await setMemberRole(id, role);
     rafraichirEquipe();
   }catch(e){ alert('Erreur : ' + e.message); rafraichirEquipe(); }
+}
+
+async function actionSupprimerMembre(id, nom){
+  const msg =
+    `Supprimer définitivement le profil de ${nom} ?\n\n` +
+    `• Son compte de connexion est effacé de la base\n` +
+    `• Il ne pourra plus jamais se connecter\n` +
+    `• L'historique des interventions qu'il a enregistrées est CONSERVÉ\n\n` +
+    `Cette action est irréversible. Pour un départ temporaire, préférez « Suspendre ».`;
+  if(!confirm(msg)) return;
+  try{
+    const { error } = await sb.rpc('supprimer_profil', { p_profile_id: id });
+    if(error) throw error;
+    rafraichirEquipe();
+  }catch(e){
+    alert('Erreur : ' + e.message);
+    rafraichirEquipe();
+  }
 }
 
 async function actionAccesTous(id, valeur){
@@ -1675,6 +1949,9 @@ document.addEventListener('click', (e) => {
   else if(action === 'creer-invite'){ actionCreerInvite(); }
   else if(action === 'annuler-invite'){ actionAnnulerInvite(t.dataset.id); }
   else if(action === 'member-active'){ actionActiverMembre(t.dataset.id, t.dataset.active === '1'); }
+  else if(action === 'member-supprimer'){ actionSupprimerMembre(t.dataset.id, t.dataset.nom); }
+  else if(action === 'toggle-modeles'){ modeleState.ouvert = !modeleState.ouvert; render(); }
+  else if(action === 'appliquer-modele'){ appliquerModele(t.dataset.cle); }
   else if(action === 'copier-lien'){ copierDansPressePapier(inviteUrl(t.dataset.token), t); }
   else if(action === 'toggle-pw'){
     // Manipulation directe du DOM : surtout pas de render(), qui effacerait la saisie.
