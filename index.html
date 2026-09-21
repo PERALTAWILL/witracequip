@@ -1,0 +1,1467 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>WiTracEQUIP — Passeport technique d'équipement</title>
+<link rel="icon" type="image/png" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAALN0lEQVR42uWbe4xc1X3HP79znzOza+8usQmGNFkvxg7mUYUkBkqyFiopyHYTqMahUtKooBRVDYKgFJpSdWlJ1Yo+CUlbVB6pSiJqkxA72EZtgmIT1VA3kVolNsZgbNY2eAP22p733Ht+/ePeHWbWO/ayO453N0c60t4759y939/rfH+/ew78kjeZ8rx83jAyIjMCxcKFyvr1FtAzK6x83mFoyMxYdQ4NGfJ5590odnID83mH9evjscvctSvOjTPBRYguEmsWYowL9heM1oC1kRo7gsohp1bfXfzP7SPt3nnqAhh70IUXBtll569Vkc8AHxVjesSY5AlyljxBFRTUWtTaUZAXRe03Sy8dXMcrr1QnIwSZxG+aueFjv4Xn3mdc5xJU0diCqqJqEdGzavaqgohBRMQxIIKN4p9Sj+4rb3n+28042thRG/BDQwKQXTX4NRMGT4mRS7RWj7UexagqIIg4gHtWe/IOgqpqPYq1Vo/FyCUmDJ7Krl75UBobpJ2ypW2EX7/eZlcNPimZYK1WaxGqBpGZGwBbrcIiYiXwXS1X15U2bb15DNN4S3Da+Xx21ce+KpnwFq3UaggeIsJsacm7GqK4JpngMqd/UV/03S2byecddu7U9haQgs/ccM2nTCZ8WutRHfBmOdepi+d6tlL9VHnz8xvGB0Y5SRiDg0Gmi53iOR8ginXWmP2p3MF1RKP4tfIJlrN1a7U5KL4DbnDQATSbsZ82gddPFNtZDz5xB0MUW+N7i7NZXQtoinXcKrBypQVQx3wORZlrTVE18rlmrM0uIIDmrl1xrs1mXhEjXY2lbq7AFxG1ccFU6wMpYxRATRr8DEAUBheLa7qw1s4h8ImCrbXiul2R5y1vxpwIIM3qxOoiEQMids65gIgVMYjVRc2Y3ZYxxvRNh9c7JpGn1fYhxIigClbtuPsGkdPPBYitnaoQEoxNzR1HjN2pGr4xhhPFIqB4nj8h51SFqFbFuB7ZMEw9LZlbqlSwUR3XDxIdTCCHer0GCF25XGPuu61+qFGvvQCYOvhCscjqq67htlU3srCnN9VWqzStjXn1jYM8sO4J/m/vHrKZLAClconLFi/h7rWfYeC88zHGOSmGWVVGRo/y8DNP88wLP5qyEITW5G3aAnCMoVgssObqj7Pxz/76tOM/umw5v/HhK7n6zs/z2puHALjogvfzgwe+Rl/3vNPOX73i1/jNP/1DNm3fRi7XNXV36KQFWOCLN90MQKVW4+fHRoltjDRZgFVLJgjp7eqmr3set1y/hnse/ioAt1y/hr7ueVTrdY4WjlOuVjFNHExRXOPwnvk9hL7PnTd9mu9t39aR2DhtAcTW4vsBvV3zUODIiWNcdcfnKZSLOI6DqiYuUi7zkaUXs/Vv/hFV5bzecxqFlPf29qGqeK5L/iv3smP3LroyGay1iAhRHNOdyfHfDz3CeecsoK97Hr4fTFv7HbOAscgvQGRjSpUy5Vq1RQDVWpVSpdxI1rQp2qtq416pUqFaq+I4piGAOI5xxBDZGAFsB3lqxwTwDqUUHMfBMUkfE4AYB8dxTh9THCcZaxwESTJbTe+n/6WTDM3lDLSkWjZxf7dzm++diXZGBGCMafQxCzDGNIjMKeeKNMY3u8vY9YwVgDZpsFguU6qUMY6DVcUxBlsuUapWT/ucUrWKLZcopgHWiGDjOKn+jlnETBOAAkaSFwx8nysuWkaxUk5iAIoRoVSpcFn/QBNVlpYK1hgFvrR/ABSyYZAGViG2MbkwQ+D7iTVI54TQESJUKhZ5feQwvzpwET257mSpaxMka1GdwPPZc2g44cbAyweHMSJU6zW+ec99E2pZgFoUISLsHzlMvVIh7O6e9lJoOqF913P5yrce52jhBIGX1E/NuC5pDzyfn+7byyObNxBmMoRhhkc2b+Bn+/YSeH5j3ETzA8/jaOE4f/Gtx3E9tyNWMG0LsNYShhn+Z/curvnibdxy/RrO7e2DdG1vaFOTMtOeg8M8vOlpjhw/TugnSdNbx49x7d1f4LbVN7Lk/Pcl1iLv8Mix2szh0SM89uz32LX/NXLZ7NQSojNCha0ll82y5+AwX/rnfxgrtrRxAiUMQgLfb/h96PscKxW4/xsPn/ozmypOEHYM/JlZBhvxbSIhKBMxGauK67gE83saM06arYlsrLUdA9/RdLhYKvHB9/fzO79+A4vesyBlcU2wFWIbs/vA6zy6ZSNHTiQuYJvIThTH/KKb2wnwlUqZDy1Zxn/81YOTSml/e+V1XHfP7YyWirhpvjD+mQ3Fp9qW9F6nWeG0VwEBoihi6LO3NlJaTQsYzV3TIFit17i0f4DfW30j1WKhUUZrdodCudTosbVE1jau61HU0c/xnUmHg5BfWXAuqsqxYoH8/X9MYSIiNLCEf7t7CKvKkkUXgIwHb8kGIZcvvhDVhBa/+sYBRIT+9y5BEA69/RYjo2/jOG5HLKFjQTC2ybJXqVXZ8fJLlMdR4bhcagQ/My4dbtQFyxUuX7yEFx58pBFLP/HlO/Fcl2f+PKk2/dFj/8QDTzzKvJ7ejsSMzqXD8g6t7cpkEKG1IAJkg3BSi0hsLbG1ieCsJee6DU4Ren6DQc7YbHBsqWoufFhrT1nyHoPvGoOTdoCuMOTVgwd44gfPoqr87949uEEwiWedRQFIE/Wd6Loto/QC9hwc5hNfvgOrSuB5vDS8n73Dr/PZe+9KNB8EhPN7Zi4RUiCOY2Ibp98CFEVRGxOfxmc1FZbvuhhj2PfmG+wbfp2lH1jMimXLsWpRVb7/kx2MFgu4aZA9+wKQJAYo4BpDNsxg1bbEgDi2ZMNMSw3wpCBYrTCwaCnP3P+3AKx//jnWfukPuHr5pTx2172NsR+5/VZGXt6FF05/JehIOlwulxgtFBCgr3s+2x/8l7Zl8XoUEXgeh0ePgtq2tcWGSahSj+OWwDjjqLAg/P13nmTl5R8i9H3et2DhKccfOXGcR7dsxAszDTCqiu+6HHjr59zz6NcRhJeG90MYoinwMYHPKCocW0s2l2Pjf23jk0N38/trbuKc7vnpsigt6rSq7D/8Jn/55L+y+8B+cplsiwA81+Pw0bd54InHkim+Tzi/h+//ZAcf/sLvNtLi1948mOYRHU6HFZ0Sx7TW0pUKYeP2bXiuNzFnVqjXahjXbQHfXBF2HZegp7dBi621jBYLjIwebYwLfb9jm9ZaP49bqU81qFpr6c7lUrdt/5DQ99F0fLuy+HiG5xoHL+M28uMpa14BS9TeAuJ4dDrlxsnU5+IpRO1kGe0A8VFFrT1ycja4cGGSsjvmgFoLqrN/d9jJ4I2qRY0casY8wSap8FUxJjc3N0nZoilVBorPvXiYlk1SoAwNmeQH3SGOk+wEnzvat+I4Crqj+NyLh9NDH+M2Sv7whwZAIv1GC4OZK00QiXm8Gev4hTr5+8orw8w5wc/m3FbZeryvXODi9ltlQcnnDS+8UMbGd4kxicxmveYlFmMEG9/F1q2VdH9gY0lp/WC/c6eSzzvRhmd3ef0XLJBMcCVxXGOibfWzI/TVJPR9LVe/Xt7y/N9NdITmZGA7d0I+79Q3bNni9V/wQQmDy4jjCFVmzZmB5MBELKHvabm6rrR5260peHvK5KvlfgKYcPXHH3Q8/3ZVS4OiJXFBZpy+x1Yu13HEGOJq7aHKpm13jGFhApY3uUNTqwbz4sr94rhLZ8OhKa1Hu9VGf1Le9KOnOM2hqckfm7viimx2UXdeRW4WdAViemfSsTnUHlV4UVT/vXSosI4f/7g03WNzJwshbbnrrloY+97SuXBw8t1RicFBd8YfnR0cdOn40dmJ5v0SHp6ek+3/AZ4gz5oQvjIZAAAAAElFTkSuQmCC">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrious/4.0.2/qrious.min.js"></script>
+<style>
+  :root{
+    --bg:#f4f6f7; --surface:#ffffff; --surface-2:#f0f2f4; --border:#e0e4e6;
+    --text:#141b1e; --text-dim:#5b686d; --primary:#0f766e; --primary-dim:#0b544e;
+    --primary-contrast:#ffffff; --danger:#b3261e; --danger-bg:#fbeae9;
+    --success:#166534; --success-bg:#eafaf0; --warn-bg:#fff7e6; --warn:#946200;
+    --radius:10px; --shadow:0 1px 2px rgba(20,27,30,.06), 0 1px 8px rgba(20,27,30,.04);
+    --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --bg:#12181a; --surface:#1b2326; --surface-2:#222b2e; --border:#2c363a;
+      --text:#e9eef0; --text-dim:#9aabb1; --primary:#2dd4bf; --primary-dim:#14b8a6;
+      --primary-contrast:#062622; --danger:#f2887f; --danger-bg:#3a201d;
+      --success:#7fe0a6; --success-bg:#132a1e; --warn-bg:#332a12; --warn:#f2c46d;
+      --shadow:0 1px 2px rgba(0,0,0,.3), 0 1px 10px rgba(0,0,0,.25);
+    }
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--bg); color:var(--text); font-family:var(--font);
+    font-size:15px; line-height:1.5; -webkit-font-smoothing:antialiased;
+  }
+  #app{min-height:100vh; display:flex; flex-direction:column;}
+  a{color:var(--primary); text-decoration:none;}
+  a:hover{text-decoration:underline;}
+  button, input, select, textarea{font-family:inherit; font-size:inherit; color:inherit;}
+  h1,h2,h3{margin:0 0 4px 0; font-weight:650;}
+  .muted{color:var(--text-dim);}
+  .small{font-size:13px;}
+
+  /* ---- topbar ---- */
+  .topbar{
+    display:flex; align-items:center; gap:14px; padding:10px 18px;
+    background:var(--surface); border-bottom:1px solid var(--border);
+    position:sticky; top:0; z-index:20;
+  }
+  .brand{display:flex; align-items:center; gap:10px; font-weight:700; font-size:17px; letter-spacing:-.01em;}
+  .brand .logo{
+    width:32px; height:32px; object-fit:contain; flex-shrink:0;
+  }
+  .brand .by{font-size:10.5px; color:var(--text-dim); font-weight:500; margin-top:1px;}
+  .topbar-spacer{flex:1;}
+  .org-pill{
+    font-size:12.5px; color:var(--text-dim); background:var(--surface-2);
+    border:1px solid var(--border); padding:4px 10px; border-radius:999px;
+  }
+  .user-menu{position:relative;}
+  .user-btn{
+    display:flex; align-items:center; gap:8px; background:none; border:1px solid var(--border);
+    padding:6px 10px; border-radius:999px; cursor:pointer; color:var(--text);
+  }
+  .avatar{
+    width:24px; height:24px; border-radius:50%; background:var(--surface-2);
+    display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:700;
+    border:1px solid var(--border);
+  }
+  .dropdown{
+    position:absolute; right:0; top:calc(100% + 6px); background:var(--surface);
+    border:1px solid var(--border); border-radius:var(--radius); box-shadow:var(--shadow);
+    min-width:180px; padding:6px; display:none; z-index:30;
+  }
+  .dropdown.open{display:block;}
+  .dropdown button{
+    display:block; width:100%; text-align:left; background:none; border:none;
+    padding:8px 10px; border-radius:6px; cursor:pointer; color:var(--text);
+  }
+  .dropdown button:hover{background:var(--surface-2);}
+
+  /* ---- nav tabs ---- */
+  .tabs{
+    display:flex; gap:4px; padding:0 18px; background:var(--surface);
+    border-bottom:1px solid var(--border); overflow-x:auto;
+  }
+  .tab{
+    padding:11px 14px; font-size:13.5px; font-weight:600; color:var(--text-dim);
+    border-bottom:2px solid transparent; cursor:pointer; white-space:nowrap;
+  }
+  .tab.active{color:var(--primary); border-bottom-color:var(--primary);}
+
+  main{flex:1; width:100%; max-width:920px; margin:0 auto; padding:20px 18px 60px; width:100%;}
+  .container-wide{max-width:1080px;}
+
+  /* ---- cards / surfaces ---- */
+  .card{
+    background:var(--surface); border:1px solid var(--border); border-radius:var(--radius);
+    padding:18px; box-shadow:var(--shadow);
+  }
+  .card + .card{margin-top:14px;}
+  .row{display:flex; align-items:center; gap:10px;}
+  .row.between{justify-content:space-between;}
+  .row.wrap{flex-wrap:wrap;}
+  .stack{display:flex; flex-direction:column; gap:10px;}
+  .grid-2{display:grid; grid-template-columns:1fr 1fr; gap:10px;}
+  @media(max-width:520px){.grid-2{grid-template-columns:1fr;}}
+
+  /* ---- forms ---- */
+  label{display:block; font-size:12.5px; font-weight:650; color:var(--text-dim); margin-bottom:4px; text-transform:uppercase; letter-spacing:.02em;}
+  .field{margin-bottom:12px;}
+  input[type=text], input[type=email], input[type=password], input[type=number],
+  input[type=date], input[type=search], select, textarea{
+    width:100%; padding:9px 11px; border:1px solid var(--border); border-radius:8px;
+    background:var(--surface); color:var(--text); outline:none;
+  }
+  input:focus, select:focus, textarea:focus{border-color:var(--primary); box-shadow:0 0 0 3px color-mix(in srgb, var(--primary) 18%, transparent);}
+  textarea{min-height:70px; resize:vertical;}
+  .hint{font-size:12px; color:var(--text-dim); margin-top:4px;}
+
+  .btn{
+    display:inline-flex; align-items:center; justify-content:center; gap:6px;
+    padding:9px 15px; border-radius:8px; border:1px solid var(--border);
+    background:var(--surface); color:var(--text); font-weight:600; font-size:13.5px;
+    cursor:pointer; white-space:nowrap;
+  }
+  .btn:hover{background:var(--surface-2);}
+  .btn:disabled{opacity:.5; cursor:not-allowed;}
+  .btn-primary{background:var(--primary); border-color:var(--primary); color:var(--primary-contrast);}
+  .btn-primary:hover{background:var(--primary-dim); border-color:var(--primary-dim);}
+  .btn-danger{color:var(--danger); border-color:var(--danger-bg);}
+  .btn-danger:hover{background:var(--danger-bg);}
+  .btn-sm{padding:6px 10px; font-size:12.5px;}
+  .btn-block{width:100%;}
+  .icon-btn{background:none; border:none; cursor:pointer; color:var(--text-dim); padding:4px;}
+  .icon-btn:hover{color:var(--text);}
+
+  /* ---- badges / alerts ---- */
+  .badge{display:inline-block; font-size:11.5px; font-weight:700; padding:2px 8px; border-radius:999px;}
+  .badge-neutral{background:var(--surface-2); color:var(--text-dim);}
+  .badge-warn{background:var(--warn-bg); color:var(--warn);}
+  .badge-role{background:var(--surface-2); color:var(--primary); border:1px solid var(--border);}
+  .badge-off{background:var(--danger-bg); color:var(--danger);}
+  .alert{padding:11px 13px; border-radius:8px; font-size:13.5px; margin-bottom:14px;}
+  .alert-error{background:var(--danger-bg); color:var(--danger);}
+  .alert-success{background:var(--success-bg); color:var(--success);}
+  .alert-info{background:var(--surface-2); color:var(--text-dim);}
+
+  /* ---- lists / tables ---- */
+  .list-item{
+    display:flex; align-items:center; gap:12px; padding:13px 0; border-bottom:1px solid var(--border);
+  }
+  .list-item:last-child{border-bottom:none;}
+  .list-item .thumb{
+    width:38px; height:38px; border-radius:8px; background:var(--surface-2); flex-shrink:0;
+    display:flex; align-items:center; justify-content:center; font-weight:700; color:var(--primary);
+    border:1px solid var(--border);
+  }
+  table{width:100%; border-collapse:collapse; font-size:13.5px;}
+  th{text-align:left; font-size:11.5px; text-transform:uppercase; letter-spacing:.02em; color:var(--text-dim); padding:8px 8px; border-bottom:1px solid var(--border);}
+  td{padding:10px 8px; border-bottom:1px solid var(--border); vertical-align:top;}
+  tr:last-child td{border-bottom:none;}
+
+  .empty{text-align:center; padding:40px 20px; color:var(--text-dim);}
+  .empty .big{font-size:34px; margin-bottom:8px;}
+
+  .spinner{
+    width:20px; height:20px; border:2.5px solid var(--border); border-top-color:var(--primary);
+    border-radius:50%; animation:spin .7s linear infinite; margin:30px auto;
+  }
+  @keyframes spin{to{transform:rotate(360deg);}}
+  .center-screen{min-height:100vh; display:flex; align-items:center; justify-content:center;}
+
+  /* ---- auth screen ---- */
+  .auth-wrap{max-width:380px; margin:8vh auto; padding:0 18px;}
+  .auth-logo{display:flex; flex-direction:column; align-items:center; gap:8px; margin-bottom:26px; text-align:center;}
+  .auth-logo .logo{width:52px; height:52px; object-fit:contain;}
+  .auth-toggle{display:flex; gap:4px; background:var(--surface-2); padding:4px; border-radius:10px; margin-bottom:18px;}
+  .auth-toggle button{flex:1; padding:8px; border:none; background:none; border-radius:7px; cursor:pointer; font-weight:650; color:var(--text-dim);}
+  .auth-toggle button.active{background:var(--surface); color:var(--text); box-shadow:var(--shadow);}
+
+  /* ---- equipe ---- */
+  .member{display:flex; align-items:center; gap:10px; padding:12px 0; border-bottom:1px solid var(--border); flex-wrap:wrap;}
+  .member:last-child{border-bottom:none;}
+  .member .who{flex:1; min-width:150px;}
+  .member select{width:auto; min-width:130px; padding:6px 8px;}
+  .invite-link{
+    display:flex; gap:8px; align-items:center; background:var(--surface-2);
+    border:1px solid var(--border); border-radius:8px; padding:8px 10px; margin-top:8px; flex-wrap:wrap;
+  }
+  .invite-link code{
+    flex:1; min-width:140px; font-size:12px; word-break:break-all;
+    font-family:ui-monospace, SFMono-Regular, Menlo, monospace; color:var(--text-dim);
+  }
+
+  /* ---- field builder (types) ---- */
+  .champ-row{display:grid; grid-template-columns:1fr 110px 32px; gap:8px; margin-bottom:8px; align-items:center;}
+
+  /* ---- QR / print ---- */
+  .qr-box{display:flex; flex-direction:column; align-items:center; gap:10px; padding:10px 0;}
+  #print-area{display:none;}
+  @media print{
+    body *{visibility:hidden;}
+    #print-area, #print-area *{visibility:visible;}
+    #print-area{display:block; position:fixed; top:0; left:0; width:100%; text-align:center; padding-top:30px;}
+  }
+
+  ::-webkit-scrollbar{width:10px; height:10px;}
+  ::-webkit-scrollbar-thumb{background:var(--border); border-radius:6px;}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="print-area"></div>
+
+<script>
+/* =========================================================================
+   WiTracEQUIP — carnet technique d'équipement (QR code)
+   Client-side SPA, connecté en direct à Supabase (organization_id / RLS).
+   Un seul fichier HTML — à héberger tel quel (Netlify, Vercel, GitHub Pages,
+   ou ton propre domaine witracequip.fr).
+   ========================================================================= */
+
+/* =========================================================================
+   ADRESSE PUBLIQUE DE L'APPLICATION
+   -------------------------------------------------------------------------
+   Un QR code imprimé contient une adresse, et cette adresse est gravée dans
+   l'étiquette pour toujours : si l'application déménage, toutes les étiquettes
+   déjà collées deviennent mortes.
+
+   Tant que cette ligne est vide, l'appli utilise l'adresse depuis laquelle elle
+   est ouverte — pratique pour tester, mais à ne PAS utiliser pour imprimer des
+   étiquettes en série.
+
+   Dès que le domaine définitif est en place, renseigner cette ligne :
+       const APP_BASE_URL = 'https://witracequip.fr/';
+   ========================================================================= */
+const APP_BASE_URL = '';
+
+const SUPABASE_URL = 'https://oeqgyjyqdwlymlpfkdyn.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_w3Lh6JYXepKHspWG5e06FQ_BpXaGQnE';
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+/* Logo WiTracEQUIP (utilisé sur l'écran de connexion et la page d'invitation) */
+const LOGO_DATA_URL = 'data:image/png;base64,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';
+
+const CHAMP_TYPES = [
+  {v:'text', l:'Texte'},
+  {v:'number', l:'Nombre'},
+  {v:'date', l:'Date'},
+  {v:'textarea', l:'Texte long'},
+];
+
+/* Rôles et droits
+   - utilisateur : créer un équipement, remplir/ajouter des interventions, imprimer le QR
+   - responsable : tout cela + supprimer (archiver) un équipement
+   - admin       : tout cela + gérer les profils (inviter, changer de rôle, suspendre)
+   Ces règles sont AUSSI appliquées côté base (RLS + triggers) : masquer un bouton
+   ici n'est qu'un confort d'affichage, la sécurité réelle est dans Supabase. */
+const ROLE_LABELS = {
+  admin: 'Administrateur',
+  responsable: 'Responsable',
+  utilisateur: 'Utilisateur',
+};
+const ROLES_ASSIGNABLES = ['responsable', 'utilisateur'];
+
+function roleLabel(r){ return ROLE_LABELS[r] || r || '—'; }
+function isAdmin(){ return state.profile?.role === 'admin'; }
+function peutSupprimer(){ return ['admin','responsable'].includes(state.profile?.role); }
+
+const state = {
+  session: null,
+  profile: null,      // { id, organization_id, full_name, role }
+  orgName: '',
+  route: parseHash(),
+  types: [],
+  typesLoaded: false,
+  loading: true,
+  authMode: 'login',  // 'login' | 'signup'
+  authError: '',
+  authNotice: '',
+  authBusy: false,
+  accessError: '',    // 'ACCES_SUSPENDU' ou message d'erreur au chargement du profil
+};
+
+function parseHash(){
+  const h = location.hash.replace(/^#\/?/, '');
+  const parts = h.split('/').filter(Boolean);
+  return { name: parts[0] || 'dashboard', param: parts[1] || null };
+}
+
+function nav(path){ location.hash = path; }
+
+window.addEventListener('hashchange', () => {
+  state.route = parseHash();
+  // Ouvrir une fiche force son rechargement, quelle que soit la façon d'y arriver
+  // (clic, scan d'un QR code, retour arrière, lien collé) : plusieurs personnes
+  // travaillent sur la même base, les données en cache peuvent être périmées.
+  if(state.route.name === 'equip') equipDetail.id = null;
+  render();
+});
+
+/* ---------------------------------------------------------------------- */
+/* Helpers                                                                 */
+/* ---------------------------------------------------------------------- */
+
+function esc(s){
+  return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function initials(name){
+  if(!name) return '?';
+  return name.trim().split(/\s+/).slice(0,2).map(w=>w[0]).join('').toUpperCase();
+}
+function fmtDate(d){
+  if(!d) return '—';
+  try{ return new Date(d).toLocaleDateString('fr-FR', {day:'2-digit', month:'short', year:'numeric'}); }
+  catch(e){ return d; }
+}
+function fmtDateTime(d){
+  if(!d) return '—';
+  try{ return new Date(d).toLocaleString('fr-FR', {day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit'}); }
+  catch(e){ return d; }
+}
+function uuid(){
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c=>{
+    const r = Math.random()*16|0, v = c==='x'? r : (r&0x3|0x8);
+    return v.toString(16);
+  });
+}
+
+/* ---------------------------------------------------------------------- */
+/* Data layer                                                              */
+/* ---------------------------------------------------------------------- */
+
+async function loadProfileAndOrg(){
+  const uid = state.session.user.id;
+  const { data: profile, error } = await sb.from('profiles').select('id, organization_id, full_name, role, active').eq('id', uid).maybeSingle();
+  if(error) throw error;
+  if(!profile){
+    // Le trigger d'inscription n'a pas encore tourné (rare / latence) — on réessaie une fois.
+    await new Promise(r=>setTimeout(r, 800));
+    const retry = await sb.from('profiles').select('id, organization_id, full_name, role, active').eq('id', uid).maybeSingle();
+    // Profil invisible malgré une session valide = accès coupé côté base
+    // (profil suspendu ou organisation suspendue : current_org_id() renvoie NULL).
+    if(retry.error || !retry.data) throw new Error('ACCES_SUSPENDU');
+    state.profile = retry.data;
+  } else {
+    state.profile = profile;
+  }
+  const { data: org } = await sb.from('organizations').select('nom').eq('id', state.profile.organization_id).maybeSingle();
+  state.orgName = org?.nom || '';
+}
+
+async function loadTypes(force){
+  if(state.typesLoaded && !force) return state.types;
+  const { data, error } = await sb.from('equipment_types').select('id, nom, champs, created_at').order('nom');
+  if(error) throw error;
+  state.types = data || [];
+  state.typesLoaded = true;
+  return state.types;
+}
+
+async function listEquipements({ search, typeId, showArchived }){
+  let q = sb.from('equipements').select('id, nom, serial_value, valeurs, archived, type_id, created_at').order('created_at', {ascending:false});
+  if(!showArchived) q = q.eq('archived', false);
+  if(typeId) q = q.eq('type_id', typeId);
+  if(search) q = q.ilike('nom', `%${search}%`);
+  const { data, error } = await q;
+  if(error) throw error;
+  return data || [];
+}
+
+async function getEquipement(id){
+  const { data, error } = await sb.from('equipements').select('*').eq('id', id).maybeSingle();
+  if(error) throw error;
+  return data;
+}
+
+async function listInterventions(equipementId){
+  const { data, error } = await sb.from('interventions').select('*').eq('equipement_id', equipementId).order('date', {ascending:false});
+  if(error) throw error;
+  return data || [];
+}
+
+/* --- Gestion des profils (admin uniquement) ------------------------- */
+
+async function listMembers(){
+  const { data, error } = await sb.from('profiles')
+    .select('id, full_name, role, active, created_at').order('created_at');
+  if(error) throw error;
+  return data || [];
+}
+
+async function listInvites(){
+  const { data, error } = await sb.from('invites')
+    .select('*').is('used_at', null).order('created_at', {ascending:false});
+  if(error) throw error;
+  const now = Date.now();
+  return (data || []).filter(i => new Date(i.expires_at).getTime() > now);
+}
+
+async function createInvite(role, label){
+  const { data, error } = await sb.from('invites')
+    .insert({ organization_id: state.profile.organization_id, role, label: label || null })
+    .select().single();
+  if(error) throw error;
+  return data;
+}
+
+async function cancelInvite(id){
+  const { error } = await sb.from('invites').delete().eq('id', id);
+  if(error) throw error;
+}
+
+async function setMemberRole(id, role){
+  const { error } = await sb.from('profiles').update({ role }).eq('id', id);
+  if(error) throw error;
+}
+
+async function setMemberActive(id, active){
+  const { error } = await sb.from('profiles').update({ active }).eq('id', id);
+  if(error) throw error;
+}
+
+/* Base de toutes les adresses fabriquées par l'appli (QR codes, invitations). */
+function baseUrl(){
+  const b = (APP_BASE_URL || '').trim();
+  return b ? b.replace(/\/+$/, '') + '/' : (location.origin + location.pathname);
+}
+function adresseDefinitive(){ return !!(APP_BASE_URL || '').trim(); }
+function lienEquipement(id){ return baseUrl() + '#/equip/' + id; }
+function inviteUrl(token){ return baseUrl() + '#/join/' + token; }
+
+async function copierDansPressePapier(texte, btn){
+  try{
+    await navigator.clipboard.writeText(texte);
+  }catch(e){
+    const ta = document.createElement('textarea');
+    ta.value = texte; document.body.appendChild(ta); ta.select();
+    try{ document.execCommand('copy'); }catch(_){}
+    document.body.removeChild(ta);
+  }
+  if(btn){
+    const avant = btn.textContent;
+    btn.textContent = 'Copié !';
+    setTimeout(()=>{ btn.textContent = avant; }, 1600);
+  }
+}
+
+/* ---------------------------------------------------------------------- */
+/* Render root                                                             */
+/* ---------------------------------------------------------------------- */
+
+function render(){
+  const app = document.getElementById('app');
+  if(state.loading){
+    app.innerHTML = `<div class="center-screen"><div class="spinner"></div></div>`;
+    return;
+  }
+  if(state.accessError){
+    app.innerHTML = renderAccesSuspendu();
+    return;
+  }
+  if(!state.session){
+    // Lien d'invitation : accessible sans être connecté.
+    if(state.route.name === 'join' && state.route.param){
+      app.innerHTML = renderJoin(state.route.param);
+      return;
+    }
+    app.innerHTML = renderAuth();
+    return;
+  }
+  app.innerHTML = renderShell();
+}
+
+function renderAccesSuspendu(){
+  const suspendu = state.accessError === 'ACCES_SUSPENDU';
+  return `
+    <div class="auth-wrap">
+      <div class="auth-logo">
+        <h1 style="font-size:20px;">${suspendu ? 'Accès suspendu' : 'Connexion impossible'}</h1>
+      </div>
+      <div class="card stack">
+        <div class="alert alert-error" style="margin:0;">
+          ${suspendu
+            ? "Votre accès à WiTracEQUIP est actuellement suspendu."
+            : esc(state.accessError)}
+        </div>
+        <div class="small muted">
+          ${suspendu
+            ? "Contactez l'administrateur de votre organisation pour le rétablir."
+            : "Réessayez dans un instant, ou reconnectez-vous."}
+        </div>
+        <button class="btn btn-block" data-action="logout">Se déconnecter</button>
+      </div>
+    </div>
+  `;
+}
+
+function renderShell(){
+  const r = state.route;
+  let content = '';
+  try{
+    if(r.name === 'dashboard') content = viewDashboard();
+    else if(r.name === 'types') content = viewTypes();
+    else if(r.name === 'equip-new') content = viewEquipNew();
+    else if(r.name === 'equip') content = viewEquipDetail(r.param);
+    else if(r.name === 'equipe') content = isAdmin() ? viewEquipe() : viewNonAutorise();
+    else content = viewDashboard();
+  }catch(e){
+    content = `<div class="alert alert-error">Erreur d'affichage : ${esc(e.message||e)}</div>`;
+  }
+
+  return `
+    <div class="topbar">
+      <div class="brand">
+        <img class="logo" src="data:image/png;base64,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" alt="WiTracEQUIP">
+        <div>
+          WiTracEQUIP
+          <div class="by">by WiDIAG MQ</div>
+        </div>
+      </div>
+      <div class="topbar-spacer"></div>
+      <div class="org-pill">${esc(state.orgName || '…')}</div>
+      <div class="user-menu">
+        <button class="user-btn" data-action="toggle-menu">
+          <span class="avatar">${initials(state.profile?.full_name || state.session.user.email)}</span>
+        </button>
+        <div class="dropdown" id="user-dropdown">
+          <div class="small muted" style="padding:8px 10px;">
+            ${esc(state.session.user.email)}
+            <div style="margin-top:4px;"><span class="badge badge-role">${esc(roleLabel(state.profile?.role))}</span></div>
+          </div>
+          <button data-action="logout">Se déconnecter</button>
+        </div>
+      </div>
+    </div>
+    <div class="tabs">
+      <div class="tab ${r.name==='dashboard'?'active':''}" data-action="go" data-path="/">Équipements</div>
+      <div class="tab ${r.name==='types'?'active':''}" data-action="go" data-path="/types">Types d'équipement</div>
+      ${isAdmin() ? `<div class="tab ${r.name==='equipe'?'active':''}" data-action="go" data-path="/equipe">Équipe</div>` : ''}
+    </div>
+    <main>${content}</main>
+  `;
+}
+
+/* ---------------------------------------------------------------------- */
+/* Auth view                                                               */
+/* ---------------------------------------------------------------------- */
+
+function renderAuth(){
+  // L'inscription libre n'existe pas : un compte ne peut être créé qu'en
+  // ouvrant un lien d'invitation (#/join/...). Cet écran ne sert qu'à se connecter.
+  return `
+    <div class="auth-wrap">
+      <div class="auth-logo">
+        <img class="logo brand-logo" src="${LOGO_DATA_URL}" alt="WiTracEQUIP">
+        <h1 style="font-size:20px;">WiTracEQUIP</h1>
+        <div class="small muted">Le passeport technique de vos équipements — by WiDIAG MQ</div>
+      </div>
+
+      ${state.authError ? `<div class="alert alert-error">${esc(state.authError)}</div>` : ''}
+      ${state.authNotice ? `<div class="alert alert-success">${esc(state.authNotice)}</div>` : ''}
+
+      <form class="card stack" data-action="submit-auth">
+        <div class="field">
+          <label>Email</label>
+          <input type="email" name="email" placeholder="vous@exemple.com" required autocomplete="email">
+        </div>
+        <div class="field">
+          <label>Mot de passe</label>
+          <input type="password" name="password" placeholder="••••••••" minlength="6" required autocomplete="current-password">
+        </div>
+        <button class="btn btn-primary btn-block" type="submit" ${state.authBusy?'disabled':''}>
+          ${state.authBusy ? '…' : 'Se connecter'}
+        </button>
+      </form>
+
+      <div class="small muted" style="text-align:center;margin-top:14px;">
+        L'accès à WiTracEQUIP se fait uniquement sur invitation.<br>
+        Vous avez reçu un lien d'invitation ? Ouvrez-le pour créer votre compte.
+      </div>
+    </div>
+  `;
+}
+
+async function handleAuthSubmit(form){
+  state.authError = ''; state.authNotice = ''; state.authBusy = true; render();
+  const fd = new FormData(form);
+  const email = fd.get('email').trim();
+  const password = fd.get('password');
+  try{
+    const { error } = await sb.auth.signInWithPassword({ email, password });
+    if(error) throw error;
+    // onAuthStateChange se charge de la suite
+  }catch(e){
+    state.authError = translateAuthError(e.message || String(e));
+  }finally{
+    state.authBusy = false; render();
+  }
+}
+
+function translateAuthError(msg){
+  const m = msg.toLowerCase();
+  if(m.includes('invalid login credentials')) return "Email ou mot de passe incorrect.";
+  if(m.includes('user already registered') || m.includes('already registered')) return "Un compte existe déjà avec cet email.";
+  if(m.includes('email not confirmed')) return "Merci de confirmer votre email avant de vous connecter (lien envoyé par email).";
+  if(m.includes('password should be at least')) return "Le mot de passe doit faire au moins 6 caractères.";
+  if(m.includes('inscription_sur_invitation'))
+    return "La création de compte se fait uniquement via un lien d'invitation.";
+  if(m.includes('organisation_suspendue'))
+    return "L'organisation qui vous invite est actuellement suspendue. Contactez WiDIAG MQ.";
+  if(m.includes('invite_invalide') || m.includes('database error saving new user'))
+    return "Ce lien d'invitation n'est plus valable. Demandez-en un nouveau à votre administrateur.";
+  return msg;
+}
+
+/* ---------------------------------------------------------------------- */
+/* View: Dashboard (équipements)                                          */
+/* ---------------------------------------------------------------------- */
+
+let dashboardCache = { items: null, search:'', typeId:'', showArchived:false, loading:false, error:'' };
+
+function viewDashboard(){
+  if(dashboardCache.items === null && !dashboardCache.loading){
+    dashboardCache.loading = true;
+    listEquipements({ search: dashboardCache.search, typeId: dashboardCache.typeId, showArchived: dashboardCache.showArchived })
+      .then(items => { dashboardCache.items = items; dashboardCache.loading = false; render(); })
+      .catch(e => { dashboardCache.error = e.message; dashboardCache.loading = false; render(); });
+  }
+
+  const typeOptions = state.types.map(t => `<option value="${t.id}" ${dashboardCache.typeId===t.id?'selected':''}>${esc(t.nom)}</option>`).join('');
+
+  let list = '';
+  if(dashboardCache.error){
+    list = `<div class="alert alert-error">${esc(dashboardCache.error)}</div>`;
+  } else if(dashboardCache.items === null){
+    list = `<div class="spinner"></div>`;
+  } else if(dashboardCache.items.length === 0){
+    list = `<div class="empty"><div class="big">🔧</div>Aucun équipement pour l'instant.<br><span class="small">Ajoutez votre premier équipement pour générer son QR code.</span></div>`;
+  } else {
+    list = `<div class="card" style="padding:0 18px;">` + dashboardCache.items.map(eq => {
+      const t = state.types.find(t=>t.id===eq.type_id);
+      return `
+        <div class="list-item" style="cursor:pointer;" data-action="go" data-path="/equip/${eq.id}">
+          <div class="thumb">${esc(initials(eq.nom))}</div>
+          <div style="flex:1;min-width:0;">
+            <div style="font-weight:650;">${esc(eq.nom)} ${eq.archived?'<span class="badge badge-warn">supprimé</span>':''}</div>
+            <div class="small muted">${esc(t?.nom || 'Type inconnu')}${eq.serial_value ? ' · N/S ' + esc(eq.serial_value) : ''}</div>
+          </div>
+          <div class="small muted">${fmtDate(eq.created_at)}</div>
+        </div>`;
+    }).join('') + `</div>`;
+  }
+
+  return `
+    <div class="row between wrap" style="margin-bottom:14px;">
+      <h2>Équipements</h2>
+      ${state.typesLoaded && state.types.length ? `<button class="btn btn-primary" data-action="go" data-path="/equip-new">+ Nouvel équipement</button>`
+        : `<button class="btn btn-primary" data-action="go" data-path="/types">Créer un type d'équipement d'abord</button>`}
+    </div>
+
+    <div class="card" style="margin-bottom:14px;">
+      <div class="row wrap" style="gap:10px;">
+        <input type="search" placeholder="Rechercher par nom…" style="flex:2;min-width:160px;" value="${esc(dashboardCache.search)}" data-action="dash-search">
+        <select style="flex:1;min-width:140px;" data-action="dash-filter-type">
+          <option value="">Tous les types</option>
+          ${typeOptions}
+        </select>
+        <label style="display:flex;align-items:center;gap:6px;text-transform:none;font-weight:500;font-size:13.5px;color:var(--text);margin:0;">
+          <input type="checkbox" style="width:auto;" ${dashboardCache.showArchived?'checked':''} data-action="dash-archived">
+          Voir les supprimés
+        </label>
+      </div>
+    </div>
+
+    ${list}
+  `;
+}
+
+function refreshDashboard(){
+  dashboardCache.items = null; dashboardCache.error=''; render();
+}
+
+/* ---------------------------------------------------------------------- */
+/* View: Types d'équipement                                               */
+/* ---------------------------------------------------------------------- */
+
+let typeForm = { open:false, nom:'', champs:[], busy:false, error:'' };
+
+function viewTypes(){
+  const rows = state.types.map(t => `
+    <div class="list-item">
+      <div class="thumb">🏷️</div>
+      <div style="flex:1;">
+        <div style="font-weight:650;">${esc(t.nom)}</div>
+        <div class="small muted">${(t.champs||[]).length} champ(s) personnalisé(s)${(t.champs||[]).length ? ' · ' + (t.champs||[]).map(c=>esc(c.label)).join(', ') : ''}</div>
+      </div>
+    </div>
+  `).join('');
+
+  return `
+    <div class="row between" style="margin-bottom:14px;">
+      <h2>Types d'équipement</h2>
+      <button class="btn btn-primary" data-action="toggle-type-form">${typeForm.open?'Annuler':'+ Nouveau type'}</button>
+    </div>
+
+    ${typeForm.open ? renderTypeForm() : ''}
+
+    <div class="card" style="padding:0 18px;">
+      ${state.types.length ? rows : `<div class="empty"><div class="big">🏷️</div>Aucun type d'équipement.<br><span class="small">Créez-en un (ex. « Véhicule », « Extincteur », « Défibrillateur »…) pour commencer à ajouter des équipements.</span></div>`}
+    </div>
+  `;
+}
+
+function renderTypeForm(){
+  const champsRows = typeForm.champs.map((c, i) => `
+    <div class="champ-row">
+      <input type="text" placeholder="Nom du champ (ex : Kilométrage)" value="${esc(c.label)}" data-action="champ-label" data-i="${i}">
+      <select data-action="champ-type" data-i="${i}">
+        ${CHAMP_TYPES.map(ct=>`<option value="${ct.v}" ${ct.v===c.type?'selected':''}>${ct.l}</option>`).join('')}
+      </select>
+      <button type="button" class="icon-btn" data-action="champ-remove" data-i="${i}" title="Supprimer">✕</button>
+    </div>
+  `).join('');
+
+  return `
+    <div class="card" style="margin-bottom:14px;">
+      ${typeForm.error ? `<div class="alert alert-error">${esc(typeForm.error)}</div>` : ''}
+      <div class="field">
+        <label>Nom du type</label>
+        <input type="text" placeholder="Ex : Véhicule de service" id="type-nom-input" value="${esc(typeForm.nom)}" data-action="type-nom">
+      </div>
+      <label>Champs personnalisés (optionnel)</label>
+      <div style="margin-bottom:8px;">${champsRows}</div>
+      <button type="button" class="btn btn-sm" data-action="champ-add">+ Ajouter un champ</button>
+      <div class="hint">Ces champs apparaîtront dans le formulaire d'ajout d'équipement de ce type (ex : marque, modèle, capacité, kilométrage…).</div>
+      <div class="row" style="margin-top:14px;">
+        <button class="btn btn-primary" data-action="save-type" ${typeForm.busy?'disabled':''}>${typeForm.busy?'Enregistrement…':'Enregistrer le type'}</button>
+      </div>
+    </div>
+  `;
+}
+
+async function saveType(){
+  typeForm.error = '';
+  const nom = typeForm.nom.trim();
+  if(!nom){ typeForm.error = 'Le nom du type est obligatoire.'; render(); return; }
+  const champs = typeForm.champs
+    .filter(c => c.label.trim())
+    .map(c => ({ key: slugify(c.label), label: c.label.trim(), type: c.type }));
+  typeForm.busy = true; render();
+  try{
+    const { error } = await sb.from('equipment_types').insert({
+      organization_id: state.profile.organization_id,
+      nom, champs
+    });
+    if(error) throw error;
+    typeForm = { open:false, nom:'', champs:[], busy:false, error:'' };
+    await loadTypes(true);
+    render();
+  }catch(e){
+    typeForm.busy = false; typeForm.error = e.message; render();
+  }
+}
+
+function slugify(s){
+  return s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]+/g,'_').replace(/^_+|_+$/g,'') || ('champ_' + Math.random().toString(36).slice(2,6));
+}
+
+/* ---------------------------------------------------------------------- */
+/* View: Équipe — gestion des profils (admin uniquement)                  */
+/* ---------------------------------------------------------------------- */
+
+let equipeCache = {
+  members: null, invites: null, loading: false, error: '',
+  inviteRole: 'utilisateur', inviteLabel: '', inviteBusy: false, inviteError: '',
+  dernierToken: null,
+};
+
+function chargerEquipe(force){
+  if(equipeCache.loading) return;
+  if(equipeCache.members !== null && !force) return;
+  equipeCache.loading = true;
+  Promise.all([listMembers(), listInvites()])
+    .then(([m, i]) => {
+      equipeCache.members = m; equipeCache.invites = i;
+      equipeCache.loading = false; equipeCache.error = ''; render();
+    })
+    .catch(e => { equipeCache.error = e.message; equipeCache.loading = false; render(); });
+}
+
+function rafraichirEquipe(){ equipeCache.members = null; chargerEquipe(true); }
+
+function viewNonAutorise(){
+  return `<div class="alert alert-error">Cette section est réservée à l'administrateur.</div>`;
+}
+
+function viewEquipe(){
+  chargerEquipe(false);
+
+  if(equipeCache.error) return `<div class="alert alert-error">${esc(equipeCache.error)}</div>`;
+  if(equipeCache.members === null) return `<div class="spinner"></div>`;
+
+  const moi = state.profile?.id;
+
+  const membres = equipeCache.members.map(m => {
+    const estMoi = m.id === moi;
+    const estAdmin = m.role === 'admin';
+    return `
+      <div class="member">
+        <div class="thumb">${esc(initials(m.full_name))}</div>
+        <div class="who">
+          <div style="font-weight:650;">
+            ${esc(m.full_name || 'Sans nom')}
+            ${estMoi ? '<span class="small muted">(vous)</span>' : ''}
+            ${!m.active ? '<span class="badge badge-off">suspendu</span>' : ''}
+          </div>
+          <div class="small muted">Membre depuis le ${fmtDate(m.created_at)}</div>
+        </div>
+        ${(estAdmin || estMoi)
+          ? `<span class="badge badge-role">${esc(roleLabel(m.role))}</span>`
+          : `<select data-action="member-role" data-id="${m.id}">
+               ${ROLES_ASSIGNABLES.map(r=>`<option value="${r}" ${r===m.role?'selected':''}>${esc(roleLabel(r))}</option>`).join('')}
+             </select>`}
+        ${estMoi ? '' : `
+          <button class="btn btn-sm ${m.active?'btn-danger':''}"
+                  data-action="member-active" data-id="${m.id}" data-active="${m.active?'0':'1'}">
+            ${m.active ? 'Suspendre' : 'Réactiver'}
+          </button>`}
+      </div>`;
+  }).join('');
+
+  const invitations = (equipeCache.invites || []).map(i => `
+    <div class="member">
+      <div class="who">
+        <div style="font-weight:650;">
+          ${esc(i.label || 'Invitation')}
+          <span class="badge badge-role">${esc(roleLabel(i.role))}</span>
+        </div>
+        <div class="small muted">Valable jusqu'au ${fmtDate(i.expires_at)}</div>
+        <div class="invite-link">
+          <code>${esc(inviteUrl(i.token))}</code>
+          <button class="btn btn-sm" data-action="copier-lien" data-token="${esc(i.token)}">Copier</button>
+        </div>
+      </div>
+      <button class="btn btn-sm btn-danger" data-action="annuler-invite" data-id="${i.id}">Annuler</button>
+    </div>
+  `).join('');
+
+  return `
+    <div class="row between wrap" style="margin-bottom:14px;">
+      <h2>Équipe</h2>
+      <span class="badge badge-role">${esc(state.orgName || '')}</span>
+    </div>
+
+    <div class="card">
+      <h3>Inviter quelqu'un</h3>
+      <div class="hint" style="margin-bottom:12px;">
+        Vous fixez le rôle à l'avance : la personne rejoint votre organisation en créant son
+        compte depuis le lien, sans pouvoir choisir ses propres droits.
+      </div>
+      ${equipeCache.inviteError ? `<div class="alert alert-error">${esc(equipeCache.inviteError)}</div>` : ''}
+      <div class="row wrap" style="gap:10px;">
+        <select style="flex:1;min-width:150px;" data-action="invite-role">
+          ${ROLES_ASSIGNABLES.map(r=>`<option value="${r}" ${r===equipeCache.inviteRole?'selected':''}>${esc(roleLabel(r))}</option>`).join('')}
+        </select>
+        <input type="text" style="flex:2;min-width:160px;" placeholder="Nom de la personne (facultatif)"
+               value="${esc(equipeCache.inviteLabel)}" data-action="invite-label">
+        <button class="btn btn-primary" data-action="creer-invite" ${equipeCache.inviteBusy?'disabled':''}>
+          ${equipeCache.inviteBusy ? 'Création…' : 'Générer le lien'}
+        </button>
+      </div>
+      ${equipeCache.dernierToken ? `
+        <div class="alert alert-success" style="margin:14px 0 0;">
+          Lien créé — transmettez-le à la personne concernée.
+          <div class="invite-link">
+            <code>${esc(inviteUrl(equipeCache.dernierToken))}</code>
+            <button class="btn btn-sm" data-action="copier-lien" data-token="${esc(equipeCache.dernierToken)}">Copier</button>
+          </div>
+        </div>` : ''}
+    </div>
+
+    <div class="card">
+      <h3>Membres (${equipeCache.members.length})</h3>
+      ${membres || `<div class="empty small">Aucun membre.</div>`}
+    </div>
+
+    <div class="card">
+      <h3>Invitations en attente (${(equipeCache.invites||[]).length})</h3>
+      ${invitations || `<div class="empty small">Aucune invitation en attente.</div>`}
+    </div>
+  `;
+}
+
+async function actionCreerInvite(){
+  equipeCache.inviteError = ''; equipeCache.inviteBusy = true; render();
+  try{
+    const inv = await createInvite(equipeCache.inviteRole, equipeCache.inviteLabel.trim());
+    equipeCache.dernierToken = inv.token;
+    equipeCache.inviteLabel = '';
+    equipeCache.invites = await listInvites();
+  }catch(e){
+    equipeCache.inviteError = e.message;
+  }finally{
+    equipeCache.inviteBusy = false; render();
+  }
+}
+
+async function actionAnnulerInvite(id){
+  if(!confirm("Annuler cette invitation ? Le lien ne fonctionnera plus.")) return;
+  try{
+    await cancelInvite(id);
+    equipeCache.invites = await listInvites();
+    render();
+  }catch(e){ alert('Erreur : ' + e.message); }
+}
+
+async function actionRoleMembre(id, role){
+  try{
+    await setMemberRole(id, role);
+    rafraichirEquipe();
+  }catch(e){ alert('Erreur : ' + e.message); rafraichirEquipe(); }
+}
+
+async function actionActiverMembre(id, active){
+  const msg = active
+    ? "Réactiver ce profil ? La personne retrouvera l'accès à l'application."
+    : "Suspendre ce profil ? La personne perdra immédiatement l'accès à toutes les données, sans rien supprimer.";
+  if(!confirm(msg)) return;
+  try{
+    await setMemberActive(id, active);
+    rafraichirEquipe();
+  }catch(e){ alert('Erreur : ' + e.message); rafraichirEquipe(); }
+}
+
+/* ---------------------------------------------------------------------- */
+/* View: Rejoindre via un lien d'invitation (sans être connecté)          */
+/* ---------------------------------------------------------------------- */
+
+let joinState = { token:null, loading:false, preview:null, error:'', busy:false, notice:'' };
+
+function renderJoin(token){
+  if(joinState.token !== token){
+    joinState = { token, loading:true, preview:null, error:'', busy:false, notice:'' };
+    sb.rpc('invite_preview', { p_token: token })
+      .then(({ data, error }) => {
+        if(error) throw error;
+        joinState.preview = (data && data[0]) || null;
+        joinState.loading = false; render();
+      })
+      .catch(e => { joinState.error = e.message; joinState.loading = false; render(); });
+  }
+
+  if(joinState.loading) return `<div class="center-screen"><div class="spinner"></div></div>`;
+
+  const p = joinState.preview;
+  const invalide = !p || !p.valid;
+
+  return `
+    <div class="auth-wrap">
+      <div class="auth-logo">
+        <img class="logo" src="${LOGO_DATA_URL}" alt="WiTracEQUIP">
+        <h1 style="font-size:20px;">WiTracEQUIP</h1>
+      </div>
+
+      ${invalide ? `
+        <div class="card">
+          <div class="alert alert-error" style="margin:0;">
+            Ce lien d'invitation n'est plus valable : il a déjà été utilisé, il a expiré, ou il a été annulé.
+          </div>
+          <div class="small muted" style="margin-top:12px;">
+            Demandez un nouveau lien à l'administrateur de votre organisation.
+          </div>
+          <button class="btn btn-block" style="margin-top:14px;" data-action="go" data-path="/">
+            Retour à la connexion
+          </button>
+        </div>
+      ` : `
+        <div class="alert alert-info">
+          ${p.invite_role === 'admin'
+            ? `Vous allez créer l'organisation <strong>${esc(p.organization_name)}</strong>
+               et en devenir l'<strong>administrateur</strong>.`
+            : `Vous êtes invité à rejoindre <strong>${esc(p.organization_name)}</strong>
+               en tant que <strong>${esc(roleLabel(p.invite_role))}</strong>.`}
+        </div>
+        ${joinState.error ? `<div class="alert alert-error">${esc(joinState.error)}</div>` : ''}
+        ${joinState.notice ? `<div class="alert alert-success">${esc(joinState.notice)}</div>` : ''}
+        <form class="card stack" data-action="submit-join">
+          <div class="field">
+            <label>Votre nom complet</label>
+            <input type="text" name="full_name" placeholder="Prénom Nom" required>
+          </div>
+          <div class="field">
+            <label>Email</label>
+            <input type="email" name="email" placeholder="vous@exemple.com" required autocomplete="email">
+          </div>
+          <div class="field">
+            <label>Mot de passe</label>
+            <input type="password" name="password" placeholder="••••••••" minlength="6" required autocomplete="new-password">
+          </div>
+          <button class="btn btn-primary btn-block" type="submit" ${joinState.busy?'disabled':''}>
+            ${joinState.busy ? '…' : 'Créer mon compte'}
+          </button>
+        </form>
+      `}
+    </div>
+  `;
+}
+
+async function handleJoinSubmit(form){
+  joinState.error = ''; joinState.notice = ''; joinState.busy = true; render();
+  const fd = new FormData(form);
+  try{
+    const { data, error } = await sb.auth.signUp({
+      email: fd.get('email').trim(),
+      password: fd.get('password'),
+      options: { data: { full_name: fd.get('full_name').trim(), invite_token: joinState.token } }
+    });
+    if(error) throw error;
+    if(!data.session){
+      joinState.notice = "Compte créé ! Vérifiez votre boîte mail pour confirmer votre adresse, puis connectez-vous.";
+    }
+  }catch(e){
+    joinState.error = translateAuthError(e.message || String(e));
+  }finally{
+    joinState.busy = false; render();
+  }
+}
+
+/* ---------------------------------------------------------------------- */
+/* View: Nouvel équipement                                                */
+/* ---------------------------------------------------------------------- */
+
+let equipForm = { typeId:'', nom:'', serial_value:'', valeurs:{}, busy:false, error:'' };
+
+function viewEquipNew(){
+  if(!equipForm.typeId && state.types.length) equipForm.typeId = state.types[0].id;
+  const type = state.types.find(t=>t.id===equipForm.typeId);
+  const champs = type?.champs || [];
+
+  return `
+    <div class="row" style="margin-bottom:14px;gap:10px;">
+      <button class="icon-btn" data-action="go" data-path="/" title="Retour">←</button>
+      <h2>Nouvel équipement</h2>
+    </div>
+    <div class="card">
+      ${equipForm.error ? `<div class="alert alert-error">${esc(equipForm.error)}</div>` : ''}
+      <div class="grid-2">
+        <div class="field">
+          <label>Type d'équipement</label>
+          <select data-action="equip-type">
+            ${state.types.map(t=>`<option value="${t.id}" ${t.id===equipForm.typeId?'selected':''}>${esc(t.nom)}</option>`).join('')}
+          </select>
+        </div>
+        <div class="field">
+          <label>Nom / désignation</label>
+          <input type="text" placeholder="Ex : Renault Kangoo — WD-12" value="${esc(equipForm.nom)}" data-action="equip-nom">
+        </div>
+      </div>
+      <div class="field">
+        <label>N° de série / immatriculation (optionnel)</label>
+        <input type="text" placeholder="Ex : AB-123-CD" value="${esc(equipForm.serial_value)}" data-action="equip-serial">
+      </div>
+      ${champs.length ? `<label style="margin-top:6px;">Informations spécifiques au type</label>` : ''}
+      <div class="grid-2">
+        ${champs.map(c => `
+          <div class="field">
+            <label style="text-transform:none;font-weight:600;color:var(--text);">${esc(c.label)}</label>
+            ${c.type==='textarea'
+              ? `<textarea data-action="equip-valeur" data-key="${c.key}">${esc(equipForm.valeurs[c.key]||'')}</textarea>`
+              : `<input type="${c.type==='number'?'number':(c.type==='date'?'date':'text')}" value="${esc(equipForm.valeurs[c.key]||'')}" data-action="equip-valeur" data-key="${c.key}">`}
+          </div>
+        `).join('')}
+      </div>
+      <div class="row" style="margin-top:8px;">
+        <button class="btn btn-primary" data-action="save-equip" ${equipForm.busy?'disabled':''}>${equipForm.busy?'Enregistrement…':"Créer l'équipement"}</button>
+        <button class="btn" data-action="go" data-path="/">Annuler</button>
+      </div>
+    </div>
+  `;
+}
+
+async function saveEquip(){
+  equipForm.error = '';
+  const nom = equipForm.nom.trim();
+  if(!nom){ equipForm.error = 'Le nom est obligatoire.'; render(); return; }
+  if(!equipForm.typeId){ equipForm.error = "Choisissez un type d'équipement."; render(); return; }
+  equipForm.busy = true; render();
+  try{
+    const { data, error } = await sb.from('equipements').insert({
+      organization_id: state.profile.organization_id,
+      type_id: equipForm.typeId,
+      nom,
+      serial_value: equipForm.serial_value.trim() || null,
+      valeurs: equipForm.valeurs,
+      archived: false
+    }).select('id').single();
+    if(error) throw error;
+    equipForm = { typeId:'', nom:'', serial_value:'', valeurs:{}, busy:false, error:'' };
+    refreshDashboard();
+    nav('/equip/' + data.id);
+  }catch(e){
+    equipForm.busy = false; equipForm.error = e.message; render();
+  }
+}
+
+/* ---------------------------------------------------------------------- */
+/* View: Détail équipement (QR + historique)                              */
+/* ---------------------------------------------------------------------- */
+
+let equipDetail = { id:null, item:null, interventions:null, loading:false, error:'',
+                    showIvForm:false, ivBusy:false, ivError:'',
+                    showEditForm:false, editBusy:false, editError:'' };
+
+function viewEquipDetail(id){
+  if(equipDetail.id !== id){
+    equipDetail = { id, item:null, interventions:null, loading:true, error:'',
+                    showIvForm:false, ivBusy:false, ivError:'',
+                    showEditForm:false, editBusy:false, editError:'' };
+    Promise.all([getEquipement(id), listInterventions(id)])
+      .then(([item, ivs]) => {
+        equipDetail.item = item; equipDetail.interventions = ivs; equipDetail.loading = false; render();
+        setTimeout(()=>drawQr(id), 30);
+      })
+      .catch(e => { equipDetail.error = e.message; equipDetail.loading = false; render(); });
+    return `<div class="spinner"></div>`;
+  }
+
+  if(equipDetail.loading) return `<div class="spinner"></div>`;
+  if(equipDetail.error) return `<div class="alert alert-error">${esc(equipDetail.error)}</div>`;
+  if(!equipDetail.item) return `<div class="empty">Équipement introuvable.</div>`;
+
+  const eq = equipDetail.item;
+  const type = state.types.find(t=>t.id===eq.type_id);
+  const champs = type?.champs || [];
+  const url = lienEquipement(eq.id);
+
+  const infoRows = champs.map(c => `<tr><td class="muted">${esc(c.label)}</td><td>${esc(eq.valeurs?.[c.key] ?? '—')}</td></tr>`).join('');
+
+  const ivRows = (equipDetail.interventions||[]).map(iv => `
+    <tr>
+      <td>${fmtDate(iv.date)}</td>
+      <td>${esc(iv.type)}</td>
+      <td>${esc(iv.technicien)}</td>
+      <td class="muted">${esc(iv.description||'—')}</td>
+    </tr>
+  `).join('');
+
+  return `
+    <div class="row" style="margin-bottom:14px;gap:10px;">
+      <button class="icon-btn" data-action="go" data-path="/" title="Retour">←</button>
+      <div style="flex:1;">
+        <h2>${esc(eq.nom)} ${eq.archived?'<span class="badge badge-warn">supprimé</span>':''}</h2>
+        <div class="small muted">${esc(type?.nom || '')}${eq.serial_value ? ' · N/S ' + esc(eq.serial_value) : ''}</div>
+      </div>
+      <div class="row" style="gap:6px;">
+        ${!eq.archived ? `<button class="btn btn-sm" data-action="toggle-edit-equip">${equipDetail.showEditForm ? 'Annuler' : 'Modifier'}</button>` : ''}
+        ${!eq.archived && peutSupprimer() ? `<button class="btn btn-danger btn-sm" data-action="archive-equip">Supprimer</button>` : ''}
+        ${eq.archived && peutSupprimer() ? `<button class="btn btn-sm" data-action="restore-equip">Restaurer</button>` : ''}
+      </div>
+    </div>
+
+    ${equipDetail.showEditForm && !eq.archived ? renderEditEquipForm(eq, champs) : ''}
+
+    <div class="grid-2" style="align-items:start;">
+      <div class="card">
+        <h3 class="small" style="text-transform:uppercase;letter-spacing:.02em;color:var(--text-dim);">QR code</h3>
+        <div class="qr-box">
+          <canvas id="qr-canvas"></canvas>
+          <div class="small muted" style="word-break:break-all;text-align:center;">${esc(url)}</div>
+          ${(!adresseDefinitive() && isAdmin()) ? `
+            <div class="alert alert-info small" style="margin:0;">
+              Adresse provisoire : ce QR code pointe vers l'adresse actuelle de l'application.
+              Ne pas imprimer d'étiquettes en série avant que le domaine définitif soit en place.
+            </div>` : ''}
+          <button class="btn btn-primary btn-block" data-action="print-qr">🖨️ Imprimer l'étiquette</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3 class="small" style="text-transform:uppercase;letter-spacing:.02em;color:var(--text-dim);">Informations</h3>
+        <table>
+          <tr><td class="muted">Créé le</td><td>${fmtDateTime(eq.created_at)}</td></tr>
+          ${eq.archived ? `<tr><td class="muted">Supprimé le</td><td>${fmtDateTime(eq.archived_at)}${eq.archived_by ? ' par ' + esc(eq.archived_by) : ''}</td></tr>` : ''}
+          ${infoRows}
+        </table>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:14px;">
+      <div class="row between">
+        <h3>Historique des interventions</h3>
+        <button class="btn btn-sm" data-action="toggle-iv-form">${equipDetail.showIvForm?'Annuler':'+ Ajouter'}</button>
+      </div>
+
+      ${equipDetail.showIvForm ? renderIvForm() : ''}
+
+      ${equipDetail.interventions && equipDetail.interventions.length ? `
+        <div style="overflow-x:auto;">
+        <table>
+          <thead><tr><th>Date</th><th>Type</th><th>Technicien</th><th>Description</th></tr></thead>
+          <tbody>${ivRows}</tbody>
+        </table>
+        </div>
+      ` : `<div class="empty small">Aucune intervention enregistrée.</div>`}
+    </div>
+
+    <div id="print-template" style="display:none;">
+      <div style="font-family:sans-serif;">
+        <div style="font-weight:800;font-size:18px;margin-bottom:2px;">${esc(eq.nom)}</div>
+        <div style="font-size:12px;color:#555;margin-bottom:14px;">${esc(type?.nom||'')}${eq.serial_value ? ' · N/S ' + esc(eq.serial_value) : ''}</div>
+        <img id="print-qr-img" style="width:220px;height:220px;">
+        <div style="font-size:10px;color:#888;margin-top:10px;">WiTracEQUIP · ${esc(url)}</div>
+      </div>
+    </div>
+  `;
+}
+
+function renderEditEquipForm(eq, champs){
+  return `
+    <form class="card" style="margin-bottom:14px;" data-action="submit-edit-equip">
+      <h3 class="small" style="text-transform:uppercase;letter-spacing:.02em;color:var(--text-dim);">Modifier la fiche</h3>
+      ${equipDetail.editError ? `<div class="alert alert-error">${esc(equipDetail.editError)}</div>` : ''}
+      <div class="grid-2">
+        <div class="field">
+          <label>Nom / désignation</label>
+          <input type="text" name="nom" value="${esc(eq.nom || '')}" required>
+        </div>
+        <div class="field">
+          <label>N° de série / immatriculation</label>
+          <input type="text" name="serial_value" value="${esc(eq.serial_value || '')}">
+        </div>
+      </div>
+      ${champs.length ? `<label style="margin-top:6px;">Informations spécifiques au type</label>` : ''}
+      <div class="grid-2">
+        ${champs.map(c => {
+          const val = eq.valeurs?.[c.key] ?? '';
+          return `
+          <div class="field">
+            <label style="text-transform:none;font-weight:600;color:var(--text);">${esc(c.label)}</label>
+            ${c.type==='textarea'
+              ? `<textarea name="champ__${esc(c.key)}">${esc(val)}</textarea>`
+              : `<input type="${c.type==='number'?'number':(c.type==='date'?'date':'text')}" name="champ__${esc(c.key)}" value="${esc(val)}">`}
+          </div>`;
+        }).join('')}
+      </div>
+      <div class="row wrap" style="margin-top:8px;">
+        <button class="btn btn-primary" type="submit" ${equipDetail.editBusy?'disabled':''}>
+          ${equipDetail.editBusy ? 'Enregistrement…' : 'Enregistrer les modifications'}
+        </button>
+        <button class="btn" type="button" data-action="toggle-edit-equip">Annuler</button>
+      </div>
+    </form>
+  `;
+}
+
+async function submitEditEquip(form){
+  const fd = new FormData(form);
+  const nom = (fd.get('nom') || '').trim();
+  if(!nom){ equipDetail.editError = 'Le nom est obligatoire.'; render(); return; }
+  const serial = (fd.get('serial_value') || '').trim();
+  const valeurs = Object.assign({}, equipDetail.item?.valeurs || {});
+  for(const [k, v] of fd.entries()){
+    if(k.startsWith('champ__')) valeurs[k.slice(7)] = v;
+  }
+
+  equipDetail.editError = ''; equipDetail.editBusy = true; render();
+  try{
+    const { error } = await sb.from('equipements')
+      .update({ nom, serial_value: serial || null, valeurs })
+      .eq('id', equipDetail.id);
+    if(error) throw error;
+    equipDetail.item = await getEquipement(equipDetail.id);
+    equipDetail.showEditForm = false;
+    dashboardCache.items = null;   // la liste sera rechargée au retour
+  }catch(e){
+    equipDetail.editError = e.message;
+  }finally{
+    equipDetail.editBusy = false; render();
+  }
+}
+
+async function restoreEquipement(){
+  if(!confirm("Restaurer cet équipement ? Il réapparaîtra dans la liste active.")) return;
+  try{
+    const { error } = await sb.from('equipements')
+      .update({ archived:false, archived_at:null, archived_by:null })
+      .eq('id', equipDetail.id);
+    if(error) throw error;
+    equipDetail.item = await getEquipement(equipDetail.id);
+    dashboardCache.items = null;
+    render();
+  }catch(e){
+    alert('Erreur : ' + e.message);
+  }
+}
+
+function drawQr(id){
+  const canvas = document.getElementById('qr-canvas');
+  if(!canvas || typeof QRious === 'undefined') return;
+  const url = lienEquipement(id);
+  new QRious({ element: canvas, value: url, size: 200, background: 'white', foreground: '#141b1e', level: 'M' });
+}
+
+function renderIvForm(){
+  const today = new Date().toISOString().slice(0,10);
+  return `
+    <form class="card" style="background:var(--surface-2);margin:12px 0;" data-action="submit-iv">
+      ${equipDetail.ivError ? `<div class="alert alert-error">${esc(equipDetail.ivError)}</div>` : ''}
+      <div class="grid-2">
+        <div class="field"><label>Date</label><input type="date" name="date" value="${today}" required></div>
+        <div class="field"><label>Type d'intervention</label><input type="text" name="type" placeholder="Ex : Entretien, Réparation, Contrôle…" required></div>
+      </div>
+      <div class="field"><label>Technicien</label><input type="text" name="technicien" value="${esc(state.profile?.full_name||'')}" required></div>
+      <div class="field"><label>Description</label><textarea name="description" placeholder="Détails de l'intervention…"></textarea></div>
+      <button class="btn btn-primary" type="submit" ${equipDetail.ivBusy?'disabled':''}>${equipDetail.ivBusy?'Enregistrement…':"Enregistrer l'intervention"}</button>
+    </form>
+  `;
+}
+
+async function submitIntervention(form){
+  equipDetail.ivError = ''; equipDetail.ivBusy = true; render();
+  const fd = new FormData(form);
+  try{
+    const { error } = await sb.from('interventions').insert({
+      equipement_id: equipDetail.id,
+      date: fd.get('date'),
+      type: fd.get('type').trim(),
+      technicien: fd.get('technicien').trim(),
+      description: fd.get('description').trim() || null
+    });
+    if(error) throw error;
+    equipDetail.showIvForm = false;
+    equipDetail.interventions = await listInterventions(equipDetail.id);
+    equipDetail.ivBusy = false;
+    render();
+  }catch(e){
+    equipDetail.ivBusy = false; equipDetail.ivError = e.message; render();
+  }
+}
+
+async function archiveEquipement(){
+  if(!confirm("Supprimer cet équipement ? Il disparaît de la liste, mais son historique reste conservé et reste consultable via « Voir les supprimés ».")) return;
+  try{
+    const { error } = await sb.from('equipements').update({
+      archived: true, archived_at: new Date().toISOString(), archived_by: state.profile?.full_name || null
+    }).eq('id', equipDetail.id);
+    if(error) throw error;
+    equipDetail.item.archived = true;
+    refreshDashboard();
+    render();
+  }catch(e){
+    alert('Erreur : ' + e.message);
+  }
+}
+
+function printQr(){
+  const canvas = document.getElementById('qr-canvas');
+  const printArea = document.getElementById('print-area');
+  const template = document.getElementById('print-template');
+  if(!canvas || !template) return;
+  printArea.innerHTML = template.innerHTML;
+  const img = document.getElementById('print-qr-img');
+  if(img) img.src = canvas.toDataURL('image/png');
+  window.print();
+}
+
+/* ---------------------------------------------------------------------- */
+/* Event delegation                                                        */
+/* ---------------------------------------------------------------------- */
+
+document.addEventListener('click', (e) => {
+  const t = e.target.closest('[data-action]');
+  if(!t) return;
+  const action = t.dataset.action;
+
+  if(action === 'go'){ nav(t.dataset.path); closeMenus(); }
+  else if(action === 'toggle-menu'){ e.stopPropagation(); document.getElementById('user-dropdown')?.classList.toggle('open'); }
+  else if(action === 'logout'){ sb.auth.signOut(); }
+  else if(action === 'auth-mode'){ state.authMode = t.dataset.mode; state.authError=''; state.authNotice=''; render(); }
+  else if(action === 'toggle-type-form'){ typeForm.open = !typeForm.open; render(); }
+  else if(action === 'champ-add'){ typeForm.champs.push({label:'', type:'text'}); render(); }
+  else if(action === 'champ-remove'){ typeForm.champs.splice(+t.dataset.i, 1); render(); }
+  else if(action === 'save-type'){ saveType(); }
+  else if(action === 'save-equip'){ saveEquip(); }
+  else if(action === 'toggle-iv-form'){ equipDetail.showIvForm = !equipDetail.showIvForm; render(); }
+  else if(action === 'archive-equip'){ archiveEquipement(); }
+  else if(action === 'restore-equip'){ restoreEquipement(); }
+  else if(action === 'toggle-edit-equip'){ equipDetail.showEditForm = !equipDetail.showEditForm; equipDetail.editError=''; render(); }
+  else if(action === 'print-qr'){ printQr(); }
+  else if(action === 'creer-invite'){ actionCreerInvite(); }
+  else if(action === 'annuler-invite'){ actionAnnulerInvite(t.dataset.id); }
+  else if(action === 'member-active'){ actionActiverMembre(t.dataset.id, t.dataset.active === '1'); }
+  else if(action === 'copier-lien'){ copierDansPressePapier(inviteUrl(t.dataset.token), t); }
+});
+
+document.addEventListener('input', (e) => {
+  const t = e.target.closest('[data-action]');
+  if(!t) return;
+  const action = t.dataset.action;
+  if(action === 'dash-search'){ dashboardCache.search = t.value; debounce(refreshDashboard); }
+  else if(action === 'dash-filter-type'){ dashboardCache.typeId = t.value; refreshDashboard(); }
+  else if(action === 'dash-archived'){ dashboardCache.showArchived = t.checked; refreshDashboard(); }
+  else if(action === 'type-nom'){ typeForm.nom = t.value; }
+  else if(action === 'champ-label'){ typeForm.champs[+t.dataset.i].label = t.value; }
+  else if(action === 'champ-type'){ typeForm.champs[+t.dataset.i].type = t.value; }
+  else if(action === 'equip-nom'){ equipForm.nom = t.value; }
+  else if(action === 'equip-serial'){ equipForm.serial_value = t.value; }
+  else if(action === 'equip-type'){ equipForm.typeId = t.value; render(); }
+  else if(action === 'equip-valeur'){ equipForm.valeurs[t.dataset.key] = t.value; }
+  else if(action === 'invite-role'){ equipeCache.inviteRole = t.value; }
+  else if(action === 'invite-label'){ equipeCache.inviteLabel = t.value; }
+  else if(action === 'member-role'){ actionRoleMembre(t.dataset.id, t.value); }
+});
+
+document.addEventListener('submit', (e) => {
+  const t = e.target.closest('[data-action]');
+  if(!t) return;
+  e.preventDefault();
+  const action = t.dataset.action;
+  if(action === 'submit-auth') handleAuthSubmit(t);
+  else if(action === 'submit-iv') submitIntervention(t);
+  else if(action === 'submit-join') handleJoinSubmit(t);
+  else if(action === 'submit-edit-equip') submitEditEquip(t);
+});
+
+document.addEventListener('click', (e) => {
+  if(!e.target.closest('.user-menu')) closeMenus();
+});
+function closeMenus(){ document.getElementById('user-dropdown')?.classList.remove('open'); }
+
+let debounceTimer;
+function debounce(fn, ms=350){ clearTimeout(debounceTimer); debounceTimer = setTimeout(fn, ms); }
+
+/* ---------------------------------------------------------------------- */
+/* Auth bootstrap                                                          */
+/* ---------------------------------------------------------------------- */
+
+sb.auth.onAuthStateChange(async (event, session) => {
+  state.session = session;
+  state.accessError = '';
+  if(session){
+    try{
+      await loadProfileAndOrg();
+      await loadTypes(true);
+    }catch(e){
+      console.error(e);
+      state.accessError = (e && e.message) ? e.message : 'Erreur de chargement du profil.';
+    }
+  } else {
+    state.profile = null; state.orgName = '';
+    dashboardCache = { items: null, search:'', typeId:'', showArchived:false, loading:false, error:'' };
+    equipeCache = {
+      members: null, invites: null, loading: false, error: '',
+      inviteRole: 'utilisateur', inviteLabel: '', inviteBusy: false, inviteError: '',
+      dernierToken: null,
+    };
+    joinState = { token:null, loading:false, preview:null, error:'', busy:false, notice:'' };
+    state.typesLoaded = false; state.types = [];
+  }
+  state.loading = false;
+  render();
+});
+
+render(); // premier rendu (spinner) pendant que la session se charge
+</script>
+</body>
+</html>
