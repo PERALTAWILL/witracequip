@@ -120,6 +120,11 @@
   input:focus, select:focus, textarea:focus{border-color:var(--primary); box-shadow:0 0 0 3px color-mix(in srgb, var(--primary) 18%, transparent);}
   textarea{min-height:70px; resize:vertical;}
   .hint{font-size:12px; color:var(--text-dim); margin-top:4px;}
+  .oblig{
+    font-size:10px; font-weight:700; letter-spacing:.03em; text-transform:uppercase;
+    color:var(--danger); background:var(--danger-bg);
+    border-radius:99px; padding:1px 6px; margin-left:4px;
+  }
 
   .btn{
     display:inline-flex; align-items:center; justify-content:center; gap:6px;
@@ -1837,10 +1842,23 @@ function renderIvForm(){
     <form class="card" style="background:var(--surface-2);margin:12px 0;" data-action="submit-iv">
       ${equipDetail.ivError ? `<div class="alert alert-error">${esc(equipDetail.ivError)}</div>` : ''}
       <div class="grid-2">
-        <div class="field"><label>Date</label><input type="date" name="date" value="${today}" required></div>
-        <div class="field"><label>Type d'intervention</label><input type="text" name="type" placeholder="Ex : Entretien, Réparation, Contrôle…" required></div>
+        <div class="field">
+          <label>Date <span class="oblig">obligatoire</span></label>
+          <input type="date" name="date" value="${today}" required>
+        </div>
+        <div class="field">
+          <label>Type d'intervention <span class="oblig">obligatoire</span></label>
+          <input type="text" name="type" placeholder="Ex : Entretien, Réparation, Contrôle…" required>
+        </div>
       </div>
-      <div class="field"><label>Technicien</label><input type="text" name="technicien" value="${esc(state.profile?.full_name||'')}" required></div>
+      <div class="field">
+        <label>Intervenant <span class="oblig">obligatoire</span></label>
+        <input type="text" name="technicien" value="${esc(state.profile?.full_name||'')}" required
+               placeholder="Nom de la personne intervenue">
+        <div class="hint">Nom de la personne qui a réalisé l'intervention. C'est lui qui figurera
+          sur le carnet en cas de contrôle — pré-rempli avec le vôtre, modifiable si vous
+          saisissez pour un collègue.</div>
+      </div>
       <div class="field"><label>Description</label><textarea name="description" placeholder="Détails de l'intervention…"></textarea></div>
       <button class="btn btn-primary" type="submit" ${equipDetail.ivBusy?'disabled':''}>${equipDetail.ivBusy?'Enregistrement…':"Enregistrer l'intervention"}</button>
     </form>
@@ -1848,15 +1866,33 @@ function renderIvForm(){
 }
 
 async function submitIntervention(form){
-  equipDetail.ivError = ''; equipDetail.ivBusy = true; render();
+  // On lit et on valide AVANT tout réaffichage : une fiche d'intervention sans
+  // intervenant ni date n'a aucune valeur de preuve, elle ne doit pas partir.
   const fd = new FormData(form);
+  const date        = (fd.get('date') || '').trim();
+  const type        = (fd.get('type') || '').trim();
+  const technicien  = (fd.get('technicien') || '').trim();
+  const description = (fd.get('description') || '').trim();
+
+  if(!date){
+    equipDetail.ivError = "La date de l'intervention est obligatoire.";
+    render(); return;
+  }
+  if(!type){
+    equipDetail.ivError = "Le type d'intervention est obligatoire (entretien, réparation, contrôle…).";
+    render(); return;
+  }
+  if(!technicien){
+    equipDetail.ivError = "Le nom de l'intervenant est obligatoire : c'est lui qui engage la traçabilité de la fiche.";
+    render(); return;
+  }
+
+  equipDetail.ivError = ''; equipDetail.ivBusy = true; render();
   try{
     const { error } = await sb.from('interventions').insert({
       equipement_id: equipDetail.id,
-      date: fd.get('date'),
-      type: fd.get('type').trim(),
-      technicien: fd.get('technicien').trim(),
-      description: fd.get('description').trim() || null
+      date, type, technicien,
+      description: description || null
     });
     if(error) throw error;
     equipDetail.showIvForm = false;
