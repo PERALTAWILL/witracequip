@@ -375,6 +375,14 @@
     background:rgba(15,122,110,.12); color:var(--accent, #0f7a6e);
     border:1px solid rgba(15,122,110,.25);
   }
+  .alerte-serie{
+    margin-top:6px; font-size:13px; line-height:1.5;
+    padding:9px 11px; border-radius:9px;
+    background:rgba(200,120,20,.10); color:#8a5209;
+    border:1px solid rgba(200,120,20,.28);
+  }
+  .alerte-serie a{color:#8a5209; font-weight:600;}
+  .alerte-serie.vide{display:none;}
   .pub-retire{
     margin-left:8px;
     background:rgba(200,120,20,.12); color:#a8630f;
@@ -911,6 +919,67 @@ function render(){
     return;
   }
   app.innerHTML = renderShell();
+}
+
+/* ---------------------------------------------------------------------- */
+/* Numero de serie deja enregistre : on previent, on ne bloque pas         */
+/* ---------------------------------------------------------------------- */
+
+/* Deux camions peuvent legitimement porter le meme numero de chassis partiel,
+   et un operateur presse ne doit jamais se retrouver coince par une machine.
+   On signale donc le doublon sans empecher l'enregistrement.
+   Volontairement sans render() : reafficher la vue effacerait la saisie en
+   cours. On ecrit directement dans la zone d'alerte. */
+let serieTimer = null;
+let serieDemande = 0;
+
+function zoneAlerteSerie(){ return document.getElementById('alerte-serie'); }
+
+function afficherAlerteSerie(html){
+  const zone = zoneAlerteSerie();
+  if(!zone) return;
+  zone.innerHTML = html || '';
+  zone.classList.toggle('vide', !html);
+}
+
+function verifierSerie(valeur, excludeId){
+  const v = (valeur || '').trim();
+  clearTimeout(serieTimer);
+
+  if(v.length < 3){ afficherAlerteSerie(''); return; }
+
+  const demande = ++serieDemande;
+  serieTimer = setTimeout(async () => {
+    try{
+      let q = sb.from('equipements')
+                .select('id, nom, archived, type_id')
+                .eq('serial_value', v)
+                .limit(4);
+      if(excludeId) q = q.neq('id', excludeId);
+      const { data, error } = await q;
+      if(error) throw error;
+      if(demande !== serieDemande) return;   // la saisie a continué entre-temps
+
+      const trouves = data || [];
+      if(!trouves.length){ afficherAlerteSerie(''); return; }
+
+      const lignes = trouves.map(e => {
+        const t = state.types.find(x => x.id === e.type_id);
+        return `<div>• <a href="#/equip/${e.id}">${esc(e.nom)}</a>`
+             + `${t ? ' — ' + esc(t.nom) : ''}`
+             + `${e.archived ? ' <em>(retiré du service)</em>' : ''}</div>`;
+      }).join('');
+
+      afficherAlerteSerie(
+        `<strong>Ce numéro est déjà enregistré</strong>${trouves.length > 1 ? ` (${trouves.length} fiches)` : ''} :`
+        + lignes
+        + `<div style="margin-top:4px;">Vous pouvez tout de même enregistrer : ce n'est qu'un avertissement.</div>`
+      );
+    }catch(e){
+      // Une vérification qui échoue ne doit jamais empêcher de saisir.
+      if(demande === serieDemande) afficherAlerteSerie('');
+    }
+  }, 400);
 }
 
 /* ---------------------------------------------------------------------- */
@@ -2022,6 +2091,7 @@ function viewEquipNew(){
       <div class="field">
         <label>N° de série / immatriculation (optionnel)</label>
         <input type="text" placeholder="Ex : AB-123-CD" value="${esc(equipForm.serial_value)}" data-action="equip-serial">
+        <div class="alerte-serie vide" id="alerte-serie"></div>
       </div>
       ${champs.length ? `<label style="margin-top:6px;">Informations spécifiques au type</label>` : ''}
       <div class="grid-2">
@@ -2206,7 +2276,9 @@ function renderEditEquipForm(eq, champs){
         </div>
         <div class="field">
           <label>N° de série / immatriculation</label>
-          <input type="text" name="serial_value" value="${esc(eq.serial_value || '')}">
+          <input type="text" name="serial_value" value="${esc(eq.serial_value || '')}"
+                 data-action="edit-serial" data-exclude="${eq.id}">
+          <div class="alerte-serie vide" id="alerte-serie"></div>
         </div>
       </div>
       ${champs.length ? `<label style="margin-top:6px;">Informations spécifiques au type</label>` : ''}
@@ -2512,7 +2584,8 @@ document.addEventListener('input', (e) => {
   else if(action === 'champ-label'){ typeForm.champs[+t.dataset.i].label = t.value; }
   else if(action === 'champ-type'){ typeForm.champs[+t.dataset.i].type = t.value; }
   else if(action === 'equip-nom'){ equipForm.nom = t.value; }
-  else if(action === 'equip-serial'){ equipForm.serial_value = t.value; }
+  else if(action === 'equip-serial'){ equipForm.serial_value = t.value; verifierSerie(t.value, null); }
+  else if(action === 'edit-serial'){ verifierSerie(t.value, t.dataset.exclude || null); }
   else if(action === 'equip-type'){ equipForm.typeId = t.value; render(); }
   else if(action === 'equip-valeur'){ equipForm.valeurs[t.dataset.key] = t.value; }
   else if(action === 'invite-role'){ equipeCache.inviteRole = t.value; render(); }
