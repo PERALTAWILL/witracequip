@@ -667,7 +667,7 @@ window.addEventListener('hashchange', () => {
   // (clic, scan d'un QR code, retour arrière, lien collé) : plusieurs personnes
   // travaillent sur la même base, les données en cache peuvent être périmées.
   if(state.route.name === 'equip') equipDetail.id = null;
-  if(state.route.name === 'p') fichePublique.token = null;
+  if(state.route.name === 'p' || state.route.name === 'equip') fichePublique.token = null;
   render();
 });
 
@@ -882,6 +882,15 @@ function render(){
     // Lien d'invitation : accessible sans être connecté.
     if(state.route.name === 'join' && state.route.param){
       app.innerHTML = renderJoin(state.route.param);
+      return;
+    }
+    // Étiquettes imprimées avant la mise en place du lien public : elles
+    // portent l'adresse interne de la fiche. Un visiteur qui les scanne
+    // obtient la même consultation en lecture seule, pas un écran de
+    // connexion. L'administrateur peut couper ces anciens liens équipement
+    // par équipement avec « Changer le lien ».
+    if(state.route.name === 'equip' && state.route.param){
+      app.innerHTML = viewFichePublique(state.route.param);
       return;
     }
     app.innerHTML = renderAuth();
@@ -2340,12 +2349,12 @@ async function actionTogglePartage(){
 async function actionRegenererLienPublic(){
   const eq = equipDetail.item;
   if(!eq) return;
-  if(!confirm("Changer le lien public ? Les étiquettes déjà imprimées pour cet équipement cesseront de fonctionner : il faudra en réimprimer une. La fiche et son historique sont conservés.")) return;
+  if(!confirm("Changer le lien public ? Toutes les étiquettes déjà imprimées pour cet équipement cesseront de fonctionner : il faudra en réimprimer une. La fiche et son historique sont conservés.")) return;
   try{
     const nouveau = (crypto && crypto.randomUUID) ? crypto.randomUUID() : null;
     if(!nouveau) throw new Error("Navigateur trop ancien pour générer un nouveau lien.");
     const { error } = await sb.from('equipements')
-      .update({ public_token: nouveau }).eq('id', eq.id);
+      .update({ public_token: nouveau, ancien_lien_actif: false }).eq('id', eq.id);
     if(error) throw error;
     eq.public_token = nouveau;
     render();
