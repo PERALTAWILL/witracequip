@@ -229,6 +229,51 @@
     font-family:ui-monospace, SFMono-Regular, Menlo, monospace; color:var(--text-dim);
   }
 
+  /* ---- accueil ---- */
+  .accueil-hero{
+    background:linear-gradient(120deg, var(--primary) 0%, var(--primary-dim) 100%);
+    color:var(--primary-contrast); border-radius:var(--radius);
+    padding:22px 22px 20px; margin-bottom:20px; box-shadow:var(--shadow);
+  }
+  .accueil-marque{display:flex; align-items:center; gap:14px; margin-bottom:12px;}
+  .accueil-marque img{width:44px; height:44px; object-fit:contain; flex-shrink:0;}
+  .accueil-titre{font-size:22px; font-weight:750; letter-spacing:-.02em; line-height:1.2;}
+  .accueil-org{font-size:13.5px; opacity:.85; margin-top:2px;}
+  .accueil-phrase{font-size:14px; line-height:1.55; opacity:.92; max-width:60ch; margin:0;}
+
+  .accueil-section-titre{
+    font-size:12px; font-weight:750; letter-spacing:.06em; text-transform:uppercase;
+    color:var(--text-dim); margin-bottom:10px;
+  }
+  .etapes-accueil{
+    display:grid; grid-template-columns:repeat(auto-fit, minmax(210px, 1fr)); gap:12px;
+  }
+  .etape-accueil{
+    background:var(--surface); border:1px solid var(--border); border-radius:var(--radius);
+    padding:16px; display:flex; flex-direction:column; gap:6px; box-shadow:var(--shadow);
+  }
+  .etape-accueil.mise-en-avant{border-color:var(--primary);}
+  .etape-num{
+    width:28px; height:28px; border-radius:50%; background:var(--surface-2);
+    color:var(--primary); font-weight:800; font-size:14px;
+    display:flex; align-items:center; justify-content:center; margin-bottom:2px;
+  }
+  .etape-accueil.mise-en-avant .etape-num{background:var(--primary); color:var(--primary-contrast);}
+  .etape-titre{font-size:16px; font-weight:700; letter-spacing:-.01em;}
+  .etape-accueil p{font-size:13px; color:var(--text-dim); line-height:1.5; flex:1; margin:0;}
+  .etape-accueil .btn{align-self:flex-start; margin-top:4px;}
+
+  .accueil-chiffres{
+    display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr));
+    gap:12px; margin-top:20px;
+  }
+  .chiffre{
+    background:var(--surface); border:1px solid var(--border); border-radius:var(--radius);
+    padding:16px; text-align:center;
+  }
+  .chiffre-val{font-size:30px; font-weight:750; color:var(--primary); line-height:1.1;}
+  .chiffre-lib{font-size:12.5px; color:var(--text-dim); margin-top:4px;}
+
   /* ---- modèles métiers ---- */
   .modeles{
     display:grid; grid-template-columns:repeat(auto-fit, minmax(230px, 1fr));
@@ -566,7 +611,8 @@ const state = {
 function parseHash(){
   const h = location.hash.replace(/^#\/?/, '');
   const parts = h.split('/').filter(Boolean);
-  return { name: parts[0] || 'dashboard', param: parts[1] || null };
+  // Sans route explicite, on arrive sur l'accueil, pas sur la liste.
+  return { name: parts[0] || 'accueil', param: parts[1] || null };
 }
 
 function nav(path){ location.hash = path; }
@@ -816,7 +862,8 @@ function renderShell(){
   const r = state.route;
   let content = '';
   try{
-    if(r.name === 'dashboard') content = viewDashboard();
+    if(r.name === 'accueil') content = viewAccueil();
+    else if(r.name === 'dashboard' || r.name === 'equipements') content = viewDashboard();
     else if(r.name === 'types') content = viewTypes();
     else if(r.name === 'equip-new') content = viewEquipNew();
     else if(r.name === 'equip') content = viewEquipDetail(r.param);
@@ -851,7 +898,8 @@ function renderShell(){
       </div>
     </div>
     <div class="tabs">
-      <div class="tab ${r.name==='dashboard'?'active':''}" data-action="go" data-path="/">Équipements</div>
+      <div class="tab ${r.name==='accueil'?'active':''}" data-action="go" data-path="/">Accueil</div>
+      <div class="tab ${(r.name==='dashboard'||r.name==='equipements'||r.name==='equip'||r.name==='equip-new')?'active':''}" data-action="go" data-path="/equipements">Équipements</div>
       <div class="tab ${r.name==='types'?'active':''}" data-action="go" data-path="/types">Types d'équipement</div>
       ${isAdmin() ? `<div class="tab ${r.name==='equipe'?'active':''}" data-action="go" data-path="/equipe">Équipe</div>` : ''}
     </div>
@@ -931,6 +979,108 @@ function translateAuthError(msg){
 }
 
 /* ---------------------------------------------------------------------- */
+/* View: Accueil                                                          */
+/* ---------------------------------------------------------------------- */
+
+let accueilCache = { chiffres: null, loading: false, error: '' };
+
+async function chargerChiffres(){
+  const [eq, iv] = await Promise.all([
+    sb.from('equipements').select('id, archived'),
+    sb.from('interventions').select('date').order('date', { ascending: false }),
+  ]);
+  if(eq.error) throw eq.error;
+  if(iv.error) throw iv.error;
+  const equipements = eq.data || [];
+  const interventions = iv.data || [];
+  return {
+    actifs: equipements.filter(e => !e.archived).length,
+    interventions: interventions.length,
+    derniere: interventions.length ? interventions[0].date : null,
+  };
+}
+
+function viewAccueil(){
+  if(accueilCache.chiffres === null && !accueilCache.loading){
+    accueilCache.loading = true;
+    chargerChiffres()
+      .then(c => { accueilCache.chiffres = c; accueilCache.loading = false; render(); })
+      .catch(e => { accueilCache.error = e.message; accueilCache.loading = false; render(); });
+  }
+
+  const c = accueilCache.chiffres;
+  const prenom = (state.profile?.full_name || '').trim().split(/\s+/)[0] || '';
+  const parcVide = c && c.actifs === 0;
+
+  const etapes = [
+    { n:'1', titre:'Créer',
+      texte:"Ajoutez un équipement et renseignez sa fiche. Son QR code est généré automatiquement.",
+      lien:'/equip-new', bouton:'Ajouter un équipement' },
+    { n:'2', titre:'Renseigner',
+      texte:"À chaque passage, scannez le QR code et consignez l'intervention : date, nature, intervenant.",
+      lien:'/equipements', bouton:'Voir le parc' },
+    { n:'3', titre:'Imprimer',
+      texte:"Imprimez l'étiquette et collez-la sur l'équipement. Le carnet est accessible en deux secondes.",
+      lien:'/equipements', bouton:'Voir le parc' },
+  ];
+
+  return `
+    <div class="accueil-hero">
+      <div class="accueil-marque">
+        <img src="${LOGO_DATA_URL}" alt="">
+        <div>
+          <div class="accueil-titre">Bienvenue${prenom ? ', ' + esc(prenom) : ''}</div>
+          <div class="accueil-org">${esc(state.orgName || '')}</div>
+        </div>
+      </div>
+      <p class="accueil-phrase">
+        Merci d'avoir choisi WiTracEQUIP pour suivre vos équipements. Chaque machine,
+        véhicule ou appareil porte désormais son carnet d'entretien complet —
+        consultable et à jour, sur un simple scan.
+      </p>
+    </div>
+
+    <div class="accueil-section-titre">Votre solution en trois étapes</div>
+    <div class="etapes-accueil">
+      ${etapes.map((e, i) => `
+        <div class="etape-accueil ${(parcVide && i === 0) ? 'mise-en-avant' : ''}">
+          <div class="etape-num">${e.n}</div>
+          <div class="etape-titre">${e.titre}</div>
+          <p>${e.texte}</p>
+          <button class="btn btn-sm ${(parcVide && i === 0) ? 'btn-primary' : ''}"
+                  data-action="go" data-path="${e.lien}">${e.bouton}</button>
+        </div>`).join('')}
+    </div>
+
+    ${accueilCache.error
+      ? `<div class="alert alert-error" style="margin-top:14px;">${esc(accueilCache.error)}</div>`
+      : !c
+        ? `<div class="spinner"></div>`
+        : `<div class="accueil-chiffres">
+             <div class="chiffre">
+               <div class="chiffre-val">${c.actifs}</div>
+               <div class="chiffre-lib">équipement${c.actifs > 1 ? 's' : ''} suivi${c.actifs > 1 ? 's' : ''}</div>
+             </div>
+             <div class="chiffre">
+               <div class="chiffre-val">${c.interventions}</div>
+               <div class="chiffre-lib">intervention${c.interventions > 1 ? 's' : ''} enregistrée${c.interventions > 1 ? 's' : ''}</div>
+             </div>
+             <div class="chiffre">
+               <div class="chiffre-val" style="font-size:20px;">${c.derniere ? fmtDate(c.derniere) : '—'}</div>
+               <div class="chiffre-lib">dernière intervention</div>
+             </div>
+           </div>`}
+
+    ${parcVide ? `
+      <div class="alert alert-info" style="margin-top:14px;">
+        Votre parc est encore vide. ${isAdmin()
+          ? `Commencez par créer un type d'équipement — ou partez d'un <strong>modèle métier</strong> pour tout créer d'un coup.`
+          : `Votre administrateur doit d'abord créer les types d'équipement.`}
+      </div>` : ''}
+  `;
+}
+
+/* ---------------------------------------------------------------------- */
 /* View: Dashboard (équipements)                                          */
 /* ---------------------------------------------------------------------- */
 
@@ -994,7 +1144,9 @@ function viewDashboard(){
 }
 
 function refreshDashboard(){
-  dashboardCache.items = null; dashboardCache.error=''; render();
+  dashboardCache.items = null; dashboardCache.error='';
+  accueilCache.chiffres = null;   // les compteurs d'accueil se recalculent
+  render();
 }
 
 /* ---------------------------------------------------------------------- */
@@ -1035,7 +1187,7 @@ async function appliquerModele(cle){
     if(error) throw error;
     await loadTypes(true);
     modeleState = { ouvert:false, busy:false };
-    dashboardCache.items = null;
+    dashboardCache.items = null; accueilCache.chiffres = null;
     render();
   }catch(e){
     modeleState.busy = false; render();
@@ -1174,7 +1326,7 @@ async function saveType(){
     }
     typeForm = { open:false, id:null, nom:'', champs:[], busy:false, error:'' };
     await loadTypes(true);
-    dashboardCache.items = null;
+    dashboardCache.items = null; accueilCache.chiffres = null;
     render();
   }catch(e){
     typeForm.busy = false; typeForm.error = e.message; render();
@@ -1608,7 +1760,7 @@ function viewEquipNew(){
 
   return `
     <div class="row" style="margin-bottom:14px;gap:10px;">
-      <button class="icon-btn" data-action="go" data-path="/" title="Retour">←</button>
+      <button class="icon-btn" data-action="go" data-path="/equipements" title="Retour">←</button>
       <h2>Nouvel équipement</h2>
     </div>
     <div class="card">
@@ -1642,7 +1794,7 @@ function viewEquipNew(){
       </div>
       <div class="row" style="margin-top:8px;">
         <button class="btn btn-primary" data-action="save-equip" ${equipForm.busy?'disabled':''}>${equipForm.busy?'Enregistrement…':"Créer l'équipement"}</button>
-        <button class="btn" data-action="go" data-path="/">Annuler</button>
+        <button class="btn" data-action="go" data-path="/equipements">Annuler</button>
       </div>
     </div>
   `;
@@ -1725,7 +1877,7 @@ function viewEquipDetail(id){
 
   return `
     <div class="fiche-entete">
-      <button class="icon-btn" data-action="go" data-path="/" title="Retour">←</button>
+      <button class="icon-btn" data-action="go" data-path="/equipements" title="Retour">←</button>
       <div class="titre">
         <h2>${esc(eq.nom)} ${eq.archived?'<span class="badge badge-warn">supprimé</span>':''}</h2>
         <div class="small muted">${esc(type?.nom || '')}${eq.serial_value ? ' · N/S ' + esc(eq.serial_value) : ''}</div>
@@ -1841,7 +1993,7 @@ async function submitEditEquip(form){
     if(error) throw error;
     equipDetail.item = await getEquipement(equipDetail.id);
     equipDetail.showEditForm = false;
-    dashboardCache.items = null;   // la liste sera rechargée au retour
+    dashboardCache.items = null; accueilCache.chiffres = null;
   }catch(e){
     equipDetail.editError = e.message;
   }finally{
@@ -1857,7 +2009,7 @@ async function restoreEquipement(){
       .eq('id', equipDetail.id);
     if(error) throw error;
     equipDetail.item = await getEquipement(equipDetail.id);
-    dashboardCache.items = null;
+    dashboardCache.items = null; accueilCache.chiffres = null;
     render();
   }catch(e){
     alert('Erreur : ' + e.message);
@@ -2110,6 +2262,7 @@ sb.auth.onAuthStateChange(async (event, session) => {
     state.profile = null; state.orgName = '';
     dashboardCache = { items: null, search:'', typeId:'', showArchived:false, loading:false, error:'' };
     resetEquipeCache();
+    accueilCache = { chiffres: null, loading: false, error: '' };
     joinState = { token:null, loading:false, preview:null, error:'', busy:false, notice:'' };
     state.typesLoaded = false; state.types = [];
   }
