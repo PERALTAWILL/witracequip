@@ -199,6 +199,21 @@
   .member:last-child{border-bottom:none;}
   .member .who{flex:1; min-width:150px;}
   .member select{width:auto; min-width:130px; padding:6px 8px;}
+  /* Cloisonnement par métier : quels types un profil a le droit de voir */
+  .acces{
+    width:100%; margin-top:2px; padding:10px 12px;
+    background:var(--surface-2); border:1px solid var(--border); border-radius:8px;
+  }
+  .acces .case{
+    display:flex; align-items:center; gap:8px; margin:0 0 4px 0;
+    text-transform:none; font-weight:500; font-size:13.5px; color:var(--text);
+    letter-spacing:normal; cursor:pointer;
+  }
+  .acces .case input{width:auto; margin:0; flex-shrink:0;}
+  .acces-liste{
+    display:flex; flex-wrap:wrap; gap:4px 18px; margin:6px 0 0 24px;
+  }
+  .acces-liste .case{margin:0;}
   .invite-link{
     display:flex; gap:8px; align-items:center; background:var(--surface-2);
     border:1px solid var(--border); border-radius:8px; padding:8px 10px; margin-top:8px; flex-wrap:wrap;
@@ -462,9 +477,32 @@ async function listInterventions(equipementId){
 
 async function listMembers(){
   const { data, error } = await sb.from('profiles')
-    .select('id, full_name, role, active, created_at').order('created_at');
+    .select('id, full_name, role, active, acces_tous_types, created_at').order('created_at');
   if(error) throw error;
   return data || [];
+}
+
+/* Cloisonnement par métier : quels types chaque profil a le droit de voir. */
+async function listAcces(){
+  const { data, error } = await sb.from('acces_types').select('profile_id, type_id');
+  if(error) throw error;
+  return data || [];
+}
+
+async function setAccesTousTypes(id, valeur){
+  const { error } = await sb.from('profiles').update({ acces_tous_types: valeur }).eq('id', id);
+  if(error) throw error;
+}
+
+async function setAccesType(profileId, typeId, autoriser){
+  if(autoriser){
+    const { error } = await sb.from('acces_types').insert({ profile_id: profileId, type_id: typeId });
+    if(error) throw error;
+  } else {
+    const { error } = await sb.from('acces_types').delete()
+      .eq('profile_id', profileId).eq('type_id', typeId);
+    if(error) throw error;
+  }
 }
 
 async function listInvites(){
@@ -475,9 +513,15 @@ async function listInvites(){
   return (data || []).filter(i => new Date(i.expires_at).getTime() > now);
 }
 
-async function createInvite(role, label){
+async function createInvite(role, label, accesTousTypes, typesAutorises){
   const { data, error } = await sb.from('invites')
-    .insert({ organization_id: state.profile.organization_id, role, label: label || null })
+    .insert({
+      organization_id: state.profile.organization_id,
+      role,
+      label: label || null,
+      acces_tous_types: accesTousTypes,
+      types_autorises: accesTousTypes ? [] : typesAutorises,
+    })
     .select().single();
   if(error) throw error;
   return data;
@@ -762,29 +806,43 @@ function refreshDashboard(){
 /* View: Types d'équipement                                               */
 /* ---------------------------------------------------------------------- */
 
-let typeForm = { open:false, nom:'', champs:[], busy:false, error:'' };
+let typeForm = { open:false, id:null, nom:'', champs:[], busy:false, error:'' };
+
+function ouvrirTypeForm(type){
+  typeForm = type
+    ? { open:true, id:type.id, nom:type.nom,
+        // On conserve la clé d'origine de chaque champ : c'est elle qui relie
+        // le champ aux valeurs déjà saisies sur les équipements existants.
+        champs:(type.champs||[]).map(c => ({ key:c.key, label:c.label, type:c.type })),
+        busy:false, error:'' }
+    : { open:true, id:null, nom:'', champs:[], busy:false, error:'' };
+  render();
+}
 
 function viewTypes(){
   const rows = state.types.map(t => `
     <div class="list-item">
       <div class="thumb">🏷️</div>
-      <div style="flex:1;">
+      <div style="flex:1;min-width:0;">
         <div style="font-weight:650;">${esc(t.nom)}</div>
         <div class="small muted">${(t.champs||[]).length} champ(s) personnalisé(s)${(t.champs||[]).length ? ' · ' + (t.champs||[]).map(c=>esc(c.label)).join(', ') : ''}</div>
       </div>
+      ${isAdmin() ? `<button class="btn btn-sm" data-action="edit-type" data-id="${t.id}">Modifier</button>` : ''}
     </div>
   `).join('');
 
   return `
-    <div class="row between" style="margin-bottom:14px;">
+    <div class="row between wrap" style="margin-bottom:14px;">
       <h2>Types d'équipement</h2>
-      <button class="btn btn-primary" data-action="toggle-type-form">${typeForm.open?'Annuler':'+ Nouveau type'}</button>
+      ${isAdmin()
+        ? `<button class="btn btn-primary" data-action="toggle-type-form">${typeForm.open?'Annuler':'+ Nouveau type'}</button>`
+        : ''}
     </div>
 
-    ${typeForm.open ? renderTypeForm() : ''}
+    ${typeForm.open && isAdmin() ? renderTypeForm() : ''}
 
     <div class="card" style="padding:0 18px;">
-      ${state.types.length ? rows : `<div class="empty"><div class="big">🏷️</div>Aucun type d'équipement.<br><span class="small">Créez-en un (ex. « Véhicule », « Extincteur », « Défibrillateur »…) pour commencer à ajouter des équipements.</span></div>`}
+      ${state.types.length ? rows : `<div class="empty"><div class="big">🏷️</div>Aucun type d'équipement.<br><span class="small">${isAdmin() ? 'Créez-en un (ex. « Véhicule », « Dispositif médical », « Équipement industriel »…) pour commencer à ajouter des équipements.' : 'Aucun type ne vous a été attribué. Contactez votre administrateur.'}</span></div>`}
     </div>
   `;
 }
@@ -800,19 +858,29 @@ function renderTypeForm(){
     </div>
   `).join('');
 
+  const modification = !!typeForm.id;
+
   return `
     <div class="card" style="margin-bottom:14px;">
+      <h3>${modification ? 'Modifier le type' : 'Nouveau type'}</h3>
       ${typeForm.error ? `<div class="alert alert-error">${esc(typeForm.error)}</div>` : ''}
-      <div class="field">
+      <div class="field" style="margin-top:12px;">
         <label>Nom du type</label>
-        <input type="text" placeholder="Ex : Véhicule de service" id="type-nom-input" value="${esc(typeForm.nom)}" data-action="type-nom">
+        <input type="text" placeholder="Ex : Véhicule" id="type-nom-input" value="${esc(typeForm.nom)}" data-action="type-nom">
       </div>
       <label>Champs personnalisés (optionnel)</label>
       <div style="margin-bottom:8px;">${champsRows}</div>
       <button type="button" class="btn btn-sm" data-action="champ-add">+ Ajouter un champ</button>
       <div class="hint">Ces champs apparaîtront dans le formulaire d'ajout d'équipement de ce type (ex : marque, modèle, capacité, kilométrage…).</div>
-      <div class="row" style="margin-top:14px;">
-        <button class="btn btn-primary" data-action="save-type" ${typeForm.busy?'disabled':''}>${typeForm.busy?'Enregistrement…':'Enregistrer le type'}</button>
+      ${modification ? `
+        <div class="hint">
+          Ajouter un champ est sans risque : les équipements existants l'afficheront, vide,
+          jusqu'à ce qu'il soit renseigné. Retirer un champ le fait disparaître des fiches
+          mais n'efface rien : le remettre avec le même nom fait réapparaître les valeurs.
+        </div>` : ''}
+      <div class="row wrap" style="margin-top:14px;">
+        <button class="btn btn-primary" data-action="save-type" ${typeForm.busy?'disabled':''}>${typeForm.busy?'Enregistrement…':(modification ? 'Enregistrer les modifications' : 'Enregistrer le type')}</button>
+        <button class="btn" type="button" data-action="toggle-type-form">Annuler</button>
       </div>
     </div>
   `;
@@ -824,16 +892,25 @@ async function saveType(){
   if(!nom){ typeForm.error = 'Le nom du type est obligatoire.'; render(); return; }
   const champs = typeForm.champs
     .filter(c => c.label.trim())
-    .map(c => ({ key: slugify(c.label), label: c.label.trim(), type: c.type }));
+    // c.key existe déjà pour un champ créé précédemment : on le garde, sinon
+    // renommer un libellé détacherait le champ des valeurs déjà saisies.
+    .map(c => ({ key: c.key || slugify(c.label), label: c.label.trim(), type: c.type }));
   typeForm.busy = true; render();
   try{
-    const { error } = await sb.from('equipment_types').insert({
-      organization_id: state.profile.organization_id,
-      nom, champs
-    });
-    if(error) throw error;
-    typeForm = { open:false, nom:'', champs:[], busy:false, error:'' };
+    if(typeForm.id){
+      const { error } = await sb.from('equipment_types')
+        .update({ nom, champs }).eq('id', typeForm.id);
+      if(error) throw error;
+    } else {
+      const { error } = await sb.from('equipment_types').insert({
+        organization_id: state.profile.organization_id,
+        nom, champs
+      });
+      if(error) throw error;
+    }
+    typeForm = { open:false, id:null, nom:'', champs:[], busy:false, error:'' };
     await loadTypes(true);
+    dashboardCache.items = null;
     render();
   }catch(e){
     typeForm.busy = false; typeForm.error = e.message; render();
@@ -848,19 +925,26 @@ function slugify(s){
 /* View: Équipe — gestion des profils (admin uniquement)                  */
 /* ---------------------------------------------------------------------- */
 
-let equipeCache = {
-  members: null, invites: null, loading: false, error: '',
-  inviteRole: 'utilisateur', inviteLabel: '', inviteBusy: false, inviteError: '',
-  dernierToken: null,
-};
+let equipeCache;
+/* Un seul endroit définit cet état : le dupliquer, c'est oublier un champ
+   lors d'une remise à zéro et casser la vue au retour de connexion. */
+function resetEquipeCache(){
+  equipeCache = {
+    members: null, invites: null, acces: null, loading: false, error: '',
+    inviteRole: 'utilisateur', inviteLabel: '', inviteBusy: false, inviteError: '',
+    inviteTousTypes: true, inviteTypes: [],
+    dernierToken: null,
+  };
+}
+resetEquipeCache();
 
 function chargerEquipe(force){
   if(equipeCache.loading) return;
   if(equipeCache.members !== null && !force) return;
   equipeCache.loading = true;
-  Promise.all([listMembers(), listInvites()])
-    .then(([m, i]) => {
-      equipeCache.members = m; equipeCache.invites = i;
+  Promise.all([listMembers(), listInvites(), listAcces()])
+    .then(([m, i, a]) => {
+      equipeCache.members = m; equipeCache.invites = i; equipeCache.acces = a;
       equipeCache.loading = false; equipeCache.error = ''; render();
     })
     .catch(e => { equipeCache.error = e.message; equipeCache.loading = false; render(); });
@@ -880,9 +964,34 @@ function viewEquipe(){
 
   const moi = state.profile?.id;
 
+  const acces = equipeCache.acces || [];
+
   const membres = equipeCache.members.map(m => {
     const estMoi = m.id === moi;
     const estAdmin = m.role === 'admin';
+
+    // Un administrateur voit tout par construction : pas de cloisonnement à régler.
+    const blocAcces = estAdmin ? '' : `
+      <div class="acces">
+        <label class="case">
+          <input type="checkbox" data-action="acces-tous" data-id="${m.id}" ${m.acces_tous_types?'checked':''}>
+          <span><strong>Tous les types d'équipement</strong></span>
+        </label>
+        ${m.acces_tous_types
+          ? `<div class="small muted" style="margin-left:24px;">Ce profil voit l'ensemble du parc.</div>`
+          : (state.types.length
+              ? `<div class="acces-liste">
+                   ${state.types.map(t => `
+                     <label class="case">
+                       <input type="checkbox" data-action="acces-type"
+                              data-id="${m.id}" data-type="${t.id}"
+                              ${acces.some(a => a.profile_id === m.id && a.type_id === t.id) ? 'checked' : ''}>
+                       <span>${esc(t.nom)}</span>
+                     </label>`).join('')}
+                 </div>`
+              : `<div class="small muted" style="margin-left:24px;">Aucun type d'équipement à attribuer.</div>`)}
+      </div>`;
+
     return `
       <div class="member">
         <div class="thumb">${esc(initials(m.full_name))}</div>
@@ -904,6 +1013,7 @@ function viewEquipe(){
                   data-action="member-active" data-id="${m.id}" data-active="${m.active?'0':'1'}">
             ${m.active ? 'Suspendre' : 'Réactiver'}
           </button>`}
+        ${blocAcces}
       </div>`;
   }).join('');
 
@@ -914,7 +1024,12 @@ function viewEquipe(){
           ${esc(i.label || 'Invitation')}
           <span class="badge badge-role">${esc(roleLabel(i.role))}</span>
         </div>
-        <div class="small muted">Valable jusqu'au ${fmtDate(i.expires_at)}</div>
+        <div class="small muted">
+          ${i.acces_tous_types
+            ? 'Tous les types'
+            : 'Accès : ' + esc(state.types.filter(t => (i.types_autorises||[]).includes(t.id)).map(t => t.nom).join(', ') || 'aucun type')}
+          · valable jusqu'au ${fmtDate(i.expires_at)}
+        </div>
         <div class="invite-link">
           <code>${esc(inviteUrl(i.token))}</code>
           <button class="btn btn-sm" data-action="copier-lien" data-token="${esc(i.token)}">Copier</button>
@@ -933,16 +1048,55 @@ function viewEquipe(){
     <div class="card">
       <h3>Inviter quelqu'un</h3>
       <div class="hint" style="margin-bottom:12px;">
-        Vous fixez le rôle à l'avance : la personne rejoint votre organisation en créant son
-        compte depuis le lien, sans pouvoir choisir ses propres droits.
+        Vous fixez le rôle <strong>et</strong> le périmètre métier avant d'envoyer le lien.
+        La personne rejoint votre organisation avec exactement ces droits, sans pouvoir
+        les choisir ni les modifier.
       </div>
       ${equipeCache.inviteError ? `<div class="alert alert-error">${esc(equipeCache.inviteError)}</div>` : ''}
-      <div class="row wrap" style="gap:10px;">
-        <select style="flex:1;min-width:150px;" data-action="invite-role">
-          ${ROLES_ASSIGNABLES.map(r=>`<option value="${r}" ${r===equipeCache.inviteRole?'selected':''}>${esc(roleLabel(r))}</option>`).join('')}
-        </select>
-        <input type="text" style="flex:2;min-width:160px;" placeholder="Nom de la personne (facultatif)"
-               value="${esc(equipeCache.inviteLabel)}" data-action="invite-label">
+
+      <div class="grid-2">
+        <div class="field">
+          <label>Rôle</label>
+          <select data-action="invite-role">
+            ${ROLES_ASSIGNABLES.map(r=>`<option value="${r}" ${r===equipeCache.inviteRole?'selected':''}>${esc(roleLabel(r))}</option>`).join('')}
+          </select>
+          <div class="hint">${equipeCache.inviteRole === 'responsable'
+            ? 'Peut créer, remplir, imprimer et supprimer un équipement.'
+            : 'Peut créer, remplir et imprimer — mais pas supprimer.'}</div>
+        </div>
+        <div class="field">
+          <label>Nom de la personne (facultatif)</label>
+          <input type="text" placeholder="Ex : Marc Dupont"
+                 value="${esc(equipeCache.inviteLabel)}" data-action="invite-label">
+        </div>
+      </div>
+
+      <label>Périmètre métier</label>
+      <div class="acces" style="margin-bottom:12px;">
+        <label class="case">
+          <input type="checkbox" data-action="invite-tous-types" ${equipeCache.inviteTousTypes?'checked':''}>
+          <span><strong>Tous les types d'équipement</strong></span>
+        </label>
+        ${equipeCache.inviteTousTypes
+          ? `<div class="small muted" style="margin-left:24px;">Cette personne verra l'ensemble du parc.</div>`
+          : (state.types.length
+              ? `<div class="acces-liste">
+                   ${state.types.map(t => `
+                     <label class="case">
+                       <input type="checkbox" data-action="invite-type" data-type="${t.id}"
+                              ${equipeCache.inviteTypes.includes(t.id) ? 'checked' : ''}>
+                       <span>${esc(t.nom)}</span>
+                     </label>`).join('')}
+                 </div>
+                 <div class="small muted" style="margin-left:24px;margin-top:6px;">
+                   ${equipeCache.inviteTypes.length
+                     ? 'Ne verra que : ' + esc(state.types.filter(t=>equipeCache.inviteTypes.includes(t.id)).map(t=>t.nom).join(', '))
+                     : 'Aucun type coché : cette personne ne verrait aucun équipement.'}
+                 </div>`
+              : `<div class="small muted" style="margin-left:24px;">Aucun type d'équipement créé pour l'instant.</div>`)}
+      </div>
+
+      <div class="row wrap">
         <button class="btn btn-primary" data-action="creer-invite" ${equipeCache.inviteBusy?'disabled':''}>
           ${equipeCache.inviteBusy ? 'Création…' : 'Générer le lien'}
         </button>
@@ -970,9 +1124,18 @@ function viewEquipe(){
 }
 
 async function actionCreerInvite(){
+  if(!equipeCache.inviteTousTypes && equipeCache.inviteTypes.length === 0){
+    equipeCache.inviteError = "Choisissez au moins un type d'équipement, sinon cette personne n'aurait accès à rien.";
+    render(); return;
+  }
   equipeCache.inviteError = ''; equipeCache.inviteBusy = true; render();
   try{
-    const inv = await createInvite(equipeCache.inviteRole, equipeCache.inviteLabel.trim());
+    const inv = await createInvite(
+      equipeCache.inviteRole,
+      equipeCache.inviteLabel.trim(),
+      equipeCache.inviteTousTypes,
+      equipeCache.inviteTypes
+    );
     equipeCache.dernierToken = inv.token;
     equipeCache.inviteLabel = '';
     equipeCache.invites = await listInvites();
@@ -995,6 +1158,20 @@ async function actionAnnulerInvite(id){
 async function actionRoleMembre(id, role){
   try{
     await setMemberRole(id, role);
+    rafraichirEquipe();
+  }catch(e){ alert('Erreur : ' + e.message); rafraichirEquipe(); }
+}
+
+async function actionAccesTous(id, valeur){
+  try{
+    await setAccesTousTypes(id, valeur);
+    rafraichirEquipe();
+  }catch(e){ alert('Erreur : ' + e.message); rafraichirEquipe(); }
+}
+
+async function actionAccesType(profileId, typeId, autoriser){
+  try{
+    await setAccesType(profileId, typeId, autoriser);
     rafraichirEquipe();
   }catch(e){ alert('Erreur : ' + e.message); rafraichirEquipe(); }
 }
@@ -1481,7 +1658,11 @@ document.addEventListener('click', (e) => {
   else if(action === 'toggle-menu'){ e.stopPropagation(); document.getElementById('user-dropdown')?.classList.toggle('open'); }
   else if(action === 'logout'){ sb.auth.signOut(); }
   else if(action === 'auth-mode'){ state.authMode = t.dataset.mode; state.authError=''; state.authNotice=''; render(); }
-  else if(action === 'toggle-type-form'){ typeForm.open = !typeForm.open; render(); }
+  else if(action === 'toggle-type-form'){ typeForm.open ? (typeForm = { open:false, id:null, nom:'', champs:[], busy:false, error:'' }, render()) : ouvrirTypeForm(null); }
+  else if(action === 'edit-type'){
+    const type = state.types.find(x => x.id === t.dataset.id);
+    if(type) ouvrirTypeForm(type);
+  }
   else if(action === 'champ-add'){ typeForm.champs.push({label:'', type:'text'}); render(); }
   else if(action === 'champ-remove'){ typeForm.champs.splice(+t.dataset.i, 1); render(); }
   else if(action === 'save-type'){ saveType(); }
@@ -1524,9 +1705,23 @@ document.addEventListener('input', (e) => {
   else if(action === 'equip-serial'){ equipForm.serial_value = t.value; }
   else if(action === 'equip-type'){ equipForm.typeId = t.value; render(); }
   else if(action === 'equip-valeur'){ equipForm.valeurs[t.dataset.key] = t.value; }
-  else if(action === 'invite-role'){ equipeCache.inviteRole = t.value; }
+  else if(action === 'invite-role'){ equipeCache.inviteRole = t.value; render(); }
   else if(action === 'invite-label'){ equipeCache.inviteLabel = t.value; }
+  else if(action === 'invite-tous-types'){
+    equipeCache.inviteTousTypes = t.checked;
+    if(t.checked) equipeCache.inviteTypes = [];
+    equipeCache.inviteError = ''; render();
+  }
+  else if(action === 'invite-type'){
+    const id = t.dataset.type;
+    equipeCache.inviteTypes = t.checked
+      ? [...new Set([...equipeCache.inviteTypes, id])]
+      : equipeCache.inviteTypes.filter(x => x !== id);
+    equipeCache.inviteError = ''; render();
+  }
   else if(action === 'member-role'){ actionRoleMembre(t.dataset.id, t.value); }
+  else if(action === 'acces-tous'){ actionAccesTous(t.dataset.id, t.checked); }
+  else if(action === 'acces-type'){ actionAccesType(t.dataset.id, t.dataset.type, t.checked); }
 });
 
 document.addEventListener('submit', (e) => {
@@ -1566,11 +1761,7 @@ sb.auth.onAuthStateChange(async (event, session) => {
   } else {
     state.profile = null; state.orgName = '';
     dashboardCache = { items: null, search:'', typeId:'', showArchived:false, loading:false, error:'' };
-    equipeCache = {
-      members: null, invites: null, loading: false, error: '',
-      inviteRole: 'utilisateur', inviteLabel: '', inviteBusy: false, inviteError: '',
-      dernierToken: null,
-    };
+    resetEquipeCache();
     joinState = { token:null, loading:false, preview:null, error:'', busy:false, notice:'' };
     state.typesLoaded = false; state.types = [];
   }
