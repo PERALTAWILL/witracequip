@@ -360,6 +360,14 @@
   .pub-entete .nom{font-weight:700; letter-spacing:.01em;}
   .pub-entete .by{font-size:11px; opacity:.75;}
   .pub-entete .org{margin-left:auto; font-size:12px; opacity:.9; min-width:0;}
+  .pub-connexion{
+    flex:0 0 auto; margin-left:10px;
+    font:inherit; font-size:13px; font-weight:600; line-height:1;
+    color:#fff; background:rgba(255,255,255,.14);
+    border:1px solid rgba(255,255,255,.35); border-radius:9px;
+    padding:9px 14px; cursor:pointer; white-space:nowrap;
+  }
+  .pub-connexion:hover{background:rgba(255,255,255,.24);}
   .pub-titre{margin:0 0 2px; font-size:20px; line-height:1.25; word-break:break-word;}
   .pub-lecture{
     display:inline-flex; align-items:center; gap:6px;
@@ -373,7 +381,8 @@
   }
   .pub-pied a{color:var(--text-dim);}
   @media(max-width:480px){
-    .pub-entete .org{margin-left:0; width:100%;}
+    .pub-entete .org{margin-left:auto; width:auto; text-align:right;}
+    .pub-connexion{margin-left:0; width:100%; padding:11px 14px;}
   }
 
   ::-webkit-scrollbar{width:10px; height:10px;}
@@ -904,6 +913,21 @@ function render(){
 /* ---------------------------------------------------------------------- */
 
 let fichePublique  = { token:null, data:null, loading:false, error:'' };
+
+/* Le technicien qui scanne une etiquette veut souvent enchainer sur la saisie
+   de son intervention. On retient l'etiquette qu'il avait sous les yeux pour
+   le ramener directement sur cette fiche une fois connecte. */
+function connexionDepuisScan(){
+  try{ sessionStorage.setItem('wt_retour_scan', fichePublique.token || state.route.param || ''); }catch(e){}
+  state.authError = ''; state.authNotice = '';
+  nav('/connexion');
+}
+
+function retourApresConnexion(){
+  let t = '';
+  try{ t = sessionStorage.getItem('wt_retour_scan') || ''; sessionStorage.removeItem('wt_retour_scan'); }catch(e){}
+  if(t){ nav('/p/' + t); state.route = parseHash(); }
+}
 let resolvePublic  = { token:null, busy:false };
 
 /* Une personne déjà connectée qui scanne une étiquette de son parc n'a pas
@@ -1031,6 +1055,7 @@ function enTetePublique(org){
         <div class="by">Passeport technique d'équipement</div>
       </div>
       ${org ? `<div class="org">${esc(org)}</div>` : ''}
+      <button class="pub-connexion" data-action="connexion-depuis-scan">Se connecter</button>
     </div>`;
 }
 
@@ -1039,7 +1064,7 @@ function piedPublic(){
     <div class="pub-pied">
       Carnet d'entretien tenu avec WiTracEQUIP — by WiDIAG MQ.<br>
       Cette page est une consultation libre : elle ne permet aucune modification.<br>
-      <a href="#/accueil">Espace professionnel</a>
+      Technicien de l'équipe ? « Se connecter » en haut de page ouvre la fiche complète.
     </div>`;
 }
 
@@ -2424,6 +2449,7 @@ document.addEventListener('click', (e) => {
   else if(action === 'restore-equip'){ restoreEquipement(); }
   else if(action === 'toggle-edit-equip'){ equipDetail.showEditForm = !equipDetail.showEditForm; equipDetail.editError=''; render(); }
   else if(action === 'print-qr'){ printQr(); }
+  else if(action === 'connexion-depuis-scan'){ connexionDepuisScan(); }
   else if(action === 'toggle-partage'){ actionTogglePartage(); }
   else if(action === 'regen-token'){ actionRegenererLienPublic(); }
   else if(action === 'creer-invite'){ actionCreerInvite(); }
@@ -2511,6 +2537,7 @@ sb.auth.onAuthStateChange(async (event, session) => {
     try{
       await loadProfileAndOrg();
       await loadTypes(true);
+      retourApresConnexion();
     }catch(e){
       console.error(e);
       state.accessError = (e && e.message) ? e.message : 'Erreur de chargement du profil.';
