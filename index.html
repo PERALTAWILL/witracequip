@@ -222,15 +222,32 @@
     .fiche-entete .actions .btn{flex:1;}
   }
 
-  /* ---- QR / print ---- */
+  /* ---- QR / impression d'étiquette ---- */
   .qr-box{display:flex; flex-direction:column; align-items:center; gap:10px; padding:10px 0;}
   /* Le QR est généré à taille fixe : on l'oblige à se réduire sur les petits écrans. */
   .qr-box canvas{max-width:100%; height:auto;}
   #print-area{display:none;}
+
+  /* Étiquette : uniquement le QR code et l'identifiant (immatriculation ou n° de
+     série). Tout le reste de l'application est retiré du flux d'impression —
+     pas masqué mais retiré, sinon certaines imprimantes sortent des pages vides.
+     Pensé pour une imprimante thermique d'étiquettes. */
   @media print{
-    body *{visibility:hidden;}
-    #print-area, #print-area *{visibility:visible;}
-    #print-area{display:block; position:fixed; top:0; left:0; width:100%; text-align:center; padding-top:30px;}
+    @page{ margin:3mm; }
+    html, body{ background:#fff !important; margin:0; padding:0; }
+    #app{ display:none !important; }
+    #print-area{
+      display:block !important;
+      text-align:center;
+      color:#000;
+    }
+    #print-area img{ display:block; margin:0 auto; }
+    #print-area .etiquette-id{
+      font-family:Arial, Helvetica, sans-serif;
+      font-weight:700; font-size:10pt; color:#000;
+      margin-top:1.5mm; letter-spacing:.02em;
+      word-break:break-all;
+    }
   }
 
   ::-webkit-scrollbar{width:10px; height:10px;}
@@ -264,6 +281,18 @@
        const APP_BASE_URL = 'https://witracequip.fr/';
    ========================================================================= */
 const APP_BASE_URL = '';
+
+/* =========================================================================
+   ÉTIQUETTE IMPRIMÉE
+   L'étiquette ne contient QUE le QR code et l'identifiant de l'équipement
+   (immatriculation pour un véhicule, n° de série pour un appareil) : rien
+   d'autre, pour tenir sur une imprimante thermique.
+   Ajustez la taille selon le format de vos étiquettes.
+   ========================================================================= */
+const ETIQUETTE = {
+  taille_qr_mm: 30,          // côté du QR imprimé, en millimètres
+  afficher_identifiant: true, // n° de série / immatriculation sous le QR
+};
 
 const SUPABASE_URL = 'https://oeqgyjyqdwlymlpfkdyn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_w3Lh6JYXepKHspWG5e06FQ_BpXaGQnE';
@@ -1262,14 +1291,6 @@ function viewEquipDetail(id){
       ` : `<div class="empty small">Aucune intervention enregistrée.</div>`}
     </div>
 
-    <div id="print-template" style="display:none;">
-      <div style="font-family:sans-serif;">
-        <div style="font-weight:800;font-size:18px;margin-bottom:2px;">${esc(eq.nom)}</div>
-        <div style="font-size:12px;color:#555;margin-bottom:14px;">${esc(type?.nom||'')}${eq.serial_value ? ' · N/S ' + esc(eq.serial_value) : ''}</div>
-        <img id="print-qr-img" style="width:220px;height:220px;">
-        <div style="font-size:10px;color:#888;margin-top:10px;">WiTracEQUIP · ${esc(url)}</div>
-      </div>
-    </div>
   `;
 }
 
@@ -1412,15 +1433,39 @@ async function archiveEquipement(){
 }
 
 function printQr(){
-  const canvas = document.getElementById('qr-canvas');
+  const eq = equipDetail.item;
   const printArea = document.getElementById('print-area');
-  const template = document.getElementById('print-template');
-  if(!canvas || !template) return;
-  drawQr(equipDetail.id);   // ceinture et bretelles : jamais d'étiquette vierge
-  printArea.innerHTML = template.innerHTML;
+  if(!eq || !printArea) return;
+
+  const url = lienEquipement(eq.id);
+
+  // QR généré spécialement pour l'impression, en haute définition : une
+  // imprimante thermique tire à ~203 points par pouce, le QR de 200 px affiché
+  // à l'écran sortirait baveux et difficile à scanner.
+  let source = null;
+  if(typeof QRious !== 'undefined'){
+    const hd = document.createElement('canvas');
+    new QRious({ element: hd, value: url, size: 800, background:'white', foreground:'#000000', level:'M' });
+    source = hd;
+  } else {
+    source = document.getElementById('qr-canvas');  // repli
+  }
+  if(!source) return;
+
+  const ident = (eq.serial_value || '').trim();
+  const cote = ETIQUETTE.taille_qr_mm;
+
+  printArea.innerHTML = `
+    <img id="print-qr-img" alt="" style="width:${cote}mm;height:${cote}mm;">
+    ${(ETIQUETTE.afficher_identifiant && ident) ? `<div class="etiquette-id">${esc(ident)}</div>` : ''}
+  `;
+
   const img = document.getElementById('print-qr-img');
-  if(img) img.src = canvas.toDataURL('image/png');
-  window.print();
+  // L'image est une donnée encodée : il faut attendre qu'elle soit décodée,
+  // sinon l'impression part avant et l'étiquette sort vide.
+  img.onload  = () => window.print();
+  img.onerror = () => window.print();
+  img.src = source.toDataURL('image/png');
 }
 
 /* ---------------------------------------------------------------------- */
