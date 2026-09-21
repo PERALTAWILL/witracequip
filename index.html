@@ -354,8 +354,14 @@ function initials(name){
 }
 function fmtDate(d){
   if(!d) return '—';
-  try{ return new Date(d).toLocaleDateString('fr-FR', {day:'2-digit', month:'short', year:'numeric'}); }
-  catch(e){ return d; }
+  // Une date seule (AAAA-MM-JJ) est interprétée par JavaScript comme minuit UTC.
+  // Aux Antilles (UTC-4), elle s'afficherait donc la veille. On la construit
+  // explicitement en heure locale pour que la date saisie soit la date affichée.
+  const m = (typeof d === 'string') && d.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  try{
+    const dt = m ? new Date(+m[1], +m[2] - 1, +m[3]) : new Date(d);
+    return dt.toLocaleDateString('fr-FR', {day:'2-digit', month:'short', year:'numeric'});
+  }catch(e){ return d; }
 }
 function fmtDateTime(d){
   if(!d) return '—';
@@ -1177,7 +1183,11 @@ function viewEquipDetail(id){
   const champs = type?.champs || [];
   const url = lienEquipement(eq.id);
 
-  const infoRows = champs.map(c => `<tr><td class="muted">${esc(c.label)}</td><td>${esc(eq.valeurs?.[c.key] ?? '—')}</td></tr>`).join('');
+  const infoRows = champs.map(c => {
+    const brut = eq.valeurs?.[c.key];
+    const val = !brut ? '—' : (c.type === 'date' ? fmtDate(brut) : brut);
+    return `<tr><td class="muted">${esc(c.label)}</td><td>${esc(val)}</td></tr>`;
+  }).join('');
 
   const ivRows = (equipDetail.interventions||[]).map(iv => `
     <tr>
@@ -1187,6 +1197,11 @@ function viewEquipDetail(id){
       <td class="muted">${esc(iv.description||'—')}</td>
     </tr>
   `).join('');
+
+  // Le QR est dessiné dans un <canvas> que chaque réaffichage recrée vide.
+  // On le redessine donc après CHAQUE rendu de la fiche, sinon ouvrir un
+  // formulaire efface le QR — et « Imprimer l'étiquette » sortirait une étiquette vierge.
+  setTimeout(() => drawQr(eq.id), 0);
 
   return `
     <div class="fiche-entete">
@@ -1401,6 +1416,7 @@ function printQr(){
   const printArea = document.getElementById('print-area');
   const template = document.getElementById('print-template');
   if(!canvas || !template) return;
+  drawQr(equipDetail.id);   // ceinture et bretelles : jamais d'étiquette vierge
   printArea.innerHTML = template.innerHTML;
   const img = document.getElementById('print-qr-img');
   if(img) img.src = canvas.toDataURL('image/png');
