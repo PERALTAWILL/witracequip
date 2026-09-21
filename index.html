@@ -375,6 +375,11 @@
     background:rgba(15,122,110,.12); color:var(--accent, #0f7a6e);
     border:1px solid rgba(15,122,110,.25);
   }
+  .pub-retire{
+    margin-left:8px;
+    background:rgba(200,120,20,.12); color:#a8630f;
+    border-color:rgba(200,120,20,.3);
+  }
   .pub-pied{
     margin-top:22px; text-align:center; font-size:12px; line-height:1.6;
     color:var(--text-dim);
@@ -1016,7 +1021,10 @@ function viewFichePublique(token){
             ${esc(d.type || '')}${d.serial_value ? ' · ' + esc(d.serial_value) : ''}
           </div>
         </div>
-        <div><span class="pub-lecture">🔒 Consultation en lecture seule</span></div>
+        <div>
+          <span class="pub-lecture">🔒 Consultation en lecture seule</span>
+          ${d.archived ? `<span class="pub-lecture pub-retire">⚠️ Retiré du service</span>` : ''}
+        </div>
       </div>
 
       <div class="card" style="margin-top:14px;">
@@ -2158,7 +2166,8 @@ function viewEquipDetail(id){
         <h3 class="small" style="text-transform:uppercase;letter-spacing:.02em;color:var(--text-dim);">Informations</h3>
         <table>
           <tr><td class="muted">Créé le</td><td>${fmtDateTime(eq.created_at)}</td></tr>
-          ${eq.archived ? `<tr><td class="muted">Supprimé le</td><td>${fmtDateTime(eq.archived_at)}${eq.archived_by ? ' par ' + esc(eq.archived_by) : ''}</td></tr>` : ''}
+          ${eq.archived ? `<tr><td class="muted">Retiré le</td><td>${fmtDateTime(eq.archived_at)}${eq.archived_by ? ' par ' + esc(eq.archived_by) : ''}</td></tr>` : ''}
+          ${eq.archived && eq.archive_reason ? `<tr><td class="muted">Motif du retrait</td><td>${esc(eq.archive_reason)}</td></tr>` : ''}
           ${infoRows}
         </table>
       </div>
@@ -2253,7 +2262,7 @@ async function restoreEquipement(){
   if(!confirm("Restaurer cet équipement ? Il réapparaîtra dans la liste active.")) return;
   try{
     const { error } = await sb.from('equipements')
-      .update({ archived:false, archived_at:null, archived_by:null })
+      .update({ archived:false, archived_at:null, archived_by:null, archive_reason:null })
       .eq('id', equipDetail.id);
     if(error) throw error;
     equipDetail.item = await getEquipement(equipDetail.id);
@@ -2338,14 +2347,32 @@ async function submitIntervention(form){
   }
 }
 
+/* Un retrait doit toujours pouvoir s'expliquer : la base refuse un equipement
+   retire sans motif ni nom d'operateur. On demande donc le motif avant, plutot
+   que de laisser la base renvoyer une erreur technique a l'utilisateur. */
 async function archiveEquipement(){
-  if(!confirm("Supprimer cet équipement ? Il disparaît de la liste, mais son historique reste conservé et reste consultable via « Voir les supprimés ».")) return;
+  const qui = (state.profile?.full_name || state.session?.user?.email || '').trim();
+  if(!qui){ alert("Votre nom doit être renseigné dans votre profil avant de retirer un équipement."); return; }
+
+  const motif = (window.prompt(
+    "Retirer cet équipement du parc.\n\n" +
+    "Motif du retrait (obligatoire) — par exemple : vendu, réformé, hors service, volé, restitué au loueur.\n\n" +
+    "La fiche et son historique restent conservés et consultables via « Voir les supprimés ».", '') || '').trim();
+
+  if(!motif){
+    if(motif === '') alert("Retrait annulé : un motif est obligatoire.");
+    return;
+  }
+
   try{
     const { error } = await sb.from('equipements').update({
-      archived: true, archived_at: new Date().toISOString(), archived_by: state.profile?.full_name || null
+      archived: true,
+      archived_at: new Date().toISOString(),
+      archived_by: qui,
+      archive_reason: motif
     }).eq('id', equipDetail.id);
     if(error) throw error;
-    equipDetail.item.archived = true;
+    equipDetail.item = await getEquipement(equipDetail.id);
     refreshDashboard();
     render();
   }catch(e){
