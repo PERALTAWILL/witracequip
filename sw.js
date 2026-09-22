@@ -26,18 +26,20 @@
 
 /* Changer ce numéro à chaque déploiement : c'est ce qui déclenche le
    remplacement de l'ancien cache par le nouveau chez tous les utilisateurs. */
-const VERSION = 'wte-v2.10.0';
+const VERSION = 'wte-v2.11.0';
 
 const CACHE_SHELL = `${VERSION}-shell`;
 const CACHE_EXTERNE = `${VERSION}-externe`;
 
-/* La coquille de l'application : un seul fichier HTML autonome (CSS et
-   JavaScript inline) + le manifest + les icônes. Si l'un de ces fichiers
-   manque, l'application ne démarre pas hors ligne. */
+/* La coquille de l'application : le HTML, son CSS (désormais un fichier à
+   part, voir css/style.css — le JavaScript reste inline pour l'instant)
+   + le manifest + les icônes. Si l'un de ces fichiers manque, l'application
+   ne démarre pas hors ligne. */
 const FICHIERS_SHELL = [
   './',
   'index.html',
   'manifest.json',
+  'css/style.css',
 
   'assets/icons/icon-192.png',
   'assets/icons/icon-512.png',
