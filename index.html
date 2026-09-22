@@ -322,19 +322,21 @@ série). Tout le reste de l'application est retiré du flux d'impression —
 pas masqué mais retiré, sinon certaines imprimantes sortent des pages vides.
 Pensé pour une imprimante thermique d'étiquettes. */
 @media print{
-@page{ margin:3mm; }
+@page{ size:20mm 20mm; margin:1mm; }
 html, body{ background:#fff !important; margin:0; padding:0; }
 #app{ display:none !important; }
 #print-area{
 display:block !important;
+width:18mm;
 text-align:center;
 color:#000;
+overflow:hidden;
 }
 #print-area img{ display:block; margin:0 auto; }
 #print-area .etiquette-id{
 font-family:Arial, Helvetica, sans-serif;
-font-weight:700; font-size:10pt; color:#000;
-margin-top:1.5mm; letter-spacing:.02em;
+font-weight:700; font-size:6pt; line-height:1.1; color:#000;
+margin-top:0.6mm; letter-spacing:.01em;
 word-break:break-all;
 }
 }
@@ -445,7 +447,7 @@ d'autre, pour tenir sur une imprimante thermique.
 Ajustez la taille selon le format de vos étiquettes.
 ========================================================================= */
 const ETIQUETTE = {
-taille_qr_mm: 30, // côté du QR imprimé, en millimètres
+taille_qr_mm: 16, // côté du QR imprimé, en millimètres — étiquette thermique 2 cm x 2 cm
 afficher_identifiant: true, // n° de série / immatriculation sous le QR
 };
 
