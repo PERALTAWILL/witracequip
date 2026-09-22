@@ -14,6 +14,7 @@
 <link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrious/4.0.2/qrious.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
 <style>
 :root{
 --bg:#f4f6f7; --surface:#ffffff; --surface-2:#f0f2f4; --border:#e0e4e6;
@@ -289,6 +290,55 @@ padding:16px; text-align:center;
 }
 .chiffre-val{font-size:30px; font-weight:750; color:var(--primary); line-height:1.1;}
 .chiffre-lib{font-size:12.5px; color:var(--text-dim); margin-top:4px;}
+
+/* ---- scanner QR (accueil) ---- */
+.scanner-carte{
+background:var(--surface); border:1px solid var(--border); border-radius:var(--radius);
+padding:18px; margin-top:20px; display:flex; align-items:center; gap:16px; box-shadow:var(--shadow);
+}
+.scanner-carte-icone{
+width:50px; height:50px; border-radius:13px; background:var(--accent-dim); color:var(--accent);
+display:flex; align-items:center; justify-content:center; flex-shrink:0;
+}
+.scanner-carte-texte{flex:1; min-width:0;}
+.scanner-carte-titre{font-weight:700; font-size:15.5px; margin-bottom:2px;}
+.scanner-carte-texte p{font-size:13px; color:var(--text-dim); line-height:1.45; margin:0;}
+.scanner-carte .btn{flex-shrink:0;}
+@media(max-width:560px){
+.scanner-carte{flex-direction:column; align-items:stretch; text-align:center;}
+.scanner-carte-icone{align-self:center;}
+.scanner-carte .btn{width:100%;}
+}
+
+.scanner-overlay{
+position:fixed; inset:0; z-index:200; background:#000;
+display:flex; align-items:center; justify-content:center; overflow:hidden;
+}
+.scanner-overlay video{
+position:absolute; inset:0; width:100%; height:100%; object-fit:cover;
+background:#000;
+}
+.scanner-overlay canvas{ display:none; }
+.scanner-cadre{
+position:relative; width:min(72vw, 280px); height:min(72vw, 280px);
+border:3px solid rgba(255,255,255,.85); border-radius:20px;
+box-shadow:0 0 0 2000px rgba(0,0,0,.45);
+}
+.scanner-fermer{
+position:absolute; top:max(16px, env(safe-area-inset-top)); right:16px; z-index:1;
+width:42px; height:42px; border-radius:50%; background:rgba(20,27,30,.6); color:#fff;
+border:none; font-size:20px; line-height:1; display:flex; align-items:center; justify-content:center;
+cursor:pointer;
+}
+.scanner-consigne{
+position:absolute; bottom:max(30px, env(safe-area-inset-bottom)); left:16px; right:16px;
+text-align:center; color:#fff; font-size:13.5px; font-weight:600; text-shadow:0 1px 4px rgba(0,0,0,.7);
+}
+.scanner-erreur{
+position:absolute; bottom:96px; left:16px; right:16px; text-align:center;
+background:rgba(190,45,38,.94); color:#fff; padding:11px 14px; border-radius:11px;
+font-size:13px; font-weight:600; line-height:1.4;
+}
 
 /* ---- modèles métiers ---- */
 .modeles{
@@ -781,6 +831,10 @@ state.route = parseHash();
 // travaillent sur la même base, les données en cache peuvent être périmées.
 if(state.route.name === 'equip') equipDetail.id = null;
 if(state.route.name === 'p' || state.route.name === 'equip') fichePublique.token = null;
+// Filet de sécurité : si on change de route par un autre biais que le bouton
+// « fermer » du scanner (retour arrière du téléphone, par exemple), on
+// coupe quand même la caméra — sinon elle continuerait de tourner en fond.
+if(typeof scannerState !== 'undefined' && scannerState.ouvert) fermerScanner();
 render();
 });
 
@@ -803,6 +857,7 @@ box: '<path d="M12 3 3 7.5 12 12l9-4.5Z"/><path d="M3 7.5v9L12 21l9-4.5v-9"/><pa
 tag: '<path d="M4 6h16M7 12h10M10 18h4"/>',
 users: '<circle cx="9" cy="8" r="3.2"/><path d="M2.5 20c1.2-3.6 3.8-5.3 6.5-5.3s5.3 1.7 6.5 5.3"/><circle cx="17" cy="8.5" r="2.6"/><path d="M15.3 15c2.1.4 3.7 1.9 4.6 4.6"/>',
 clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/>',
+scan: '<rect x="3" y="3" width="7" height="7" rx="1.4"/><rect x="14" y="3" width="7" height="7" rx="1.4"/><rect x="3" y="14" width="7" height="7" rx="1.4"/><path d="M14 15h3v3M20 15v3h-3M14 21h3"/>',
 };
 function iconeNav(nom, taille){
 const t = taille || 18;
@@ -1607,6 +1662,11 @@ texte:"Imprimez l'étiquette et collez-la sur l'équipement. Le carnet est acces
 lien:'/equipements', bouton:'Voir le parc' },
 ];
 
+// Le <video> est recréé à chaque rendu (innerHTML) : on rattache le flux
+// existant et on (re)démarre la boucle de décodage juste après, comme le
+// drawQr() de la fiche équipement plus bas dans ce fichier.
+if(scannerState.ouvert) setTimeout(() => attacherScanner(), 0);
+
 return `
 <div class="accueil-hero">
 <div class="accueil-marque">
@@ -1636,23 +1696,16 @@ data-action="go" data-path="${e.lien}">${e.bouton}</button>
 </div>
 
 ${accueilCache.error
-? `<div class="alert alert-error" style="margin-top:14px;">${esc(accueilCache.error)}</div>`
-: !c
-? `<div class="spinner"></div>`
-: `<div class="accueil-chiffres">
-<div class="chiffre">
-<div class="chiffre-val">${c.actifs}</div>
-<div class="chiffre-lib">équipement${c.actifs > 1 ? 's' : ''} suivi${c.actifs > 1 ? 's' : ''}</div>
+? `<div class="alert alert-error" style="margin-top:14px;">${esc(accueilCache.error)}</div>` : ''}
+
+<div class="scanner-carte">
+<div class="scanner-carte-icone">${iconeNav('scan', 26)}</div>
+<div class="scanner-carte-texte">
+<div class="scanner-carte-titre">Scanner un équipement</div>
+<p>Ouvrez la caméra et cadrez le QR code collé sur l'équipement pour accéder directement à sa fiche — sans passer par l'appareil photo du téléphone.</p>
 </div>
-<div class="chiffre">
-<div class="chiffre-val">${c.interventions}</div>
-<div class="chiffre-lib">intervention${c.interventions > 1 ? 's' : ''} enregistrée${c.interventions > 1 ? 's' : ''}</div>
+<button class="btn btn-primary" data-action="ouvrir-scanner">Scanner un QR code</button>
 </div>
-<div class="chiffre">
-<div class="chiffre-val" style="font-size:20px;">${c.derniere ? fmtDate(c.derniere) : '—'}</div>
-<div class="chiffre-lib">dernière intervention</div>
-</div>
-</div>`}
 
 ${parcVide ? `
 <div class="alert alert-info" style="margin-top:14px;">
@@ -1660,7 +1713,138 @@ Votre parc est encore vide. ${isAdmin()
 ? `Commencez par créer un type d'équipement — ou partez d'un <strong>modèle métier</strong> pour tout créer d'un coup.`
 : `Votre administrateur doit d'abord créer les types d'équipement.`}
 </div>` : ''}
+
+${scannerState.ouvert ? `
+<div class="scanner-overlay">
+<video id="scanner-video" playsinline muted autoplay></video>
+<canvas id="scanner-canvas"></canvas>
+<div class="scanner-cadre"></div>
+<button class="scanner-fermer" data-action="fermer-scanner" title="Fermer">✕</button>
+<div class="scanner-consigne">Cadrez le QR code de l'équipement</div>
+${scannerState.erreur ? `<div class="scanner-erreur">${esc(scannerState.erreur)}</div>` : ''}
+</div>
+` : ''}
 `;
+}
+
+/* ---------------------------------------------------------------------- */
+/* Scanner QR intégré (accueil) — évite d'avoir à ouvrir l'appareil photo du
+téléphone à côté de l'appli : la caméra s'ouvre dans un écran plein cadre,
+chaque image est décodée avec jsQR, et dès qu'un QR WiTracEQUIP est reconnu
+on navigue directement sur la fiche (même logique de routage qu'une étiquette
+scannée avec l'appareil photo natif — voir lienPublic() / le hash-routing
+plus haut). */
+let scannerState = { ouvert:false, busy:false, erreur:'', stream:null, raf:null };
+
+async function ouvrirScanner(){
+if(scannerState.ouvert || scannerState.busy) return;
+
+if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+scannerState.ouvert = true;
+scannerState.erreur = "Votre navigateur ne permet pas d'utiliser la caméra ici. Scannez l'étiquette avec l'appareil photo du téléphone à la place.";
+render();
+return;
+}
+
+scannerState.busy = true; scannerState.erreur = ''; scannerState.ouvert = true;
+render();
+
+try{
+const stream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:{ ideal:'environment' } }, audio:false });
+scannerState.busy = false;
+if(!scannerState.ouvert){ stream.getTracks().forEach(t=>t.stop()); return; } // fermé pendant l'attente
+scannerState.stream = stream;
+render();
+}catch(e){
+scannerState.busy = false;
+if(!scannerState.ouvert) return;
+scannerState.erreur = /NotAllowedError|Permission denied/i.test(e.name || e.message || '')
+? "Accès à la caméra refusé. Autorisez la caméra pour WiTracEQUIP dans les réglages de votre navigateur, puis réessayez."
+: "Impossible d'accéder à la caméra : " + (e.message || e.name || 'erreur inconnue');
+render();
+}
+}
+
+function fermerScanner(){
+if(scannerState.raf) cancelAnimationFrame(scannerState.raf);
+scannerState.raf = null;
+if(scannerState.stream) scannerState.stream.getTracks().forEach(t=>t.stop());
+scannerState.stream = null;
+scannerState.ouvert = false;
+scannerState.busy = false;
+scannerState.erreur = '';
+render();
+}
+
+// Rattache le flux vidéo (conservé en mémoire) au <video> fraîchement recréé
+// par le rendu, et démarre la boucle de décodage si elle ne tourne pas déjà.
+// Appelée après chaque rendu de l'accueil tant que le scanner est ouvert —
+// même principe que setTimeout(()=>drawQr(...)) sur la fiche équipement.
+function attacherScanner(){
+if(!scannerState.ouvert || !scannerState.stream) return;
+
+if(typeof jsQR === 'undefined'){
+if(!scannerState.erreur){
+scannerState.erreur = "Le lecteur de QR code n'a pas pu se charger. Vérifiez votre connexion et réessayez.";
+render();
+}
+return;
+}
+
+const video = document.getElementById('scanner-video');
+const canvas = document.getElementById('scanner-canvas');
+if(!video || !canvas) return;
+
+if(video.srcObject !== scannerState.stream){
+video.srcObject = scannerState.stream;
+video.play().catch(()=>{});
+}
+
+if(scannerState.raf) return; // la boucle de décodage tourne déjà
+
+const ctx = canvas.getContext('2d', { willReadFrequently:true });
+
+function boucle(){
+if(!scannerState.ouvert || !scannerState.stream){ scannerState.raf = null; return; }
+
+if(video.readyState >= video.HAVE_ENOUGH_DATA && video.videoWidth){
+canvas.width = video.videoWidth;
+canvas.height = video.videoHeight;
+ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+let resultat = null;
+try{
+const image = ctx.getImageData(0, 0, canvas.width, canvas.height);
+resultat = jsQR(image.data, image.width, image.height, { inversionAttempts:'dontInvert' });
+}catch(e){ /* image illisible, on retente au prochain tour */ }
+if(resultat && resultat.data){
+scannerState.raf = null;
+traiterResultatScan(resultat.data);
+return;
+}
+}
+scannerState.raf = requestAnimationFrame(boucle);
+}
+scannerState.raf = requestAnimationFrame(boucle);
+}
+
+// Un QR WiTracEQUIP encode toujours .../#/p/<jeton> (ou plus rarement
+// .../#/equip/<id>) — voir lienPublic()/lienEquipement(). On ne garde que
+// le fragment de route et on laisse le routage habituel faire le reste
+// (même écran que si l'étiquette avait été scannée avec l'appareil photo).
+function traiterResultatScan(texte){
+const brut = (texte || '').trim();
+const idx = brut.indexOf('#');
+const chemin = idx !== -1 ? brut.slice(idx + 1) : (/^\/(p|equip)\//.test(brut) ? brut : '');
+
+if(!/^\/(p|equip)\//.test(chemin)){
+scannerState.erreur = "Ce QR code ne correspond pas à un équipement WiTracEQUIP.";
+render();
+setTimeout(() => { if(scannerState.ouvert){ scannerState.erreur = ''; render(); } }, 1800);
+return;
+}
+
+fermerScanner();
+nav(chemin);
 }
 
 /* ---------------------------------------------------------------------- */
@@ -2848,6 +3032,8 @@ else if(action === 'archive-equip'){ archiveEquipement(); }
 else if(action === 'restore-equip'){ restoreEquipement(); }
 else if(action === 'toggle-edit-equip'){ equipDetail.showEditForm = !equipDetail.showEditForm; equipDetail.editError=''; render(); }
 else if(action === 'print-qr'){ printQr(); }
+else if(action === 'ouvrir-scanner'){ ouvrirScanner(); }
+else if(action === 'fermer-scanner'){ fermerScanner(); }
 else if(action === 'connexion-depuis-scan'){ connexionDepuisScan(); }
 else if(action === 'toggle-partage'){ actionTogglePartage(); }
 else if(action === 'regen-token'){ actionRegenererLienPublic(); }
