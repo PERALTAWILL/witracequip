@@ -1,57 +1,27 @@
-/* =========================================================================
-   WiTracEQUIP — feuille de styles unique
-   -------------------------------------------------------------------------
-   Toute l'apparence de l'application est ici. Aucun style n'est écrit dans
-   le HTML ni généré depuis le JavaScript : pour changer une couleur, une
-   taille ou un espacement, c'est ce fichier et lui seul.
-
-   Organisation :
-     1. Jetons de thème (clair / sombre)
-     2. Base
-     3. Barre supérieure, onglets, statut réseau
-     4. Cartes, grilles, formulaires, boutons
-     5. Badges et messages
-     6. Listes et tableaux
-     7. Écrans d'authentification
-     8. Équipe et cloisonnement métier
-     9. Modèles métiers
-    10. Fiche équipement, QR code et impression d'étiquette
-   ========================================================================= */
-
-/* -------------------------------------------------------------------------
-   1. JETONS DE THÈME
-   Le mode sombre suit le réglage du système d'exploitation. Sur un chantier
-   ou dans un local technique, l'écran d'un téléphone en mode sombre reste
-   lisible ; c'est la raison d'être de ce second jeu de couleurs.
-   ------------------------------------------------------------------------- */
 :root{
-  --bg:#f4f6f7; --surface:#ffffff; --surface-2:#f0f2f4; --border:#e0e4e6;
-  --text:#141b1e; --text-dim:#5b686d; --primary:#0f766e; --primary-dim:#0b544e;
-  --primary-contrast:#ffffff; --danger:#b3261e; --danger-bg:#fbeae9;
-  --success:#166534; --success-bg:#eafaf0; --warn-bg:#fff7e6; --warn:#946200;
-  --radius:10px; --shadow:0 1px 2px rgba(20,27,30,.06), 0 1px 8px rgba(20,27,30,.04);
-  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+--bg:#f4f6f7; --surface:#ffffff; --surface-2:#f0f2f4; --border:#e0e4e6;
+--text:#141b1e; --text-dim:#5b686d; --primary:#0f766e; --primary-dim:#0b544e;
+--primary-contrast:#ffffff; --danger:#b3261e; --danger-bg:#fbeae9;
+--success:#166534; --success-bg:#eafaf0; --warn-bg:#fff7e6; --warn:#946200;
+--radius:10px; --shadow:0 1px 2px rgba(20,27,30,.06), 0 1px 8px rgba(20,27,30,.04);
+--font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }
 @media (prefers-color-scheme: dark){
-  :root{
-    --bg:#12181a; --surface:#1b2326; --surface-2:#222b2e; --border:#2c363a;
-    --text:#e9eef0; --text-dim:#9aabb1; --primary:#2dd4bf; --primary-dim:#14b8a6;
-    --primary-contrast:#062622; --danger:#f2887f; --danger-bg:#3a201d;
-    --success:#7fe0a6; --success-bg:#132a1e; --warn-bg:#332a12; --warn:#f2c46d;
-    --shadow:0 1px 2px rgba(0,0,0,.3), 0 1px 10px rgba(0,0,0,.25);
-  }
+:root{
+--bg:#12181a; --surface:#1b2326; --surface-2:#222b2e; --border:#2c363a;
+--text:#e9eef0; --text-dim:#9aabb1; --primary:#2dd4bf; --primary-dim:#14b8a6;
+--primary-contrast:#062622; --danger:#f2887f; --danger-bg:#3a201d;
+--success:#7fe0a6; --success-bg:#132a1e; --warn-bg:#332a12; --warn:#f2c46d;
+--shadow:0 1px 2px rgba(0,0,0,.3), 0 1px 10px rgba(0,0,0,.25);
 }
-
-/* -------------------------------------------------------------------------
-   2. BASE
-   ------------------------------------------------------------------------- */
+}
 *{box-sizing:border-box;}
 html,body{margin:0;padding:0;}
 body{
-  background:var(--bg); color:var(--text); font-family:var(--font);
-  font-size:15px; line-height:1.5; -webkit-font-smoothing:antialiased;
-  /* Un numéro de série ou un nom sans espace ne doit jamais élargir la page. */
-  overflow-wrap:break-word;
+background:var(--bg); color:var(--text); font-family:var(--font);
+font-size:15px; line-height:1.5; -webkit-font-smoothing:antialiased;
+/* Un numéro de série ou un nom sans espace ne doit jamais élargir la page. */
+overflow-wrap:break-word;
 }
 #app{min-height:100vh; display:flex; flex-direction:column;}
 a{color:var(--primary); text-decoration:none;}
@@ -61,90 +31,66 @@ h1,h2,h3{margin:0 0 4px 0; font-weight:650;}
 .muted{color:var(--text-dim);}
 .small{font-size:13px;}
 
-/* -------------------------------------------------------------------------
-   3. BARRE SUPÉRIEURE, ONGLETS, STATUT RÉSEAU
-   ------------------------------------------------------------------------- */
+/* ---- topbar ---- */
 .topbar{
-  display:flex; align-items:center; gap:14px; padding:10px 18px;
-  background:var(--surface); border-bottom:1px solid var(--border);
-  position:sticky; top:0; z-index:20;
+display:flex; align-items:center; gap:14px; padding:10px 18px;
+background:var(--surface); border-bottom:1px solid var(--border);
+position:sticky; top:0; z-index:20;
 }
 .brand{display:flex; align-items:center; gap:10px; font-weight:700; font-size:17px; letter-spacing:-.01em;}
-.brand .logo{width:32px; height:32px; object-fit:contain; flex-shrink:0;}
+.brand .logo{
+width:32px; height:32px; object-fit:contain; flex-shrink:0;
+}
 .brand .by{font-size:10.5px; color:var(--text-dim); font-weight:500; margin-top:1px;}
 .topbar-spacer{flex:1;}
 .org-pill{
-  font-size:12.5px; color:var(--text-dim); background:var(--surface-2);
-  border:1px solid var(--border); padding:4px 10px; border-radius:999px;
+font-size:12.5px; color:var(--text-dim); background:var(--surface-2);
+border:1px solid var(--border); padding:4px 10px; border-radius:999px;
+}
+.badge-attente{
+font-size:12.5px; font-weight:700; color:#fff; background:#b45309;
+padding:4px 10px; border-radius:999px; margin-right:8px; white-space:nowrap;
 }
 .user-menu{position:relative;}
 .user-btn{
-  display:flex; align-items:center; gap:8px; background:none; border:1px solid var(--border);
-  padding:6px 10px; border-radius:999px; cursor:pointer; color:var(--text);
+display:flex; align-items:center; gap:8px; background:none; border:1px solid var(--border);
+padding:6px 10px; border-radius:999px; cursor:pointer; color:var(--text);
 }
 .avatar{
-  width:24px; height:24px; border-radius:50%; background:var(--surface-2);
-  display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:700;
-  border:1px solid var(--border);
+width:24px; height:24px; border-radius:50%; background:var(--surface-2);
+display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:700;
+border:1px solid var(--border);
 }
 .dropdown{
-  position:absolute; right:0; top:calc(100% + 6px); background:var(--surface);
-  border:1px solid var(--border); border-radius:var(--radius); box-shadow:var(--shadow);
-  min-width:180px; padding:6px; display:none; z-index:30;
+position:absolute; right:0; top:calc(100% + 6px); background:var(--surface);
+border:1px solid var(--border); border-radius:var(--radius); box-shadow:var(--shadow);
+min-width:180px; padding:6px; display:none; z-index:30;
 }
 .dropdown.open{display:block;}
 .dropdown button{
-  display:block; width:100%; text-align:left; background:none; border:none;
-  padding:8px 10px; border-radius:6px; cursor:pointer; color:var(--text);
+display:block; width:100%; text-align:left; background:none; border:none;
+padding:8px 10px; border-radius:6px; cursor:pointer; color:var(--text);
 }
 .dropdown button:hover{background:var(--surface-2);}
 
+/* ---- nav tabs ---- */
 .tabs{
-  display:flex; gap:4px; padding:0 18px; background:var(--surface);
-  border-bottom:1px solid var(--border); overflow-x:auto;
+display:flex; gap:4px; padding:0 18px; background:var(--surface);
+border-bottom:1px solid var(--border); overflow-x:auto;
 }
 .tab{
-  padding:11px 14px; font-size:13.5px; font-weight:600; color:var(--text-dim);
-  border-bottom:2px solid transparent; cursor:pointer; white-space:nowrap;
+padding:11px 14px; font-size:13.5px; font-weight:600; color:var(--text-dim);
+border-bottom:2px solid transparent; cursor:pointer; white-space:nowrap;
 }
 .tab.active{color:var(--primary); border-bottom-color:var(--primary);}
 
-/* Témoin de statut réseau.
-   En ligne, il ne montre rien : un bandeau permanent finit par ne plus être lu.
-   Il n'apparaît que lorsqu'il a quelque chose à dire — coupure réseau, ou
-   interventions en attente d'envoi. */
-.net-banner{
-  display:flex; align-items:center; gap:10px; flex-wrap:wrap;
-  padding:8px 18px; font-size:13px; font-weight:600;
-  border-bottom:1px solid var(--border);
-}
-.net-banner.offline{background:var(--warn-bg); color:var(--warn);}
-.net-banner.pending{background:var(--surface-2); color:var(--text-dim);}
-.net-banner.syncing{background:var(--success-bg); color:var(--success);}
-.net-banner .dot{
-  width:9px; height:9px; border-radius:50%; background:currentColor;
-  flex-shrink:0; box-shadow:0 0 0 3px color-mix(in srgb, currentColor 22%, transparent);
-}
-.net-banner .spacer{flex:1;}
-.net-banner .btn{padding:4px 9px; font-size:12px;}
-
-/* Bandeau « données en cache » affiché en tête d'une fiche consultée hors ligne. */
-.cache-note{
-  display:flex; align-items:center; gap:8px;
-  background:var(--surface-2); color:var(--text-dim);
-  border:1px dashed var(--border); border-radius:8px;
-  padding:9px 12px; font-size:12.5px; margin-bottom:14px;
-}
-
-main{flex:1; width:100%; max-width:920px; margin:0 auto; padding:20px 18px 60px;}
+main{flex:1; width:100%; max-width:920px; margin:0 auto; padding:20px 18px 60px; width:100%;}
 .container-wide{max-width:1080px;}
 
-/* -------------------------------------------------------------------------
-   4. CARTES, GRILLES, FORMULAIRES, BOUTONS
-   ------------------------------------------------------------------------- */
+/* ---- cards / surfaces ---- */
 .card{
-  background:var(--surface); border:1px solid var(--border); border-radius:var(--radius);
-  padding:18px; box-shadow:var(--shadow);
+background:var(--surface); border:1px solid var(--border); border-radius:var(--radius);
+padding:18px; box-shadow:var(--shadow);
 }
 .card + .card{margin-top:14px;}
 .row{display:flex; align-items:center; gap:10px;}
@@ -153,31 +99,32 @@ main{flex:1; width:100%; max-width:920px; margin:0 auto; padding:20px 18px 60px;
 .stack{display:flex; flex-direction:column; gap:10px;}
 .grid-2{display:grid; grid-template-columns:1fr 1fr; gap:10px;}
 /* Sans ceci, une cellule de grille refuse de se réduire sous la taille de son
-   contenu (QR code, nom à rallonge) et fait déborder toute la page. */
+contenu (QR code, nom à rallonge) et fait déborder toute la page. */
 .grid-2 > *{min-width:0;}
 @media(max-width:520px){.grid-2{grid-template-columns:1fr;}}
 
+/* ---- forms ---- */
 label{display:block; font-size:12.5px; font-weight:650; color:var(--text-dim); margin-bottom:4px; text-transform:uppercase; letter-spacing:.02em;}
 .field{margin-bottom:12px;}
 input[type=text], input[type=email], input[type=password], input[type=number],
 input[type=date], input[type=search], select, textarea{
-  width:100%; padding:9px 11px; border:1px solid var(--border); border-radius:8px;
-  background:var(--surface); color:var(--text); outline:none;
+width:100%; padding:9px 11px; border:1px solid var(--border); border-radius:8px;
+background:var(--surface); color:var(--text); outline:none;
 }
 input:focus, select:focus, textarea:focus{border-color:var(--primary); box-shadow:0 0 0 3px color-mix(in srgb, var(--primary) 18%, transparent);}
 textarea{min-height:70px; resize:vertical;}
 .hint{font-size:12px; color:var(--text-dim); margin-top:4px;}
 .oblig{
-  font-size:10px; font-weight:700; letter-spacing:.03em; text-transform:uppercase;
-  color:var(--danger); background:var(--danger-bg);
-  border-radius:99px; padding:1px 6px; margin-left:4px;
+font-size:10px; font-weight:700; letter-spacing:.03em; text-transform:uppercase;
+color:var(--danger); background:var(--danger-bg);
+border-radius:99px; padding:1px 6px; margin-left:4px;
 }
 
 .btn{
-  display:inline-flex; align-items:center; justify-content:center; gap:6px;
-  padding:9px 15px; border-radius:8px; border:1px solid var(--border);
-  background:var(--surface); color:var(--text); font-weight:600; font-size:13.5px;
-  cursor:pointer; white-space:nowrap;
+display:inline-flex; align-items:center; justify-content:center; gap:6px;
+padding:9px 15px; border-radius:8px; border:1px solid var(--border);
+background:var(--surface); color:var(--text); font-weight:600; font-size:13.5px;
+cursor:pointer; white-space:nowrap;
 }
 .btn:hover{background:var(--surface-2);}
 .btn:disabled{opacity:.5; cursor:not-allowed;}
@@ -190,64 +137,44 @@ textarea{min-height:70px; resize:vertical;}
 .icon-btn{background:none; border:none; cursor:pointer; color:var(--text-dim); padding:4px;}
 .icon-btn:hover{color:var(--text);}
 
-/* -------------------------------------------------------------------------
-   5. BADGES ET MESSAGES
-   ------------------------------------------------------------------------- */
+/* ---- badges / alerts ---- */
 .badge{display:inline-block; font-size:11.5px; font-weight:700; padding:2px 8px; border-radius:999px;}
 .badge-neutral{background:var(--surface-2); color:var(--text-dim);}
 .badge-warn{background:var(--warn-bg); color:var(--warn);}
 .badge-role{background:var(--surface-2); color:var(--primary); border:1px solid var(--border);}
 .badge-off{background:var(--danger-bg); color:var(--danger);}
-.badge-attente{background:var(--warn-bg); color:var(--warn);}
 .alert{padding:11px 13px; border-radius:8px; font-size:13.5px; margin-bottom:14px;}
 .alert-error{background:var(--danger-bg); color:var(--danger);}
 .alert-success{background:var(--success-bg); color:var(--success);}
 .alert-info{background:var(--surface-2); color:var(--text-dim);}
 .alert-warn-admin{background:var(--warn-bg); color:var(--warn); margin-bottom:12px;}
 
-/* Avertissement de doublon de numéro de série.
-   Volontairement jaune et non rouge : c'est un signalement, pas un refus.
-   Deux appareils peuvent légitimement porter le même numéro chez deux
-   fabricants différents — c'est à la personne de trancher, pas au logiciel. */
-.alert-doublon{
-  background:var(--warn-bg); color:var(--warn); border:1px solid color-mix(in srgb, var(--warn) 35%, transparent);
-}
-.alert-doublon strong{display:block; margin-bottom:4px;}
-.alert-doublon .liens{margin-top:6px; display:flex; flex-direction:column; gap:3px;}
-.alert-doublon .liens a{color:inherit; text-decoration:underline; font-weight:600; font-size:13px;}
-
-/* -------------------------------------------------------------------------
-   6. LISTES ET TABLEAUX
-   ------------------------------------------------------------------------- */
+/* ---- lists / tables ---- */
 .list-item{
-  display:flex; align-items:center; gap:12px; padding:13px 0; border-bottom:1px solid var(--border);
+display:flex; align-items:center; gap:12px; padding:13px 0; border-bottom:1px solid var(--border);
 }
 .list-item:last-child{border-bottom:none;}
 .list-item .thumb{
-  width:38px; height:38px; border-radius:8px; background:var(--surface-2); flex-shrink:0;
-  display:flex; align-items:center; justify-content:center; font-weight:700; color:var(--primary);
-  border:1px solid var(--border);
+width:38px; height:38px; border-radius:8px; background:var(--surface-2); flex-shrink:0;
+display:flex; align-items:center; justify-content:center; font-weight:700; color:var(--primary);
+border:1px solid var(--border);
 }
 table{width:100%; border-collapse:collapse; font-size:13.5px;}
 th{text-align:left; font-size:11.5px; text-transform:uppercase; letter-spacing:.02em; color:var(--text-dim); padding:8px 8px; border-bottom:1px solid var(--border);}
 td{padding:10px 8px; border-bottom:1px solid var(--border); vertical-align:top;}
 tr:last-child td{border-bottom:none;}
-/* Ligne d'intervention pas encore synchronisée : visible d'un coup d'œil. */
-tr.en-attente td{background:color-mix(in srgb, var(--warn-bg) 60%, transparent);}
 
 .empty{text-align:center; padding:40px 20px; color:var(--text-dim);}
 .empty .big{font-size:34px; margin-bottom:8px;}
 
 .spinner{
-  width:20px; height:20px; border:2.5px solid var(--border); border-top-color:var(--primary);
-  border-radius:50%; animation:spin .7s linear infinite; margin:30px auto;
+width:20px; height:20px; border:2.5px solid var(--border); border-top-color:var(--primary);
+border-radius:50%; animation:spin .7s linear infinite; margin:30px auto;
 }
 @keyframes spin{to{transform:rotate(360deg);}}
 .center-screen{min-height:100vh; display:flex; align-items:center; justify-content:center;}
 
-/* -------------------------------------------------------------------------
-   7. ÉCRANS D'AUTHENTIFICATION
-   ------------------------------------------------------------------------- */
+/* ---- auth screen ---- */
 .auth-wrap{max-width:380px; margin:8vh auto; padding:0 18px;}
 .auth-logo{display:flex; flex-direction:column; align-items:center; gap:8px; margin-bottom:26px; text-align:center;}
 .auth-logo .logo{width:52px; height:52px; object-fit:contain;}
@@ -255,100 +182,342 @@ tr.en-attente td{background:color-mix(in srgb, var(--warn-bg) 60%, transparent);
 .auth-toggle button{flex:1; padding:8px; border:none; background:none; border-radius:7px; cursor:pointer; font-weight:650; color:var(--text-dim);}
 .auth-toggle button.active{background:var(--surface); color:var(--text); box-shadow:var(--shadow);}
 
-/* Champ mot de passe avec aperçu (le petit œil). */
+/* ---- champ mot de passe avec aperçu ---- */
 .pw-wrap{position:relative; display:block;}
 .pw-wrap input{padding-right:44px;}
 .pw-toggle{
-  position:absolute; right:5px; top:50%; transform:translateY(-50%);
-  display:flex; align-items:center; justify-content:center;
-  width:32px; height:32px; padding:0; border:none; border-radius:7px;
-  background:none; color:var(--text-dim); cursor:pointer;
+position:absolute; right:5px; top:50%; transform:translateY(-50%);
+display:flex; align-items:center; justify-content:center;
+width:32px; height:32px; padding:0; border:none; border-radius:7px;
+background:none; color:var(--text-dim); cursor:pointer;
 }
 .pw-toggle:hover{color:var(--text); background:var(--surface-2);}
 .pw-toggle:focus-visible{outline:2px solid var(--primary); outline-offset:1px;}
 
-/* -------------------------------------------------------------------------
-   8. ÉQUIPE ET CLOISONNEMENT MÉTIER
-   ------------------------------------------------------------------------- */
+/* ---- equipe ---- */
 .member{display:flex; align-items:center; gap:10px; padding:12px 0; border-bottom:1px solid var(--border); flex-wrap:wrap;}
 .member:last-child{border-bottom:none;}
 .member .who{flex:1; min-width:150px;}
 .member select{width:auto; min-width:130px; padding:6px 8px;}
-/* Cloisonnement par métier : quels types un profil a le droit de voir. */
+/* Cloisonnement par métier : quels types un profil a le droit de voir */
 .acces{
-  width:100%; margin-top:2px; padding:10px 12px;
-  background:var(--surface-2); border:1px solid var(--border); border-radius:8px;
+width:100%; margin-top:2px; padding:10px 12px;
+background:var(--surface-2); border:1px solid var(--border); border-radius:8px;
 }
 .acces .case{
-  display:flex; align-items:center; gap:8px; margin:0 0 4px 0;
-  text-transform:none; font-weight:500; font-size:13.5px; color:var(--text);
-  letter-spacing:normal; cursor:pointer;
+display:flex; align-items:center; gap:8px; margin:0 0 4px 0;
+text-transform:none; font-weight:500; font-size:13.5px; color:var(--text);
+letter-spacing:normal; cursor:pointer;
 }
 .acces .case input{width:auto; margin:0; flex-shrink:0;}
-.acces-liste{display:flex; flex-wrap:wrap; gap:4px 18px; margin:6px 0 0 24px;}
+.acces-liste{
+display:flex; flex-wrap:wrap; gap:4px 18px; margin:6px 0 0 24px;
+}
 .acces-liste .case{margin:0;}
 .invite-link{
-  display:flex; gap:8px; align-items:center; background:var(--surface-2);
-  border:1px solid var(--border); border-radius:8px; padding:8px 10px; margin-top:8px; flex-wrap:wrap;
+display:flex; gap:8px; align-items:center; background:var(--surface-2);
+border:1px solid var(--border); border-radius:8px; padding:8px 10px; margin-top:8px; flex-wrap:wrap;
 }
 .invite-link code{
-  flex:1; min-width:140px; font-size:12px; word-break:break-all;
-  font-family:ui-monospace, SFMono-Regular, Menlo, monospace; color:var(--text-dim);
+flex:1; min-width:140px; font-size:12px; word-break:break-all;
+font-family:ui-monospace, SFMono-Regular, Menlo, monospace; color:var(--text-dim);
 }
 
-/* -------------------------------------------------------------------------
-   9. MODÈLES MÉTIERS
-   ------------------------------------------------------------------------- */
+/* ---- accueil ---- */
+/* Pas d'animation sur cet écran : ça a été tenté (fondu + léger mouvement à
+l'arrivée) mais le double rendu de l'accueil (un premier passage, puis un
+second quelques centaines de ms après quand les chiffres arrivent du
+serveur) provoquait des effets de bug visuellement gênants difficiles à
+fiabiliser. Tout est donc statique, volontairement. */
+.accueil-hero{
+background:linear-gradient(120deg, var(--primary) 0%, var(--primary-dim) 45%, var(--primary) 100%);
+color:var(--primary-contrast); border-radius:var(--radius);
+padding:22px 22px 20px; margin-bottom:20px; box-shadow:var(--shadow);
+}
+.accueil-marque{display:flex; align-items:center; gap:14px; margin-bottom:12px;}
+.accueil-marque img{width:44px; height:44px; object-fit:contain; flex-shrink:0;}
+.accueil-titre{font-size:22px; font-weight:750; letter-spacing:-.02em; line-height:1.2;}
+.accueil-org{font-size:13.5px; opacity:.85; margin-top:2px;}
+.accueil-phrase{font-size:14px; line-height:1.55; opacity:.92; max-width:60ch; margin:0;}
+
+.accueil-section-titre{
+font-size:12px; font-weight:750; letter-spacing:.06em; text-transform:uppercase;
+color:var(--text-dim); margin-bottom:10px;
+}
+.etapes-accueil{
+display:grid; grid-template-columns:repeat(auto-fit, minmax(210px, 1fr)); gap:12px;
+}
+.etape-accueil{
+background:var(--surface); border:1px solid var(--border); border-radius:var(--radius);
+padding:16px; display:flex; flex-direction:column; gap:6px; box-shadow:var(--shadow);
+}
+.etape-accueil.mise-en-avant{border-color:var(--primary);}
+.etape-num{
+width:28px; height:28px; border-radius:50%; background:var(--surface-2);
+color:var(--primary); font-weight:800; font-size:14px;
+display:flex; align-items:center; justify-content:center; margin-bottom:2px;
+}
+.etape-accueil.mise-en-avant .etape-num{background:var(--primary); color:var(--primary-contrast);}
+.etape-titre{font-size:16px; font-weight:700; letter-spacing:-.01em;}
+.etape-accueil p{font-size:13px; color:var(--text-dim); line-height:1.5; flex:1; margin:0;}
+.etape-accueil .btn{align-self:flex-start; margin-top:4px;}
+
+.accueil-chiffres{
+display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr));
+gap:12px; margin-top:20px;
+}
+.chiffre{
+background:var(--surface); border:1px solid var(--border); border-radius:var(--radius);
+padding:16px; text-align:center;
+}
+.chiffre-val{font-size:30px; font-weight:750; color:var(--primary); line-height:1.1;}
+.chiffre-lib{font-size:12.5px; color:var(--text-dim); margin-top:4px;}
+
+/* ---- scanner QR (accueil) ---- */
+.scanner-carte{
+background:var(--surface); border:1px solid var(--border); border-radius:var(--radius);
+padding:18px; margin-top:20px; display:flex; align-items:center; gap:16px; box-shadow:var(--shadow);
+}
+.scanner-carte-icone{
+width:50px; height:50px; border-radius:13px; background:var(--accent-dim); color:var(--accent);
+display:flex; align-items:center; justify-content:center; flex-shrink:0;
+}
+.scanner-carte-texte{flex:1; min-width:0;}
+.scanner-carte-titre{font-weight:700; font-size:15.5px; margin-bottom:2px;}
+.scanner-carte-texte p{font-size:13px; color:var(--text-dim); line-height:1.45; margin:0;}
+.scanner-carte .btn{flex-shrink:0;}
+@media(max-width:560px){
+.scanner-carte{flex-direction:column; align-items:stretch; text-align:center;}
+.scanner-carte-icone{align-self:center;}
+.scanner-carte .btn{width:100%;}
+}
+
+.scanner-overlay{
+position:fixed; inset:0; z-index:200; background:#000;
+display:flex; align-items:center; justify-content:center; overflow:hidden;
+}
+.scanner-overlay video{
+position:absolute; inset:0; width:100%; height:100%; object-fit:cover;
+background:#000;
+}
+.scanner-overlay canvas{ display:none; }
+.scanner-cadre{
+position:relative; width:min(72vw, 280px); height:min(72vw, 280px);
+border:3px solid rgba(255,255,255,.85); border-radius:20px;
+box-shadow:0 0 0 2000px rgba(0,0,0,.45);
+}
+.scanner-fermer{
+position:absolute; top:max(16px, env(safe-area-inset-top)); right:16px; z-index:1;
+width:42px; height:42px; border-radius:50%; background:rgba(20,27,30,.6); color:#fff;
+border:none; font-size:20px; line-height:1; display:flex; align-items:center; justify-content:center;
+cursor:pointer;
+}
+.scanner-consigne{
+position:absolute; bottom:max(30px, env(safe-area-inset-bottom)); left:16px; right:16px;
+text-align:center; color:#fff; font-size:13.5px; font-weight:600; text-shadow:0 1px 4px rgba(0,0,0,.7);
+}
+.scanner-erreur{
+position:absolute; bottom:96px; left:16px; right:16px; text-align:center;
+background:rgba(190,45,38,.94); color:#fff; padding:11px 14px; border-radius:11px;
+font-size:13px; font-weight:600; line-height:1.4;
+}
+
+/* ---- modèles métiers ---- */
 .modeles{
-  display:grid; grid-template-columns:repeat(auto-fit, minmax(230px, 1fr));
-  gap:10px; margin-top:14px;
+display:grid; grid-template-columns:repeat(auto-fit, minmax(230px, 1fr));
+gap:10px; margin-top:14px;
 }
 .modele{
-  background:var(--surface-2); border:1px solid var(--border); border-radius:var(--radius);
-  padding:14px; display:flex; flex-direction:column; gap:4px;
+background:var(--surface-2); border:1px solid var(--border); border-radius:var(--radius);
+padding:14px; display:flex; flex-direction:column; gap:4px;
 }
 .modele-nom{font-weight:650; font-size:14.5px;}
-.modele-types{font-size:12px; color:var(--text-dim); line-height:1.45; margin:6px 0 10px; flex:1;}
+.modele-types{
+font-size:12px; color:var(--text-dim); line-height:1.45;
+margin:6px 0 10px; flex:1;
+}
 .modele .btn{align-self:flex-start;}
 
-/* Constructeur de champs personnalisés d'un type d'équipement. */
+/* ---- field builder (types) ---- */
 .champ-row{display:grid; grid-template-columns:1fr 110px 32px; gap:8px; margin-bottom:8px; align-items:center;}
 
-/* -------------------------------------------------------------------------
-   10. FICHE ÉQUIPEMENT, QR CODE ET IMPRESSION D'ÉTIQUETTE
-   ------------------------------------------------------------------------- */
+/* ---- en-tête d'une fiche équipement ---- */
 .fiche-entete{display:flex; align-items:flex-start; gap:10px; flex-wrap:wrap; margin-bottom:14px;}
 .fiche-entete .titre{flex:1 1 160px; min-width:0;}
 .fiche-entete .actions{display:flex; gap:6px; flex-wrap:wrap;}
 /* Sur téléphone, les boutons passent sous le titre plutôt que de l'écraser. */
 @media(max-width:520px){
-  .fiche-entete .titre{flex:1 1 100%;}
-  .fiche-entete .actions{width:100%;}
-  .fiche-entete .actions .btn{flex:1;}
+.fiche-entete .titre{flex:1 1 100%;}
+.fiche-entete .actions{width:100%;}
+.fiche-entete .actions .btn{flex:1;}
 }
 
+/* ---- QR / impression d'étiquette ---- */
 .qr-box{display:flex; flex-direction:column; align-items:center; gap:10px; padding:10px 0;}
 /* Le QR est généré à taille fixe : on l'oblige à se réduire sur les petits écrans. */
 .qr-box canvas{max-width:100%; height:auto;}
 #print-area{display:none;}
 
 /* Étiquette : uniquement le QR code et l'identifiant (immatriculation ou n° de
-   série). Tout le reste de l'application est retiré du flux d'impression —
-   pas masqué mais retiré, sinon certaines imprimantes sortent des pages vides.
-   Pensé pour une imprimante thermique d'étiquettes. */
+série). Tout le reste de l'application est retiré du flux d'impression —
+pas masqué mais retiré, sinon certaines imprimantes sortent des pages vides.
+Pensé pour une imprimante thermique d'étiquettes. */
 @media print{
-  @page{ margin:3mm; }
-  html, body{ background:#fff !important; margin:0; padding:0; }
-  #app{ display:none !important; }
-  #print-area{ display:block !important; text-align:center; color:#000; }
-  #print-area img{ display:block; margin:0 auto; }
-  #print-area .etiquette-id{
-    font-family:Arial, Helvetica, sans-serif;
-    font-weight:700; font-size:10pt; color:#000;
-    margin-top:1.5mm; letter-spacing:.02em;
-    word-break:break-all;
-  }
+@page{ size:20mm 20mm; margin:1mm; }
+html, body{ background:#fff !important; margin:0; padding:0; }
+#app{ display:none !important; }
+#print-area{
+display:block !important;
+width:18mm;
+text-align:center;
+color:#000;
+overflow:hidden;
+}
+#print-area img{ display:block; margin:0 auto; }
+#print-area .etiquette-id{
+font-family:Arial, Helvetica, sans-serif;
+font-weight:700; font-size:6pt; line-height:1.1; color:#000;
+margin-top:0.6mm; letter-spacing:.01em;
+word-break:break-all;
+}
+}
+
+/* ---- Consultation publique (scan du QR code, sans compte) ---- */
+.pub-page{width:100%; max-width:820px; margin:0 auto; padding:18px 16px 48px;
+box-sizing:border-box; min-width:0;}
+.pub-page *{min-width:0;}
+.pub-page table{width:100%; table-layout:fixed; overflow-wrap:break-word;}
+/* Sur un telephone, un tableau a quatre colonnes devient illisible : chaque
+intervention se replie alors en bloc, une ligne par information. */
+@media(max-width:560px){
+.pub-ivs{table-layout:auto;}
+.pub-ivs thead{display:none;}
+.pub-ivs, .pub-ivs tbody, .pub-ivs tr, .pub-ivs td{display:block; width:100%;}
+.pub-ivs tr{padding:10px 0; border-bottom:1px solid var(--border);}
+.pub-ivs tr:last-child{border-bottom:none;}
+.pub-ivs td{border:none; padding:2px 0;}
+.pub-ivs td[data-l]::before{
+content:attr(data-l) " : "; color:var(--text-dim); font-weight:600;
+}
+.pub-ivs td.iv-date{font-weight:700; font-size:15px; padding-bottom:4px;}
+}
+.pub-entete{
+display:flex; align-items:center; gap:12px; flex-wrap:wrap;
+padding:14px 16px; border-radius:14px; margin-bottom:16px;
+background:linear-gradient(135deg,#0d5a51,#0a3f3a); color:#fff;
+}
+.pub-entete img{width:38px; height:38px; border-radius:9px; flex:0 0 auto;}
+.pub-entete .nom{font-weight:700; letter-spacing:.01em;}
+.pub-entete .by{font-size:11px; opacity:.75;}
+.pub-entete .org{margin-left:auto; font-size:12px; opacity:.9; min-width:0;}
+.pub-connexion{
+flex:0 0 auto; margin-left:10px;
+font:inherit; font-size:13px; font-weight:600; line-height:1;
+color:#fff; background:rgba(255,255,255,.14);
+border:1px solid rgba(255,255,255,.35); border-radius:9px;
+padding:9px 14px; cursor:pointer; white-space:nowrap;
+}
+.pub-connexion:hover{background:rgba(255,255,255,.24);}
+.pub-titre{margin:0 0 2px; font-size:20px; line-height:1.25; word-break:break-word;}
+.pub-lecture{
+display:inline-flex; align-items:center; gap:6px;
+font-size:12px; font-weight:600; padding:4px 10px; border-radius:999px;
+background:rgba(15,122,110,.12); color:var(--accent, #0f7a6e);
+border:1px solid rgba(15,122,110,.25);
+}
+.alerte-serie{
+margin-top:6px; font-size:13px; line-height:1.5;
+padding:9px 11px; border-radius:9px;
+background:rgba(200,120,20,.10); color:#8a5209;
+border:1px solid rgba(200,120,20,.28);
+}
+.alerte-serie a{color:#8a5209; font-weight:600;}
+.alerte-serie.vide{display:none;}
+.pub-retire{
+margin-left:8px;
+background:rgba(200,120,20,.12); color:#a8630f;
+border-color:rgba(200,120,20,.3);
+}
+.pub-pied{
+margin-top:22px; text-align:center; font-size:12px; line-height:1.6;
+color:var(--text-dim);
+}
+.pub-pied a{color:var(--text-dim);}
+@media(max-width:480px){
+.pub-entete .org{margin-left:auto; width:auto; text-align:right;}
+.pub-connexion{margin-left:0; width:100%; padding:11px 14px;}
 }
 
 ::-webkit-scrollbar{width:10px; height:10px;}
 ::-webkit-scrollbar-thumb{background:var(--border); border-radius:6px;}
+
+/* =========================================================================
+Refonte visuelle : navigation par sidebar (bureau) / barre du bas (mobile),
+à la place de l'ancienne rangée d'onglets horizontale.
+========================================================================= */
+:root{
+--accent:#d97757; --accent-dim:#f5e1d8; --accent-contrast:#ffffff;
+--sidebar-bg:#0a4f44; --sidebar-active:rgba(255,255,255,.14);
+--bg-glow:
+radial-gradient(1400px 900px at 92% -12%, rgba(14,118,106,.07), transparent 60%),
+radial-gradient(1100px 850px at -12% 108%, rgba(217,119,87,.05), transparent 55%);
+}
+@media (prefers-color-scheme: dark){
+:root{
+--accent:#e2916b; --accent-dim:#3a2a20; --accent-contrast:#241209;
+--sidebar-bg:#08211c;
+--bg-glow:
+radial-gradient(1400px 900px at 92% -12%, rgba(45,212,191,.05), transparent 60%),
+radial-gradient(1100px 850px at -12% 108%, rgba(226,145,107,.04), transparent 55%);
+}
+}
+body{background-image:var(--bg-glow); background-color:var(--bg); background-attachment:fixed;}
+.badge-attente{background:var(--accent);}
+
+.shell{display:flex; align-items:stretch; min-height:100vh;}
+.sidebar{
+width:232px; flex-shrink:0; background:var(--sidebar-bg); color:#fff;
+display:flex; flex-direction:column; gap:22px; padding:22px 14px;
+box-sizing:border-box; position:sticky; top:0; align-self:flex-start;
+height:100vh; overflow-y:auto;
+}
+.sidebar-brand{display:flex; align-items:center; gap:10px; padding:0 8px;}
+.sidebar-brand .logo{width:28px; height:28px; object-fit:contain; flex-shrink:0;}
+.sidebar-brand .name{font-weight:800; font-size:15px; letter-spacing:-.01em;}
+.sidebar-brand .by{font-size:10px; color:rgba(255,255,255,.6); margin-top:1px;}
+.sidebar-nav{display:flex; flex-direction:column; gap:2px;}
+.sidebar-link{
+display:flex; align-items:center; gap:11px; padding:10px 12px; border-radius:11px;
+color:rgba(255,255,255,.82); font-weight:600; font-size:13.5px; cursor:pointer;
+}
+.sidebar-link:hover{background:rgba(255,255,255,.08); color:#fff;}
+.sidebar-link.active{background:var(--sidebar-active); color:#fff;}
+.sidebar-link svg{flex-shrink:0;}
+.sidebar-spacer{flex:1;}
+.sidebar-sync{
+display:flex; align-items:center; gap:8px; background:rgba(217,119,87,.22);
+border:1px solid rgba(217,119,87,.4); border-radius:11px; padding:9px 11px;
+font-size:12px; font-weight:600; color:#fcd9c8;
+}
+
+.shell-main{flex:1; min-width:0; display:flex; flex-direction:column;}
+
+.bottom-nav{display:none;}
+
+@media(max-width:880px){
+.sidebar{display:none;}
+.bottom-nav{
+display:flex; position:fixed; left:0; right:0; bottom:0; z-index:25;
+background:var(--surface); border-top:1px solid var(--border);
+align-items:center; justify-content:space-around;
+padding:6px 4px calc(6px + env(safe-area-inset-bottom));
+}
+.bottom-nav-item{
+display:flex; flex-direction:column; align-items:center; gap:3px;
+color:var(--text-dim); font-size:10px; font-weight:700; cursor:pointer;
+flex:1; padding:5px 2px; min-width:0;
+}
+.bottom-nav-item span{white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%;}
+.bottom-nav-item.active{color:var(--primary);}
+main{padding-bottom:78px;}
+}
