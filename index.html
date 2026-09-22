@@ -64,6 +64,10 @@ width:32px; height:32px; object-fit:contain; flex-shrink:0;
 font-size:12.5px; color:var(--text-dim); background:var(--surface-2);
 border:1px solid var(--border); padding:4px 10px; border-radius:999px;
 }
+.badge-attente{
+font-size:12.5px; font-weight:700; color:#fff; background:#b45309;
+padding:4px 10px; border-radius:999px; margin-right:8px; white-space:nowrap;
+}
 .user-menu{position:relative;}
 .user-btn{
 display:flex; align-items:center; gap:8px; background:none; border:1px solid var(--border);
@@ -687,6 +691,7 @@ authError: '',
 authNotice: '',
 authBusy: false,
 accessError: '', // 'ACCES_SUSPENDU' ou message d'erreur au chargement du profil
+enAttenteCount: 0, // nombre d'interventions saisies hors-ligne pas encore envoyées à Supabase
 };
 
 function parseHash(){
@@ -741,6 +746,148 @@ const r = Math.random()*16|0, v = c==='x'? r : (r&0x3|0x8);
 return v.toString(16);
 });
 }
+
+/* ---------------------------------------------------------------------- */
+/* Hors-ligne : file d'attente des interventions                          */
+/* ---------------------------------------------------------------------- */
+/* Une intervention saisie sans réseau est stockée dans IndexedDB, puis
+envoyée à Supabase dès que la connexion revient. Rien n'est mis en cache
+ici : c'est un stockage local DE BROUILLONS EN ATTENTE D'ENVOI, pas un
+cache de données serveur — sw.js continue de ne jamais mettre en cache les
+requêtes Supabase (voir son en-tête), ce module ne change rien à ça.
+
+Limite assumée (option retenue) : saisir une intervention hors-ligne n'est
+possible que depuis la fiche d'un équipement déjà ouverte (donc déjà en
+mémoire) — pas de liste d'équipements gardée en local pour l'instant. */
+
+const OFFLINE_DB_NOM = 'wte-offline';
+const OFFLINE_DB_VERSION = 1;
+const OFFLINE_STORE = 'interventions_en_attente';
+
+function offlineOuvrirDB(){
+return new Promise((resolve, reject) => {
+const req = indexedDB.open(OFFLINE_DB_NOM, OFFLINE_DB_VERSION);
+req.onupgradeneeded = () => {
+const db = req.result;
+if(!db.objectStoreNames.contains(OFFLINE_STORE)){
+const store = db.createObjectStore(OFFLINE_STORE, { keyPath: 'id' });
+store.createIndex('equipement_id', 'equipement_id', { unique: false });
+}
+};
+req.onsuccess = () => resolve(req.result);
+req.onerror = () => reject(req.error);
+});
+}
+
+async function offlineTx(mode, fn){
+const db = await offlineOuvrirDB();
+return new Promise((resolve, reject) => {
+const transaction = db.transaction(OFFLINE_STORE, mode);
+const store = transaction.objectStore(OFFLINE_STORE);
+const resultat = fn(store);
+transaction.oncomplete = () => resolve(resultat);
+transaction.onerror = () => reject(transaction.error);
+});
+}
+
+async function offlineMettreEnAttente(donnees){
+const item = {
+id: uuid(),
+equipement_id: donnees.equipement_id,
+date: donnees.date,
+type: donnees.type,
+technicien: donnees.technicien,
+description: donnees.description || null,
+cree_le: new Date().toISOString(),
+tentatives: 0,
+derniere_erreur: '',
+};
+await offlineTx('readwrite', (store) => store.add(item));
+return item;
+}
+
+async function offlineListerEnAttente(equipementId){
+return offlineTx('readonly', (store) => new Promise((resolve, reject) => {
+const resultats = [];
+const index = store.index('equipement_id');
+const curseur = equipementId ? index.openCursor(IDBKeyRange.only(equipementId)) : store.openCursor();
+curseur.onsuccess = (e) => {
+const c = e.target.result;
+if(c){ resultats.push(c.value); c.continue(); }
+else resolve(resultats);
+};
+curseur.onerror = () => reject(curseur.error);
+}));
+}
+
+async function offlineCompterEnAttente(){
+return offlineTx('readonly', (store) => new Promise((resolve, reject) => {
+const req = store.count();
+req.onsuccess = () => resolve(req.result);
+req.onerror = () => reject(req.error);
+}));
+}
+
+async function offlineSupprimer(id){
+return offlineTx('readwrite', (store) => store.delete(id));
+}
+
+async function offlineMarquerEchec(id, message){
+return offlineTx('readwrite', (store) => new Promise((resolve, reject) => {
+const req = store.get(id);
+req.onsuccess = () => {
+const item = req.result;
+if(!item) return resolve();
+item.tentatives += 1;
+item.derniere_erreur = message;
+store.put(item);
+resolve();
+};
+req.onerror = () => reject(req.error);
+}));
+}
+
+let offlineSyncEnCours = false;
+
+/* Appelée au démarrage (si déjà en ligne) et à chaque retour de connexion.
+Rafraîchit le compteur affiché dans l'en-tête, et si la fiche actuellement
+ouverte est concernée, recharge son historique pour faire apparaître les
+interventions tout juste envoyées. */
+async function synchroniserInterventionsEnAttente(){
+if(offlineSyncEnCours || !navigator.onLine) return;
+offlineSyncEnCours = true;
+let auMoinsUneEnvoyee = false;
+try{
+const enAttente = await offlineListerEnAttente();
+for(const item of enAttente){
+try{
+const { error } = await sb.from('interventions').insert({
+equipement_id: item.equipement_id,
+date: item.date,
+type: item.type,
+technicien: item.technicien,
+description: item.description,
+});
+if(error) throw error;
+await offlineSupprimer(item.id);
+auMoinsUneEnvoyee = true;
+}catch(e){
+await offlineMarquerEchec(item.id, e.message || 'Erreur inconnue');
+// On continue avec les suivantes : une erreur sur l'une ne doit pas
+// bloquer l'envoi des autres.
+}
+}
+}finally{
+offlineSyncEnCours = false;
+state.enAttenteCount = await offlineCompterEnAttente();
+if(auMoinsUneEnvoyee && equipDetail.id){
+try{ equipDetail.interventions = await listInterventions(equipDetail.id); }catch(e){}
+}
+render();
+}
+}
+
+window.addEventListener('online', () => { synchroniserInterventionsEnAttente(); });
 
 /* ---------------------------------------------------------------------- */
 /* Data layer */
@@ -1209,6 +1356,7 @@ WiTracEQUIP
 </div>
 </div>
 <div class="topbar-spacer"></div>
+${state.enAttenteCount > 0 ? `<span class="badge-attente" title="${state.enAttenteCount} intervention${state.enAttenteCount>1?'s':''} en attente d'envoi (sans réseau)">⏳ ${state.enAttenteCount}</span>` : ''}
 <div class="org-pill">${esc(state.orgName || '…')}</div>
 <div class="user-menu">
 <button class="user-btn" data-action="toggle-menu">
@@ -2155,13 +2303,13 @@ equipForm.busy = false; equipForm.error = e.message; render();
 /* ---------------------------------------------------------------------- */
 
 let equipDetail = { id:null, item:null, interventions:null, loading:false, error:'',
-showIvForm:false, ivBusy:false, ivError:'',
+showIvForm:false, ivBusy:false, ivError:'', ivNotice:'',
 showEditForm:false, editBusy:false, editError:'' };
 
 function viewEquipDetail(id){
 if(equipDetail.id !== id){
 equipDetail = { id, item:null, interventions:null, loading:true, error:'',
-showIvForm:false, ivBusy:false, ivError:'',
+showIvForm:false, ivBusy:false, ivError:'', ivNotice:'',
 showEditForm:false, editBusy:false, editError:'' };
 Promise.all([getEquipement(id), listInterventions(id)])
 .then(([item, ivs]) => {
@@ -2264,6 +2412,7 @@ ${infoRows}
 </div>
 
 ${equipDetail.showIvForm ? renderIvForm() : ''}
+${equipDetail.ivNotice ? `<div class="alert alert-info" style="margin-top:10px;">${esc(equipDetail.ivNotice)}</div>` : ''}
 
 ${equipDetail.interventions && equipDetail.interventions.length ? `
 <div style="overflow-x:auto;">
@@ -2417,18 +2566,42 @@ render(); return;
 }
 
 equipDetail.ivError = ''; equipDetail.ivBusy = true; render();
+
+const donneesIv = { equipement_id: equipDetail.id, date, type, technicien, description: description || null };
+
+// Pas de réseau connu : on met en attente directement, inutile de tenter.
+if(!navigator.onLine){
+await offlineMettreEnAttente(donneesIv);
+state.enAttenteCount = await offlineCompterEnAttente();
+equipDetail.showIvForm = false;
+equipDetail.ivBusy = false;
+equipDetail.ivNotice = "Pas de réseau : intervention enregistrée hors-ligne, elle sera envoyée automatiquement dès la reconnexion.";
+render();
+return;
+}
+
 try{
-const { error } = await sb.from('interventions').insert({
-equipement_id: equipDetail.id,
-date, type, technicien,
-description: description || null
-});
+const { error } = await sb.from('interventions').insert(donneesIv);
 if(error) throw error;
 equipDetail.showIvForm = false;
 equipDetail.interventions = await listInterventions(equipDetail.id);
 equipDetail.ivBusy = false;
 render();
 }catch(e){
+// Le réseau se coupe parfois entre le test navigator.onLine et l'envoi
+// réel (sous-sol, ascenseur...) : une vraie erreur réseau (pas une erreur
+// métier renvoyée par Supabase/Postgres) bascule aussi en file d'attente
+// plutôt que de faire perdre la saisie au technicien.
+const messageReseau = /failed to fetch|networkerror|load failed|network request failed/i.test(e.message || '');
+if(messageReseau){
+await offlineMettreEnAttente(donneesIv);
+state.enAttenteCount = await offlineCompterEnAttente();
+equipDetail.showIvForm = false;
+equipDetail.ivBusy = false;
+equipDetail.ivNotice = "Réseau indisponible : intervention enregistrée hors-ligne, elle sera envoyée automatiquement dès la reconnexion.";
+render();
+return;
+}
 equipDetail.ivBusy = false; equipDetail.ivError = e.message; render();
 }
 }
@@ -2483,18 +2656,22 @@ render();
 }
 
 /* Changer le jeton : l'ancienne etiquette devient muette, la fiche et son
-historique ne bougent pas. Utile si une etiquette part avec un vehicule vendu. */
+historique ne bougent pas. Utile si une etiquette part avec un vehicule vendu.
+Passe par la RPC regenerer_public_token (plutôt qu'un update() direct) :
+elle revérifie elle-même le rôle et l'organisation côté serveur (indépendamment
+du trigger equipements_guard, qui reste une seconde barrière), et renvoie le
+nouveau jeton en un seul aller-retour. Le QR affiché est redessiné automatique-
+ment au prochain render() (voir le commentaire au-dessus de drawQr plus haut :
+il se redessine à chaque rendu de la fiche à partir de eq.public_token). */
 async function actionRegenererLienPublic(){
 const eq = equipDetail.item;
 if(!eq) return;
 if(!confirm("Changer le lien public ? Toutes les étiquettes déjà imprimées pour cet équipement cesseront de fonctionner : il faudra en réimprimer une. La fiche et son historique sont conservés.")) return;
 try{
-const nouveau = (crypto && crypto.randomUUID) ? crypto.randomUUID() : null;
-if(!nouveau) throw new Error("Navigateur trop ancien pour générer un nouveau lien.");
-const { error } = await sb.from('equipements')
-.update({ public_token: nouveau, ancien_lien_actif: false }).eq('id', eq.id);
+const { data: nouveauToken, error } = await sb.rpc('regenerer_public_token', { p_equipement_id: eq.id });
 if(error) throw error;
-eq.public_token = nouveau;
+eq.public_token = nouveauToken;
+eq.ancien_lien_actif = false;
 render();
 }catch(e){ alert('Erreur : ' + e.message); }
 }
@@ -2557,7 +2734,7 @@ else if(action === 'champ-add'){ typeForm.champs.push({label:'', type:'text'}); 
 else if(action === 'champ-remove'){ typeForm.champs.splice(+t.dataset.i, 1); render(); }
 else if(action === 'save-type'){ saveType(); }
 else if(action === 'save-equip'){ saveEquip(); }
-else if(action === 'toggle-iv-form'){ equipDetail.showIvForm = !equipDetail.showIvForm; render(); }
+else if(action === 'toggle-iv-form'){ equipDetail.showIvForm = !equipDetail.showIvForm; equipDetail.ivNotice = ''; render(); }
 else if(action === 'archive-equip'){ archiveEquipement(); }
 else if(action === 'restore-equip'){ restoreEquipement(); }
 else if(action === 'toggle-edit-equip'){ equipDetail.showEditForm = !equipDetail.showEditForm; equipDetail.editError=''; render(); }
@@ -2652,6 +2829,10 @@ try{
 await loadProfileAndOrg();
 await loadTypes(true);
 retourApresConnexion();
+try{
+state.enAttenteCount = await offlineCompterEnAttente();
+if(navigator.onLine) synchroniserInterventionsEnAttente();
+}catch(e){ console.error('[hors-ligne]', e); }
 }catch(e){
 console.error(e);
 state.accessError = (e && e.message) ? e.message : 'Erreur de chargement du profil.';
