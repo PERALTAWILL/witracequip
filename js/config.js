@@ -1,286 +1,292 @@
 /* =========================================================================
-   WiTracEQUIP — configuration
-   -------------------------------------------------------------------------
-   Tout ce qui se règle sans toucher au code de l'application est ici :
-   adresse publique, connexion Supabase, format d'étiquette, rôles,
-   et les modèles métiers proposés à un nouveau client.
+WiTracEQUIP — carnet technique d'équipement (QR code)
+Client-side SPA, connecté en direct à Supabase (organization_id / RLS).
+Un seul fichier HTML — à héberger tel quel (Netlify, Vercel, GitHub Pages,
+ou ton propre domaine witracequip.fr).
+========================================================================= */
 
-   Ce fichier ne contient AUCUNE logique : uniquement des constantes.
-   ========================================================================= */
+/* =========================================================================
+ADRESSE PUBLIQUE DE L'APPLICATION
+-------------------------------------------------------------------------
+Un QR code imprimé contient une adresse, et cette adresse est gravée dans
+l'étiquette pour toujours : si l'application déménage, toutes les étiquettes
+déjà collées deviennent mortes.
 
-/* -------------------------------------------------------------------------
-   ADRESSE PUBLIQUE DE L'APPLICATION
-   -------------------------------------------------------------------------
-   Un QR code imprimé contient une adresse, et cette adresse est gravée dans
-   l'étiquette pour toujours : si l'application déménage, toutes les étiquettes
-   déjà collées deviennent mortes. C'est la raison pour laquelle cette valeur
-   est figée ici plutôt que déduite de l'adresse du navigateur.
+Tant que cette ligne est vide, l'appli utilise l'adresse depuis laquelle elle
+est ouverte — pratique pour tester, mais à ne PAS utiliser pour imprimer des
+étiquettes en série.
 
-   Conséquence à connaître : même en test local, les QR codes générés pointent
-   vers le domaine ci-dessous. Pour produire des QR pointant vers le serveur de
-   test, et seulement dans ce cas, remettre temporairement une chaîne vide.
-   ------------------------------------------------------------------------- */
-export const APP_BASE_URL = 'https://witracequip.fr/';
+Dès que le domaine définitif est en place, renseigner cette ligne :
+const APP_BASE_URL = 'https://witracequip.fr/';
+========================================================================= */
+const APP_BASE_URL = '';
 
-/* -------------------------------------------------------------------------
-   CONNEXION SUPABASE
-   -------------------------------------------------------------------------
-   Cette clé est la clé « publiable » (anon) : elle est conçue pour être lue
-   par n'importe quel visiteur. Ce n'est pas elle qui protège les données —
-   c'est le Row Level Security de Postgres, qui décide côté serveur ce que
-   chaque compte a le droit de voir. Ne JAMAIS mettre ici la clé de service.
-   ------------------------------------------------------------------------- */
-export const SUPABASE_URL = 'https://oeqgyjyqdwlymlpfkdyn.supabase.co';
-export const SUPABASE_KEY = 'sb_publishable_w3Lh6JYXepKHspWG5e06FQ_BpXaGQnE';
-
-/* -------------------------------------------------------------------------
-   ÉTIQUETTE IMPRIMÉE
-   L'étiquette ne contient QUE le QR code et l'identifiant de l'équipement
-   (immatriculation pour un véhicule, n° de série pour un appareil) : rien
-   d'autre, pour tenir sur une imprimante thermique.
-   ------------------------------------------------------------------------- */
-export const ETIQUETTE = {
-  taille_qr_mm: 30,           // côté du QR imprimé, en millimètres
-  afficher_identifiant: true, // n° de série / immatriculation sous le QR
+/* =========================================================================
+ÉTIQUETTE IMPRIMÉE
+L'étiquette ne contient QUE le QR code et l'identifiant de l'équipement
+(immatriculation pour un véhicule, n° de série pour un appareil) : rien
+d'autre, pour tenir sur une imprimante thermique.
+Ajustez la taille selon le format de vos étiquettes.
+========================================================================= */
+const ETIQUETTE = {
+taille_qr_mm: 16, // côté du QR imprimé, en millimètres — étiquette thermique 2 cm x 2 cm
+afficher_identifiant: true, // n° de série / immatriculation sous le QR
 };
 
-/* -------------------------------------------------------------------------
-   MODE HORS LIGNE
-   ------------------------------------------------------------------------- */
-export const OFFLINE = {
-  /* Nombre maximum de fiches équipement gardées en mémoire locale.
-     Au-delà, la plus anciennement consultée est évincée. Une fiche pèse
-     quelques kilo-octets ; 80 fiches tiennent largement dans le quota
-     d'un navigateur mobile tout en couvrant une tournée d'intervention. */
-  max_fiches_en_cache: 80,
+const SUPABASE_URL = 'https://oeqgyjyqdwlymlpfkdyn.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_w3Lh6JYXepKHspWG5e06FQ_BpXaGQnE';
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-  /* Préfixe de toutes les clés écrites dans le stockage local. Le changer
-     revient à repartir d'un cache vide, sans rien casser côté serveur. */
-  prefixe_stockage: 'wte.v1.',
-};
+/* Logo WiTracEQUIP (utilisé sur l'écran de connexion et la page d'invitation) */
+const LOGO_DATA_URL = 'assets/icons/icon-192.png';
 
-/* -------------------------------------------------------------------------
-   TYPES DE CHAMPS PERSONNALISÉS
-   ------------------------------------------------------------------------- */
-export const CHAMP_TYPES = [
-  { v: 'text',     l: 'Texte' },
-  { v: 'number',   l: 'Nombre' },
-  { v: 'date',     l: 'Date' },
-  { v: 'textarea', l: 'Texte long' },
+const CHAMP_TYPES = [
+{v:'text', l:'Texte'},
+{v:'number', l:'Nombre'},
+{v:'date', l:'Date'},
+{v:'textarea', l:'Texte long'},
 ];
 
-/* -------------------------------------------------------------------------
-   RÔLES ET DROITS
-   -------------------------------------------------------------------------
-   - utilisateur : créer un équipement, remplir / ajouter des interventions,
-                   imprimer le QR
-   - responsable : tout cela + retirer (archiver) un équipement
-   - admin       : tout cela + gérer les profils (inviter, changer de rôle,
-                   suspendre, cloisonner par métier)
+/* Rôles et droits
+- utilisateur : créer un équipement, remplir/ajouter des interventions, imprimer le QR
+- responsable : tout cela + supprimer (archiver) un équipement
+- admin : tout cela + gérer les profils (inviter, changer de rôle, suspendre)
+Ces règles sont AUSSI appliquées côté base (RLS + triggers) : masquer un bouton
+ici n'est qu'un confort d'affichage, la sécurité réelle est dans Supabase. */
+const ROLE_LABELS = {
+admin: 'Administrateur',
+responsable: 'Responsable',
+utilisateur: 'Utilisateur',
+};
+const ROLES_ASSIGNABLES = ['admin', 'responsable', 'utilisateur'];
 
-   Ces règles sont AUSSI appliquées côté base (RLS + triggers) : masquer un
-   bouton ici n'est qu'un confort d'affichage, la sécurité réelle est dans
-   Supabase. Un bouton caché n'a jamais protégé une donnée.
-   ------------------------------------------------------------------------- */
-export const ROLE_LABELS = {
-  admin: 'Administrateur',
-  responsable: 'Responsable',
-  utilisateur: 'Utilisateur',
+const ROLE_RESUME = {
+admin: "Tous les droits, y compris gérer l'équipe et inviter d'autres administrateurs.",
+responsable: 'Peut créer, remplir, imprimer et supprimer un équipement.',
+utilisateur: 'Peut créer, remplir et imprimer — mais pas supprimer.',
 };
 
-export const ROLES_ASSIGNABLES = ['admin', 'responsable', 'utilisateur'];
+/* Champ mot de passe avec aperçu (le petit œil) */
+const ICONE_OEIL = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`;
+const ICONE_OEIL_BARRE = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>`;
 
-export const ROLE_RESUME = {
-  admin: "Tous les droits, y compris gérer l'équipe et inviter d'autres administrateurs.",
-  responsable: 'Peut créer, remplir, imprimer et supprimer un équipement.',
-  utilisateur: 'Peut créer, remplir et imprimer — mais pas supprimer.',
+function champMotDePasse(autocomplete){
+return `
+<div class="pw-wrap">
+<input type="password" name="password" placeholder="••••••••" minlength="6" required autocomplete="${autocomplete}">
+<button type="button" class="pw-toggle" data-action="toggle-pw"
+aria-label="Afficher le mot de passe" title="Afficher le mot de passe">${ICONE_OEIL}</button>
+</div>`;
+}
+
+/* =========================================================================
+MODÈLES MÉTIERS
+Parcs types des secteurs visés, avec les champs qui comptent pour la
+traçabilité réglementaire. Un administrateur les déploie en un clic chez
+un nouveau client, puis ajuste librement.
+========================================================================= */
+const MODELES_METIERS = [
+{
+cle: 'hotellerie',
+nom: 'Hôtellerie & résidences',
+description: "Le parc technique d'un établissement recevant du public.",
+types: [
+{ nom: 'Climatisation / groupe froid', champs: [
+{label:'Marque', type:'text'}, {label:'Modèle', type:'text'},
+{label:'Puissance (kW)', type:'number'}, {label:'Emplacement', type:'text'},
+{label:'Fluide frigorigène', type:'text'},
+{label:"Dernier contrôle d'étanchéité", type:'date'},
+{label:'Prochaine inspection', type:'date'} ]},
+{ nom: 'Groupe électrogène', champs: [
+{label:'Marque', type:'text'}, {label:'Modèle', type:'text'},
+{label:'Puissance (kVA)', type:'number'}, {label:'Emplacement', type:'text'},
+{label:'Heures de fonctionnement', type:'number'},
+{label:'Dernier essai en charge', type:'date'}, {label:'Prochain essai', type:'date'} ]},
+{ nom: 'Extincteur', champs: [
+{label:'Type (eau, CO2, poudre)', type:'text'}, {label:'Capacité', type:'text'},
+{label:'Emplacement', type:'text'}, {label:'Date de fabrication', type:'date'},
+{label:'Dernière vérification annuelle', type:'date'},
+{label:'Prochaine révision décennale', type:'date'} ]},
+{ nom: 'Ascenseur', champs: [
+{label:'Marque', type:'text'}, {label:"N° d'appareil", type:'text'},
+{label:'Emplacement', type:'text'}, {label:'Société de maintenance', type:'text'},
+{label:'Dernier contrôle technique', type:'date'}, {label:'Prochain contrôle', type:'date'} ]},
+{ nom: 'Équipement de cuisine', champs: [
+{label:'Type', type:'text'}, {label:'Marque', type:'text'}, {label:'Modèle', type:'text'},
+{label:'Emplacement', type:'text'}, {label:'Dernier entretien', type:'date'} ]},
+{ nom: 'Installation électrique', champs: [
+{label:'Emplacement (TGBT, tableau divisionnaire)', type:'text'},
+{label:'Bureau de contrôle', type:'text'},
+{label:'Dernière vérification annuelle', type:'date'},
+{label:'Observations levées', type:'textarea'} ]},
+],
+},
+{
+cle: 'btp',
+nom: 'BTP & levage',
+description: 'Matériel de chantier soumis à vérification générale périodique.',
+types: [
+{ nom: 'Engin de chantier', champs: [
+{label:'Marque', type:'text'}, {label:'Modèle', type:'text'},
+{label:'Année', type:'number'}, {label:'Heures', type:'number'},
+{label:'Dernière VGP', type:'date'}, {label:'Prochaine VGP', type:'date'} ]},
+{ nom: 'Nacelle élévatrice', champs: [
+{label:'Marque', type:'text'}, {label:'Modèle', type:'text'},
+{label:'Hauteur de travail (m)', type:'number'},
+{label:'Dernière VGP', type:'date'}, {label:'Prochaine VGP', type:'date'},
+{label:'Organisme de contrôle', type:'text'} ]},
+{ nom: 'Chariot élévateur', champs: [
+{label:'Marque', type:'text'}, {label:'Modèle', type:'text'},
+{label:'Capacité (kg)', type:'number'}, {label:'Heures', type:'number'},
+{label:'Dernière VGP', type:'date'}, {label:'Prochaine VGP', type:'date'} ]},
+{ nom: 'Échafaudage', champs: [
+{label:'Type', type:'text'}, {label:'Hauteur (m)', type:'number'},
+{label:'Chantier', type:'text'}, {label:'Date de montage', type:'date'},
+{label:'Dernière vérification', type:'date'} ]},
+{ nom: 'EPI antichute', champs: [
+{label:'Type (harnais, longe, antichute)', type:'text'}, {label:'Taille', type:'text'},
+{label:'Attribué à', type:'text'}, {label:'Date de mise en service', type:'date'},
+{label:'Dernière vérification annuelle', type:'date'} ]},
+{ nom: 'Groupe électrogène de chantier', champs: [
+{label:'Marque', type:'text'}, {label:'Puissance (kVA)', type:'number'},
+{label:'Heures', type:'number'}, {label:'Dernier entretien', type:'date'} ]},
+],
+},
+{
+cle: 'sante',
+nom: 'Santé & biomédical',
+description: 'Parc d\'un établissement de soins ou d\'un cabinet.',
+types: [
+{ nom: 'Dispositif médical', champs: [
+{label:'Fabricant', type:'text'}, {label:'Modèle', type:'text'},
+{label:'Service / localisation', type:'text'}, {label:'Classe', type:'text'},
+{label:'Date de mise en service', type:'date'},
+{label:'Prochaine maintenance préventive', type:'date'} ]},
+{ nom: 'Défibrillateur (DAE)', champs: [
+{label:'Marque', type:'text'}, {label:'Modèle', type:'text'},
+{label:'Emplacement', type:'text'},
+{label:'Péremption des électrodes', type:'date'},
+{label:'Péremption de la batterie', type:'date'},
+{label:'Dernière vérification', type:'date'} ]},
+{ nom: 'Lit médicalisé', champs: [
+{label:'Marque', type:'text'}, {label:'Modèle', type:'text'},
+{label:'Service', type:'text'}, {label:'Dernière vérification électrique', type:'date'} ]},
+{ nom: 'Équipement de stérilisation', champs: [
+{label:'Marque', type:'text'}, {label:'Modèle', type:'text'},
+{label:'Service', type:'text'}, {label:'Dernier contrôle de charge', type:'date'},
+{label:'Prochaine requalification', type:'date'} ]},
+{ nom: 'Groupe électrogène de secours', champs: [
+{label:'Marque', type:'text'}, {label:'Puissance (kVA)', type:'number'},
+{label:'Emplacement', type:'text'}, {label:'Dernier essai en charge', type:'date'},
+{label:'Prochain essai', type:'date'} ]},
+{ nom: 'Climatisation zone sensible', champs: [
+{label:'Emplacement (bloc, pharmacie, labo)', type:'text'},
+{label:'Puissance (kW)', type:'number'},
+{label:'Dernier contrôle', type:'date'}, {label:'Prochain contrôle', type:'date'} ]},
+],
+},
+{
+cle: 'industrie',
+nom: 'Industrie & logistique',
+description: 'Atelier, ligne de production, entrepôt, chaîne du froid.',
+types: [
+{ nom: 'Machine de production', champs: [
+{label:'Fabricant', type:'text'}, {label:'Modèle', type:'text'},
+{label:"N° d'inventaire", type:'text'}, {label:'Ligne / atelier', type:'text'},
+{label:'Date de mise en service', type:'date'},
+{label:'Prochaine maintenance préventive', type:'date'} ]},
+{ nom: 'Chariot élévateur', champs: [
+{label:'Marque', type:'text'}, {label:'Modèle', type:'text'},
+{label:'Capacité (kg)', type:'number'}, {label:'Heures', type:'number'},
+{label:'Dernière VGP', type:'date'}, {label:'Prochaine VGP', type:'date'} ]},
+{ nom: 'Pont roulant / palan', champs: [
+{label:'Marque', type:'text'}, {label:'Capacité (t)', type:'number'},
+{label:'Emplacement', type:'text'},
+{label:'Dernière VGP', type:'date'}, {label:'Prochaine VGP', type:'date'} ]},
+{ nom: 'Compresseur / appareil à pression', champs: [
+{label:'Marque', type:'text'}, {label:'Volume (L)', type:'number'},
+{label:'Pression de service (bar)', type:'number'}, {label:'Emplacement', type:'text'},
+{label:'Dernière inspection', type:'date'},
+{label:'Prochaine requalification', type:'date'} ]},
+{ nom: 'Chambre froide', champs: [
+{label:'Emplacement', type:'text'}, {label:'Volume (m3)', type:'number'},
+{label:'Fluide frigorigène', type:'text'},
+{label:"Dernier contrôle d'étanchéité", type:'date'},
+{label:'Prochain contrôle', type:'date'} ]},
+{ nom: 'Installation électrique', champs:
+[
+{label:'Emplacement', type:'text'}, {label:'Bureau de contrôle', type:'text'},
+{label:'Dernière vérification annuelle', type:'date'},
+{label:'Observations levées', type:'textarea'} ]},
+],
+},
+{
+cle: 'flotte',
+nom: 'Flotte & atelier automobile',
+description: 'Véhicules de service, location, garage ou concession.',
+types: [
+{ nom: 'Véhicule', champs: [
+{label:'Marque', type:'text'}, {label:'Modèle', type:'text'},
+{label:'Kilométrage', type:'number'},
+{label:'Prochain contrôle technique', type:'date'},
+{label:'Prochaine révision', type:'date'},
+{label:'Conducteur attribué', type:'text'} ]},
+{ nom: 'Élévateur de garage / pont', champs: [
+{label:'Marque', type:'text'}, {label:'Capacité (t)', type:'number'},
+{label:'Emplacement', type:'text'},
+{label:'Dernière VGP', type:'date'}, {label:'Prochaine VGP', type:'date'} ]},
+{ nom: 'Outillage de diagnostic', champs: [
+{label:'Marque', type:'text'}, {label:'Modèle', type:'text'},
+{label:'Version logicielle', type:'text'},
+{label:'Dernière mise à jour', type:'date'} ]},
+{ nom: "Compresseur d'atelier", champs: [
+{label:'Marque', type:'text'}, {label:'Volume (L)', type:'number'},
+{label:'Pression (bar)', type:'number'},
+{label:'Dernière inspection', type:'date'} ]},
+],
+},
+];
+
+function roleLabel(r){ return ROLE_LABELS[r] || r || '—'; }
+function isAdmin(){ return state.profile?.role === 'admin'; }
+function peutSupprimer(){ return ['admin','responsable'].includes(state.profile?.role); }
+
+const state = {
+session: null,
+profile: null, // { id, organization_id, full_name, role }
+orgName: '',
+route: parseHash(),
+types: [],
+typesLoaded: false,
+loading: true,
+authMode: 'login', // 'login' | 'signup'
+authError: '',
+authNotice: '',
+authBusy: false,
+accessError: '', // 'ACCES_SUSPENDU' ou message d'erreur au chargement du profil
+enAttenteCount: 0, // nombre d'interventions saisies hors-ligne pas encore envoyées à Supabase
 };
 
-/* -------------------------------------------------------------------------
-   MOTIFS DE RETRAIT
-   -------------------------------------------------------------------------
-   Le motif de retrait est obligatoire (cf. docs/AI_CONTEXT.md, règle métier
-   n° 3). Cette liste n'est qu'une aide à la saisie : « Autre » ouvre un champ
-   libre, car aucune liste fermée ne couvrira tous les cas d'un parc réel.
-   ------------------------------------------------------------------------- */
-export const MOTIFS_RETRAIT = [
-  'Vendu / cédé',
-  'Réformé (fin de vie)',
-  'Détruit / accidenté',
-  'Volé / perdu',
-  'Retour au loueur',
-  'Erreur de saisie (doublon)',
-  'Autre',
-];
+function parseHash(){
+const h = location.hash.replace(/^#\/?/, '');
+const parts = h.split('/').filter(Boolean);
+// Sans route explicite, on arrive sur l'accueil, pas sur la liste.
+return { name: parts[0] || 'accueil', param: parts[1] || null };
+}
 
-/* -------------------------------------------------------------------------
-   MODÈLES MÉTIERS
-   -------------------------------------------------------------------------
-   Parcs types des secteurs visés, avec les champs qui comptent pour la
-   traçabilité réglementaire. Un administrateur les déploie en un clic chez
-   un nouveau client, puis ajuste librement.
+function nav(path){ location.hash = path; }
 
-   Les dates de « prochain contrôle » sont volontairement des champs libres
-   et non des alertes automatiques : l'application constate et trace, elle ne
-   se substitue pas à l'organisme de contrôle.
-   ------------------------------------------------------------------------- */
-export const MODELES_METIERS = [
-  {
-    cle: 'hotellerie',
-    nom: 'Hôtellerie & résidences',
-    description: "Le parc technique d'un établissement recevant du public.",
-    types: [
-      { nom: 'Climatisation / groupe froid', champs: [
-        {label:'Marque', type:'text'}, {label:'Modèle', type:'text'},
-        {label:'Puissance (kW)', type:'number'}, {label:'Emplacement', type:'text'},
-        {label:'Fluide frigorigène', type:'text'},
-        {label:"Dernier contrôle d'étanchéité", type:'date'},
-        {label:'Prochaine inspection', type:'date'} ]},
-      { nom: 'Groupe électrogène', champs: [
-        {label:'Marque', type:'text'}, {label:'Modèle', type:'text'},
-        {label:'Puissance (kVA)', type:'number'}, {label:'Emplacement', type:'text'},
-        {label:'Heures de fonctionnement', type:'number'},
-        {label:'Dernier essai en charge', type:'date'}, {label:'Prochain essai', type:'date'} ]},
-      { nom: 'Extincteur', champs: [
-        {label:'Type (eau, CO2, poudre)', type:'text'}, {label:'Capacité', type:'text'},
-        {label:'Emplacement', type:'text'}, {label:'Date de fabrication', type:'date'},
-        {label:'Dernière vérification annuelle', type:'date'},
-        {label:'Prochaine révision décennale', type:'date'} ]},
-      { nom: 'Ascenseur', champs: [
-        {label:'Marque', type:'text'}, {label:"N° d'appareil", type:'text'},
-        {label:'Emplacement', type:'text'}, {label:'Société de maintenance', type:'text'},
-        {label:'Dernier contrôle technique', type:'date'}, {label:'Prochain contrôle', type:'date'} ]},
-      { nom: 'Équipement de cuisine', champs: [
-        {label:'Type', type:'text'}, {label:'Marque', type:'text'}, {label:'Modèle', type:'text'},
-        {label:'Emplacement', type:'text'}, {label:'Dernier entretien', type:'date'} ]},
-      { nom: 'Installation électrique', champs: [
-        {label:'Emplacement (TGBT, tableau divisionnaire)', type:'text'},
-        {label:'Bureau de contrôle', type:'text'},
-        {label:'Dernière vérification annuelle', type:'date'},
-        {label:'Observations levées', type:'textarea'} ]},
-    ],
-  },
-  {
-    cle: 'btp',
-    nom: 'BTP & levage',
-    description: 'Matériel de chantier soumis à vérification générale périodique.',
-    types: [
-      { nom: 'Engin de chantier', champs: [
-        {label:'Marque', type:'text'}, {label:'Modèle', type:'text'},
-        {label:'Année', type:'number'}, {label:'Heures', type:'number'},
-        {label:'Dernière VGP', type:'date'}, {label:'Prochaine VGP', type:'date'} ]},
-      { nom: 'Nacelle élévatrice', champs: [
-        {label:'Marque', type:'text'}, {label:'Modèle', type:'text'},
-        {label:'Hauteur de travail (m)', type:'number'},
-        {label:'Dernière VGP', type:'date'}, {label:'Prochaine VGP', type:'date'},
-        {label:'Organisme de contrôle', type:'text'} ]},
-      { nom: 'Chariot élévateur', champs: [
-        {label:'Marque', type:'text'}, {label:'Modèle', type:'text'},
-        {label:'Capacité (kg)', type:'number'}, {label:'Heures', type:'number'},
-        {label:'Dernière VGP', type:'date'}, {label:'Prochaine VGP', type:'date'} ]},
-      { nom: 'Échafaudage', champs: [
-        {label:'Type', type:'text'}, {label:'Hauteur (m)', type:'number'},
-        {label:'Chantier', type:'text'}, {label:'Date de montage', type:'date'},
-        {label:'Dernière vérification', type:'date'} ]},
-      { nom: 'EPI antichute', champs: [
-        {label:'Type (harnais, longe, antichute)', type:'text'}, {label:'Taille', type:'text'},
-        {label:'Attribué à', type:'text'}, {label:'Date de mise en service', type:'date'},
-        {label:'Dernière vérification annuelle', type:'date'} ]},
-      { nom: 'Groupe électrogène de chantier', champs: [
-        {label:'Marque', type:'text'}, {label:'Puissance (kVA)', type:'number'},
-        {label:'Heures', type:'number'}, {label:'Dernier entretien', type:'date'} ]},
-    ],
-  },
-  {
-    cle: 'sante',
-    nom: 'Santé & biomédical',
-    description: "Parc d'un établissement de soins ou d'un cabinet.",
-    types: [
-      { nom: 'Dispositif médical', champs: [
-        {label:'Fabricant', type:'text'}, {label:'Modèle', type:'text'},
-        {label:'Service / localisation', type:'text'}, {label:'Classe', type:'text'},
-        {label:'Date de mise en service', type:'date'},
-        {label:'Prochaine maintenance préventive', type:'date'} ]},
-      { nom: 'Défibrillateur (DAE)', champs: [
-        {label:'Marque', type:'text'}, {label:'Modèle', type:'text'},
-        {label:'Emplacement', type:'text'},
-        {label:'Péremption des électrodes', type:'date'},
-        {label:'Péremption de la batterie', type:'date'},
-        {label:'Dernière vérification', type:'date'} ]},
-      { nom: 'Lit médicalisé', champs: [
-        {label:'Marque', type:'text'}, {label:'Modèle', type:'text'},
-        {label:'Service', type:'text'}, {label:'Dernière vérification électrique', type:'date'} ]},
-      { nom: 'Équipement de stérilisation', champs: [
-        {label:'Marque', type:'text'}, {label:'Modèle', type:'text'},
-        {label:'Service', type:'text'}, {label:'Dernier contrôle de charge', type:'date'},
-        {label:'Prochaine requalification', type:'date'} ]},
-      { nom: 'Groupe électrogène de secours', champs: [
-        {label:'Marque', type:'text'}, {label:'Puissance (kVA)', type:'number'},
-        {label:'Emplacement', type:'text'}, {label:'Dernier essai en charge', type:'date'},
-        {label:'Prochain essai', type:'date'} ]},
-      { nom: 'Climatisation zone sensible', champs: [
-        {label:'Emplacement (bloc, pharmacie, labo)', type:'text'},
-        {label:'Puissance (kW)', type:'number'},
-        {label:'Dernier contrôle', type:'date'}, {label:'Prochain contrôle', type:'date'} ]},
-    ],
-  },
-  {
-    cle: 'industrie',
-    nom: 'Industrie & logistique',
-    description: 'Atelier, ligne de production, entrepôt, chaîne du froid.',
-    types: [
-      { nom: 'Machine de production', champs: [
-        {label:'Fabricant', type:'text'}, {label:'Modèle', type:'text'},
-        {label:"N° d'inventaire", type:'text'}, {label:'Ligne / atelier', type:'text'},
-        {label:'Date de mise en service', type:'date'},
-        {label:'Prochaine maintenance préventive', type:'date'} ]},
-      { nom: 'Chariot élévateur', champs: [
-        {label:'Marque', type:'text'}, {label:'Modèle', type:'text'},
-        {label:'Capacité (kg)', type:'number'}, {label:'Heures', type:'number'},
-        {label:'Dernière VGP', type:'date'}, {label:'Prochaine VGP', type:'date'} ]},
-      { nom: 'Pont roulant / palan', champs: [
-        {label:'Marque', type:'text'}, {label:'Capacité (t)', type:'number'},
-        {label:'Emplacement', type:'text'},
-        {label:'Dernière VGP', type:'date'}, {label:'Prochaine VGP', type:'date'} ]},
-      { nom: 'Compresseur / appareil à pression', champs: [
-        {label:'Marque', type:'text'}, {label:'Volume (L)', type:'number'},
-        {label:'Pression de service (bar)', type:'number'}, {label:'Emplacement', type:'text'},
-        {label:'Dernière inspection', type:'date'},
-        {label:'Prochaine requalification', type:'date'} ]},
-      { nom: 'Chambre froide', champs: [
-        {label:'Emplacement', type:'text'}, {label:'Volume (m3)', type:'number'},
-        {label:'Fluide frigorigène', type:'text'},
-        {label:"Dernier contrôle d'étanchéité", type:'date'},
-        {label:'Prochain contrôle', type:'date'} ]},
-      { nom: 'Installation électrique', champs: [
-        {label:'Emplacement', type:'text'}, {label:'Bureau de contrôle', type:'text'},
-        {label:'Dernière vérification annuelle', type:'date'},
-        {label:'Observations levées', type:'textarea'} ]},
-    ],
-  },
-  {
-    cle: 'flotte',
-    nom: 'Flotte & atelier automobile',
-    description: 'Véhicules de service, location, garage ou concession.',
-    types: [
-      { nom: 'Véhicule', champs: [
-        {label:'Marque', type:'text'}, {label:'Modèle', type:'text'},
-        {label:'Kilométrage', type:'number'},
-        {label:'Prochain contrôle technique', type:'date'},
-        {label:'Prochaine révision', type:'date'},
-        {label:'Conducteur attribué', type:'text'} ]},
-      { nom: 'Élévateur de garage / pont', champs: [
-        {label:'Marque', type:'text'}, {label:'Capacité (t)', type:'number'},
-        {label:'Emplacement', type:'text'},
-        {label:'Dernière VGP', type:'date'}, {label:'Prochaine VGP', type:'date'} ]},
-      { nom: 'Outillage de diagnostic', champs: [
-        {label:'Marque', type:'text'}, {label:'Modèle', type:'text'},
-        {label:'Version logicielle', type:'text'},
-        {label:'Dernière mise à jour', type:'date'} ]},
-      { nom: "Compresseur d'atelier", champs: [
-        {label:'Marque', type:'text'}, {label:'Volume (L)', type:'number'},
-        {label:'Pression (bar)', type:'number'},
-        {label:'Dernière inspection', type:'date'} ]},
-    ],
-  },
-];
+window.addEventListener('hashchange', () => {
+state.route = parseHash();
+// Ouvrir une fiche force son rechargement, quelle que soit la façon d'y arriver
+// (clic, scan d'un QR code, retour arrière, lien collé) : plusieurs personnes
+// travaillent sur la même base, les données en cache peuvent être périmées.
+if(state.route.name === 'equip') equipDetail.id = null;
+if(state.route.name === 'p' || state.route.name === 'equip') fichePublique.token = null;
+// Filet de sécurité : si on change de route par un autre biais que le bouton
+// « fermer » du scanner (retour arrière du téléphone, par exemple), on
+// coupe quand même la caméra — sinon elle continuerait de tourner en fond.
+if(typeof scannerState !== 'undefined' && scannerState.ouvert) fermerScanner();
+render();
+});
+
