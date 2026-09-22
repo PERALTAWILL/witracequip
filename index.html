@@ -237,13 +237,39 @@ font-family:ui-monospace, SFMono-Regular, Menlo, monospace; color:var(--text-dim
 }
 
 /* ---- accueil ---- */
+/* Anime légèrement l'arrivée sur l'accueil : la bannière et chaque carte
+apparaissent en fondu + léger mouvement vers le haut, décalés les uns des
+autres. Pur CSS (aucune image, aucune librairie) — coût quasi nul. */
+@keyframes accueilFadeUp{
+from{opacity:0; transform:translateY(14px);}
+to{opacity:1; transform:translateY(0);}
+}
+@keyframes accueilDegrade{
+0%{background-position:0% 50%;}
+50%{background-position:100% 50%;}
+100%{background-position:0% 50%;}
+}
+@keyframes accueilLogoEntree{
+from{opacity:0; transform:scale(.6) rotate(-8deg);}
+to{opacity:1; transform:scale(1) rotate(0);}
+}
+@media (prefers-reduced-motion: reduce){
+.accueil-hero, .etape-accueil, .chiffre, .accueil-marque img{animation:none !important; opacity:1 !important;}
+}
 .accueil-hero{
-background:linear-gradient(120deg, var(--primary) 0%, var(--primary-dim) 100%);
+background:linear-gradient(120deg, var(--primary) 0%, var(--primary-dim) 45%, var(--primary) 100%);
+background-size:220% 220%;
 color:var(--primary-contrast); border-radius:var(--radius);
 padding:22px 22px 20px; margin-bottom:20px; box-shadow:var(--shadow);
+animation-name: accueilFadeUp, accueilDegrade;
+animation-duration: .6s, 10s;
+animation-timing-function: ease, ease-in-out;
+animation-iteration-count: 1, infinite;
+animation-fill-mode: both, none;
 }
 .accueil-marque{display:flex; align-items:center; gap:14px; margin-bottom:12px;}
-.accueil-marque img{width:44px; height:44px; object-fit:contain; flex-shrink:0;}
+.accueil-marque img{width:44px; height:44px; object-fit:contain; flex-shrink:0;
+animation:accueilLogoEntree .5s cubic-bezier(.2,1.4,.4,1) .1s both;}
 .accueil-titre{font-size:22px; font-weight:750; letter-spacing:-.02em; line-height:1.2;}
 .accueil-org{font-size:13.5px; opacity:.85; margin-top:2px;}
 .accueil-phrase{font-size:14px; line-height:1.55; opacity:.92; max-width:60ch; margin:0;}
@@ -258,7 +284,11 @@ display:grid; grid-template-columns:repeat(auto-fit, minmax(210px, 1fr)); gap:12
 .etape-accueil{
 background:var(--surface); border:1px solid var(--border); border-radius:var(--radius);
 padding:16px; display:flex; flex-direction:column; gap:6px; box-shadow:var(--shadow);
+opacity:0; animation:accueilFadeUp .5s ease both;
 }
+.etape-accueil:nth-child(1){animation-delay:.15s;}
+.etape-accueil:nth-child(2){animation-delay:.25s;}
+.etape-accueil:nth-child(3){animation-delay:.35s;}
 .etape-accueil.mise-en-avant{border-color:var(--primary);}
 .etape-num{
 width:28px; height:28px; border-radius:50%; background:var(--surface-2);
@@ -277,7 +307,11 @@ gap:12px; margin-top:20px;
 .chiffre{
 background:var(--surface); border:1px solid var(--border); border-radius:var(--radius);
 padding:16px; text-align:center;
+opacity:0; animation:accueilFadeUp .5s ease both;
 }
+.chiffre:nth-child(1){animation-delay:.45s;}
+.chiffre:nth-child(2){animation-delay:.53s;}
+.chiffre:nth-child(3){animation-delay:.61s;}
 .chiffre-val{font-size:30px; font-weight:750; color:var(--primary); line-height:1.1;}
 .chiffre-lib{font-size:12.5px; color:var(--text-dim); margin-top:4px;}
 
@@ -1321,11 +1355,30 @@ derniere: interventions.length ? interventions[0].date : null,
 };
 }
 
+/* Fait défiler les chiffres de 0 jusqu'à leur valeur réelle à l'arrivée sur
+l'accueil — un petit effet qui attire l'œil, sans aucune donnée ni image
+supplémentaire : juste un décompte en JavaScript sur du texte déjà là. */
+function animerChiffres(){
+document.querySelectorAll('.chiffre-val[data-count]').forEach(el => {
+const cible = parseInt(el.dataset.count, 10) || 0;
+if(!cible){ el.textContent = '0'; return; }
+const duree = 700;
+const debut = performance.now();
+function etape(maintenant){
+const p = Math.min((maintenant - debut) / duree, 1);
+const relache = 1 - Math.pow(1 - p, 3); // ease-out cubic
+el.textContent = Math.round(cible * relache);
+if(p < 1) requestAnimationFrame(etape);
+}
+requestAnimationFrame(etape);
+});
+}
+
 function viewAccueil(){
 if(accueilCache.chiffres === null && !accueilCache.loading){
 accueilCache.loading = true;
 chargerChiffres()
-.then(c => { accueilCache.chiffres = c; accueilCache.loading = false; render(); })
+.then(c => { accueilCache.chiffres = c; accueilCache.loading = false; render(); setTimeout(animerChiffres, 30); })
 .catch(e => { accueilCache.error = e.message; accueilCache.loading = false; render(); });
 }
 
@@ -1379,11 +1432,11 @@ ${accueilCache.error
 ? `<div class="spinner"></div>`
 : `<div class="accueil-chiffres">
 <div class="chiffre">
-<div class="chiffre-val">${c.actifs}</div>
+<div class="chiffre-val" data-count="${c.actifs}">0</div>
 <div class="chiffre-lib">équipement${c.actifs > 1 ? 's' : ''} suivi${c.actifs > 1 ? 's' : ''}</div>
 </div>
 <div class="chiffre">
-<div class="chiffre-val">${c.interventions}</div>
+<div class="chiffre-val" data-count="${c.interventions}">0</div>
 <div class="chiffre-lib">intervention${c.interventions > 1 ? 's' : ''} enregistrée${c.interventions > 1 ? 's' : ''}</div>
 </div>
 <div class="chiffre">
