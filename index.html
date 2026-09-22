@@ -1405,10 +1405,25 @@ chargerChiffres()
 }
 
 // La bannière + les 3 étapes s'animent dès le tout premier affichage de
-// l'accueil dans la session (même pendant que les chiffres se chargent
-// encore) et jamais ensuite, quel que soit le nombre de réaffichages.
+// l'accueil dans la session, et jamais ensuite, quel que soit le nombre de
+// réaffichages.
+//
+// CORRECTION : tant que les chiffres n'ont pas fini de charger (succès OU
+// erreur), le flag reste à false, même si un premier rendu a déjà eu lieu.
+// Pourquoi : le tout premier rendu de l'accueil a lieu AVANT que les
+// chiffres soient disponibles (chargerChiffres() vient d'être lancé) ; dès
+// qu'ils arrivent (souvent en quelques centaines de ms, bien avant la fin
+// des 3,2s de l'animation), un second rendu remplace entièrement le HTML de
+// l'accueil. Si le flag s'était déjà figé à true lors du premier rendu, ce
+// second rendu reconstruit la bannière SANS la classe d'animation — elle
+// disparaît donc avant d'avoir eu le temps de jouer. En ne figeant le flag
+// qu'une fois les données établies, la bannière garde sa classe d'animation
+// sur ces deux tout premiers rendus (elle rejoue son entrée une fois de
+// plus, sans à-coup visible), et seul un réaffichage ULTÉRIEUR (retour sur
+// l'accueil plus tard dans la session) n'anime plus rien.
 const jouerAnimHero = !accueilHeroAnimee;
-accueilHeroAnimee = true;
+const donneesEtablies = !accueilCache.loading && (accueilCache.chiffres !== null || !!accueilCache.error);
+if(donneesEtablies) accueilHeroAnimee = true;
 
 const prenom = (state.profile?.full_name || '').trim().split(/\s+/)[0] || '';
 const c = accueilCache.chiffres;
