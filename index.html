@@ -2,19 +2,9 @@
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <title>WiTracEQUIP — Passeport technique d'équipement</title>
-<meta name="description" content="WiTracEQUIP — le passeport technique de vos équipements. Scannez le QR code collé sur un appareil, consultez son carnet d'entretien, enregistrez une intervention. Par WiDIAG MQ, Martinique.">
-
-<!-- =========================================================================
-     Progressive Web App
-     -------------------------------------------------------------------------
-     L'application s'installe sur l'écran d'accueil d'un téléphone et démarre
-     sans réseau. Aucun magasin d'applications, aucune validation, aucun
-     téléchargement de plusieurs dizaines de mégaoctets : un technicien ouvre
-     l'adresse une fois, choisit « Ajouter à l'écran d'accueil », et
-     l'application est là.
-     ========================================================================= -->
+<link rel="icon" type="image/png" href="assets/icons/favicon-64.png">
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#0f766e" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#12181a" media="(prefers-color-scheme: dark)">
@@ -22,42 +12,2672 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="WiTracEQUIP">
 <link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png">
-<link rel="icon" type="image/png" sizes="64x64" href="assets/icons/favicon-64.png">
-<link rel="icon" type="image/png" sizes="192x192" href="assets/icons/icon-192.png">
-
-<link rel="stylesheet" href="css/style.css">
-
-<!-- =========================================================================
-     Bibliothèques externes
-     -------------------------------------------------------------------------
-     Chargées en scripts classiques (et non en modules) volontairement : elles
-     s'exposent alors en variables globales, que les modules ES6 lisent sans
-     dépendre d'un CDN en version ESM. Les modules étant différés par nature,
-     ces deux scripts sont toujours exécutés avant le premier import.
-
-     Le Service Worker les met en cache au premier chargement : l'application
-     démarre ensuite sans réseau, y compris ces deux fichiers.
-     ========================================================================= -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrious/4.0.2/qrious.min.js"></script>
+<style>
+:root{
+--bg:#f4f6f7; --surface:#ffffff; --surface-2:#f0f2f4; --border:#e0e4e6;
+--text:#141b1e; --text-dim:#5b686d; --primary:#0f766e; --primary-dim:#0b544e;
+--primary-contrast:#ffffff; --danger:#b3261e; --danger-bg:#fbeae9;
+--success:#166534; --success-bg:#eafaf0; --warn-bg:#fff7e6; --warn:#946200;
+--radius:10px; --shadow:0 1px 2px rgba(20,27,30,.06), 0 1px 8px rgba(20,27,30,.04);
+--font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+@media (prefers-color-scheme: dark){
+:root{
+--bg:#12181a; --surface:#1b2326; --surface-2:#222b2e; --border:#2c363a;
+--text:#e9eef0; --text-dim:#9aabb1; --primary:#2dd4bf; --primary-dim:#14b8a6;
+--primary-contrast:#062622; --danger:#f2887f; --danger-bg:#3a201d;
+--success:#7fe0a6; --success-bg:#132a1e; --warn-bg:#332a12; --warn:#f2c46d;
+--shadow:0 1px 2px rgba(0,0,0,.3), 0 1px 10px rgba(0,0,0,.25);
+}
+}
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;}
+body{
+background:var(--bg); color:var(--text); font-family:var(--font);
+font-size:15px; line-height:1.5; -webkit-font-smoothing:antialiased;
+/* Un numéro de série ou un nom sans espace ne doit jamais élargir la page. */
+overflow-wrap:break-word;
+}
+#app{min-height:100vh; display:flex; flex-direction:column;}
+a{color:var(--primary); text-decoration:none;}
+a:hover{text-decoration:underline;}
+button, input, select, textarea{font-family:inherit; font-size:inherit; color:inherit;}
+h1,h2,h3{margin:0 0 4px 0; font-weight:650;}
+.muted{color:var(--text-dim);}
+.small{font-size:13px;}
+
+/* ---- topbar ---- */
+.topbar{
+display:flex; align-items:center; gap:14px; padding:10px 18px;
+background:var(--surface); border-bottom:1px solid var(--border);
+position:sticky; top:0; z-index:20;
+}
+.brand{display:flex; align-items:center; gap:10px; font-weight:700; font-size:17px; letter-spacing:-.01em;}
+.brand .logo{
+width:32px; height:32px; object-fit:contain; flex-shrink:0;
+}
+.brand .by{font-size:10.5px; color:var(--text-dim); font-weight:500; margin-top:1px;}
+.topbar-spacer{flex:1;}
+.org-pill{
+font-size:12.5px; color:var(--text-dim); background:var(--surface-2);
+border:1px solid var(--border); padding:4px 10px; border-radius:999px;
+}
+.user-menu{position:relative;}
+.user-btn{
+display:flex; align-items:center; gap:8px; background:none; border:1px solid var(--border);
+padding:6px 10px; border-radius:999px; cursor:pointer; color:var(--text);
+}
+.avatar{
+width:24px; height:24px; border-radius:50%; background:var(--surface-2);
+display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:700;
+border:1px solid var(--border);
+}
+.dropdown{
+position:absolute; right:0; top:calc(100% + 6px); background:var(--surface);
+border:1px solid var(--border); border-radius:var(--radius); box-shadow:var(--shadow);
+min-width:180px; padding:6px; display:none; z-index:30;
+}
+.dropdown.open{display:block;}
+.dropdown button{
+display:block; width:100%; text-align:left; background:none; border:none;
+padding:8px 10px; border-radius:6px; cursor:pointer; color:var(--text);
+}
+.dropdown button:hover{background:var(--surface-2);}
+
+/* ---- nav tabs ---- */
+.tabs{
+display:flex; gap:4px; padding:0 18px; background:var(--surface);
+border-bottom:1px solid var(--border); overflow-x:auto;
+}
+.tab{
+padding:11px 14px; font-size:13.5px; font-weight:600; color:var(--text-dim);
+border-bottom:2px solid transparent; cursor:pointer; white-space:nowrap;
+}
+.tab.active{color:var(--primary); border-bottom-color:var(--primary);}
+
+main{flex:1; width:100%; max-width:920px; margin:0 auto; padding:20px 18px 60px; width:100%;}
+.container-wide{max-width:1080px;}
+
+/* ---- cards / surfaces ---- */
+.card{
+background:var(--surface); border:1px solid var(--border); border-radius:var(--radius);
+padding:18px; box-shadow:var(--shadow);
+}
+.card + .card{margin-top:14px;}
+.row{display:flex; align-items:center; gap:10px;}
+.row.between{justify-content:space-between;}
+.row.wrap{flex-wrap:wrap;}
+.stack{display:flex; flex-direction:column; gap:10px;}
+.grid-2{display:grid; grid-template-columns:1fr 1fr; gap:10px;}
+/* Sans ceci, une cellule de grille refuse de se réduire sous la taille de son
+contenu (QR code, nom à rallonge) et fait déborder toute la page. */
+.grid-2 > *{min-width:0;}
+@media(max-width:520px){.grid-2{grid-template-columns:1fr;}}
+
+/* ---- forms ---- */
+label{display:block; font-size:12.5px; font-weight:650; color:var(--text-dim); margin-bottom:4px; text-transform:uppercase; letter-spacing:.02em;}
+.field{margin-bottom:12px;}
+input[type=text], input[type=email], input[type=password], input[type=number],
+input[type=date], input[type=search], select, textarea{
+width:100%; padding:9px 11px; border:1px solid var(--border); border-radius:8px;
+background:var(--surface); color:var(--text); outline:none;
+}
+input:focus, select:focus, textarea:focus{border-color:var(--primary); box-shadow:0 0 0 3px color-mix(in srgb, var(--primary) 18%, transparent);}
+textarea{min-height:70px; resize:vertical;}
+.hint{font-size:12px; color:var(--text-dim); margin-top:4px;}
+.oblig{
+font-size:10px; font-weight:700; letter-spacing:.03em; text-transform:uppercase;
+color:var(--danger); background:var(--danger-bg);
+border-radius:99px; padding:1px 6px; margin-left:4px;
+}
+
+.btn{
+display:inline-flex; align-items:center; justify-content:center; gap:6px;
+padding:9px 15px; border-radius:8px; border:1px solid var(--border);
+background:var(--surface); color:var(--text); font-weight:600; font-size:13.5px;
+cursor:pointer; white-space:nowrap;
+}
+.btn:hover{background:var(--surface-2);}
+.btn:disabled{opacity:.5; cursor:not-allowed;}
+.btn-primary{background:var(--primary); border-color:var(--primary); color:var(--primary-contrast);}
+.btn-primary:hover{background:var(--primary-dim); border-color:var(--primary-dim);}
+.btn-danger{color:var(--danger); border-color:var(--danger-bg);}
+.btn-danger:hover{background:var(--danger-bg);}
+.btn-sm{padding:6px 10px; font-size:12.5px;}
+.btn-block{width:100%;}
+.icon-btn{background:none; border:none; cursor:pointer; color:var(--text-dim); padding:4px;}
+.icon-btn:hover{color:var(--text);}
+
+/* ---- badges / alerts ---- */
+.badge{display:inline-block; font-size:11.5px; font-weight:700; padding:2px 8px; border-radius:999px;}
+.badge-neutral{background:var(--surface-2); color:var(--text-dim);}
+.badge-warn{background:var(--warn-bg); color:var(--warn);}
+.badge-role{background:var(--surface-2); color:var(--primary); border:1px solid var(--border);}
+.badge-off{background:var(--danger-bg); color:var(--danger);}
+.alert{padding:11px 13px; border-radius:8px; font-size:13.5px; margin-bottom:14px;}
+.alert-error{background:var(--danger-bg); color:var(--danger);}
+.alert-success{background:var(--success-bg); color:var(--success);}
+.alert-info{background:var(--surface-2); color:var(--text-dim);}
+.alert-warn-admin{background:var(--warn-bg); color:var(--warn); margin-bottom:12px;}
+
+/* ---- lists / tables ---- */
+.list-item{
+display:flex; align-items:center; gap:12px; padding:13px 0; border-bottom:1px solid var(--border);
+}
+.list-item:last-child{border-bottom:none;}
+.list-item .thumb{
+width:38px; height:38px; border-radius:8px; background:var(--surface-2); flex-shrink:0;
+display:flex; align-items:center; justify-content:center; font-weight:700; color:var(--primary);
+border:1px solid var(--border);
+}
+table{width:100%; border-collapse:collapse; font-size:13.5px;}
+th{text-align:left; font-size:11.5px; text-transform:uppercase; letter-spacing:.02em; color:var(--text-dim); padding:8px 8px; border-bottom:1px solid var(--border);}
+td{padding:10px 8px; border-bottom:1px solid var(--border); vertical-align:top;}
+tr:last-child td{border-bottom:none;}
+
+.empty{text-align:center; padding:40px 20px; color:var(--text-dim);}
+.empty .big{font-size:34px; margin-bottom:8px;}
+
+.spinner{
+width:20px; height:20px; border:2.5px solid var(--border); border-top-color:var(--primary);
+border-radius:50%; animation:spin .7s linear infinite; margin:30px auto;
+}
+@keyframes spin{to{transform:rotate(360deg);}}
+.center-screen{min-height:100vh; display:flex; align-items:center; justify-content:center;}
+
+/* ---- auth screen ---- */
+.auth-wrap{max-width:380px; margin:8vh auto; padding:0 18px;}
+.auth-logo{display:flex; flex-direction:column; align-items:center; gap:8px; margin-bottom:26px; text-align:center;}
+.auth-logo .logo{width:52px; height:52px; object-fit:contain;}
+.auth-toggle{display:flex; gap:4px; background:var(--surface-2); padding:4px; border-radius:10px; margin-bottom:18px;}
+.auth-toggle button{flex:1; padding:8px; border:none; background:none; border-radius:7px; cursor:pointer; font-weight:650; color:var(--text-dim);}
+.auth-toggle button.active{background:var(--surface); color:var(--text); box-shadow:var(--shadow);}
+
+/* ---- champ mot de passe avec aperçu ---- */
+.pw-wrap{position:relative; display:block;}
+.pw-wrap input{padding-right:44px;}
+.pw-toggle{
+position:absolute; right:5px; top:50%; transform:translateY(-50%);
+display:flex; align-items:center; justify-content:center;
+width:32px; height:32px; padding:0; border:none; border-radius:7px;
+background:none; color:var(--text-dim); cursor:pointer;
+}
+.pw-toggle:hover{color:var(--text); background:var(--surface-2);}
+.pw-toggle:focus-visible{outline:2px solid var(--primary); outline-offset:1px;}
+
+/* ---- equipe ---- */
+.member{display:flex; align-items:center; gap:10px; padding:12px 0; border-bottom:1px solid var(--border); flex-wrap:wrap;}
+.member:last-child{border-bottom:none;}
+.member .who{flex:1; min-width:150px;}
+.member select{width:auto; min-width:130px; padding:6px 8px;}
+/* Cloisonnement par métier : quels types un profil a le droit de voir */
+.acces{
+width:100%; margin-top:2px; padding:10px 12px;
+background:var(--surface-2); border:1px solid var(--border); border-radius:8px;
+}
+.acces .case{
+display:flex; align-items:center; gap:8px; margin:0 0 4px 0;
+text-transform:none; font-weight:500; font-size:13.5px; color:var(--text);
+letter-spacing:normal; cursor:pointer;
+}
+.acces .case input{width:auto; margin:0; flex-shrink:0;}
+.acces-liste{
+display:flex; flex-wrap:wrap; gap:4px 18px; margin:6px 0 0 24px;
+}
+.acces-liste .case{margin:0;}
+.invite-link{
+display:flex; gap:8px; align-items:center; background:var(--surface-2);
+border:1px solid var(--border); border-radius:8px; padding:8px 10px; margin-top:8px; flex-wrap:wrap;
+}
+.invite-link code{
+flex:1; min-width:140px; font-size:12px; word-break:break-all;
+font-family:ui-monospace, SFMono-Regular, Menlo, monospace; color:var(--text-dim);
+}
+
+/* ---- accueil ---- */
+.accueil-hero{
+background:linear-gradient(120deg, var(--primary) 0%, var(--primary-dim) 100%);
+color:var(--primary-contrast); border-radius:var(--radius);
+padding:22px 22px 20px; margin-bottom:20px; box-shadow:var(--shadow);
+}
+.accueil-marque{display:flex; align-items:center; gap:14px; margin-bottom:12px;}
+.accueil-marque img{width:44px; height:44px; object-fit:contain; flex-shrink:0;}
+.accueil-titre{font-size:22px; font-weight:750; letter-spacing:-.02em; line-height:1.2;}
+.accueil-org{font-size:13.5px; opacity:.85; margin-top:2px;}
+.accueil-phrase{font-size:14px; line-height:1.55; opacity:.92; max-width:60ch; margin:0;}
+
+.accueil-section-titre{
+font-size:12px; font-weight:750; letter-spacing:.06em; text-transform:uppercase;
+color:var(--text-dim); margin-bottom:10px;
+}
+.etapes-accueil{
+display:grid; grid-template-columns:repeat(auto-fit, minmax(210px, 1fr)); gap:12px;
+}
+.etape-accueil{
+background:var(--surface); border:1px solid var(--border); border-radius:var(--radius);
+padding:16px; display:flex; flex-direction:column; gap:6px; box-shadow:var(--shadow);
+}
+.etape-accueil.mise-en-avant{border-color:var(--primary);}
+.etape-num{
+width:28px; height:28px; border-radius:50%; background:var(--surface-2);
+color:var(--primary); font-weight:800; font-size:14px;
+display:flex; align-items:center; justify-content:center; margin-bottom:2px;
+}
+.etape-accueil.mise-en-avant .etape-num{background:var(--primary); color:var(--primary-contrast);}
+.etape-titre{font-size:16px; font-weight:700; letter-spacing:-.01em;}
+.etape-accueil p{font-size:13px; color:var(--text-dim); line-height:1.5; flex:1; margin:0;}
+.etape-accueil .btn{align-self:flex-start; margin-top:4px;}
+
+.accueil-chiffres{
+display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr));
+gap:12px; margin-top:20px;
+}
+.chiffre{
+background:var(--surface); border:1px solid var(--border); border-radius:var(--radius);
+padding:16px; text-align:center;
+}
+.chiffre-val{font-size:30px; font-weight:750; color:var(--primary); line-height:1.1;}
+.chiffre-lib{font-size:12.5px; color:var(--text-dim); margin-top:4px;}
+
+/* ---- modèles métiers ---- */
+.modeles{
+display:grid; grid-template-columns:repeat(auto-fit, minmax(230px, 1fr));
+gap:10px; margin-top:14px;
+}
+.modele{
+background:var(--surface-2); border:1px solid var(--border); border-radius:var(--radius);
+padding:14px; display:flex; flex-direction:column; gap:4px;
+}
+.modele-nom{font-weight:650; font-size:14.5px;}
+.modele-types{
+font-size:12px; color:var(--text-dim); line-height:1.45;
+margin:6px 0 10px; flex:1;
+}
+.modele .btn{align-self:flex-start;}
+
+/* ---- field builder (types) ---- */
+.champ-row{display:grid; grid-template-columns:1fr 110px 32px; gap:8px; margin-bottom:8px; align-items:center;}
+
+/* ---- en-tête d'une fiche équipement ---- */
+.fiche-entete{display:flex; align-items:flex-start; gap:10px; flex-wrap:wrap; margin-bottom:14px;}
+.fiche-entete .titre{flex:1 1 160px; min-width:0;}
+.fiche-entete .actions{display:flex; gap:6px; flex-wrap:wrap;}
+/* Sur téléphone, les boutons passent sous le titre plutôt que de l'écraser. */
+@media(max-width:520px){
+.fiche-entete .titre{flex:1 1 100%;}
+.fiche-entete .actions{width:100%;}
+.fiche-entete .actions .btn{flex:1;}
+}
+
+/* ---- QR / impression d'étiquette ---- */
+.qr-box{display:flex; flex-direction:column; align-items:center; gap:10px; padding:10px 0;}
+/* Le QR est généré à taille fixe : on l'oblige à se réduire sur les petits écrans. */
+.qr-box canvas{max-width:100%; height:auto;}
+#print-area{display:none;}
+
+/* Étiquette : uniquement le QR code et l'identifiant (immatriculation ou n° de
+série). Tout le reste de l'application est retiré du flux d'impression —
+pas masqué mais retiré, sinon certaines imprimantes sortent des pages vides.
+Pensé pour une imprimante thermique d'étiquettes. */
+@media print{
+@page{ margin:3mm; }
+html, body{ background:#fff !important; margin:0; padding:0; }
+#app{ display:none !important; }
+#print-area{
+display:block !important;
+text-align:center;
+color:#000;
+}
+#print-area img{ display:block; margin:0 auto; }
+#print-area .etiquette-id{
+font-family:Arial, Helvetica, sans-serif;
+font-weight:700; font-size:10pt; color:#000;
+margin-top:1.5mm; letter-spacing:.02em;
+word-break:break-all;
+}
+}
+
+/* ---- Consultation publique (scan du QR code, sans compte) ---- */
+.pub-page{width:100%; max-width:820px; margin:0 auto; padding:18px 16px 48px;
+box-sizing:border-box; min-width:0;}
+.pub-page *{min-width:0;}
+.pub-page table{width:100%; table-layout:fixed; overflow-wrap:break-word;}
+/* Sur un telephone, un tableau a quatre colonnes devient illisible : chaque
+intervention se replie alors en bloc, une ligne par information. */
+@media(max-width:560px){
+.pub-ivs{table-layout:auto;}
+.pub-ivs thead{display:none;}
+.pub-ivs, .pub-ivs tbody, .pub-ivs tr, .pub-ivs td{display:block; width:100%;}
+.pub-ivs tr{padding:10px 0; border-bottom:1px solid var(--border);}
+.pub-ivs tr:last-child{border-bottom:none;}
+.pub-ivs td{border:none; padding:2px 0;}
+.pub-ivs td[data-l]::before{
+content:attr(data-l) " : "; color:var(--text-dim); font-weight:600;
+}
+.pub-ivs td.iv-date{font-weight:700; font-size:15px; padding-bottom:4px;}
+}
+.pub-entete{
+display:flex; align-items:center; gap:12px; flex-wrap:wrap;
+padding:14px 16px; border-radius:14px; margin-bottom:16px;
+background:linear-gradient(135deg,#0d5a51,#0a3f3a); color:#fff;
+}
+.pub-entete img{width:38px; height:38px; border-radius:9px; flex:0 0 auto;}
+.pub-entete .nom{font-weight:700; letter-spacing:.01em;}
+.pub-entete .by{font-size:11px; opacity:.75;}
+.pub-entete .org{margin-left:auto; font-size:12px; opacity:.9; min-width:0;}
+.pub-connexion{
+flex:0 0 auto; margin-left:10px;
+font:inherit; font-size:13px; font-weight:600; line-height:1;
+color:#fff; background:rgba(255,255,255,.14);
+border:1px solid rgba(255,255,255,.35); border-radius:9px;
+padding:9px 14px; cursor:pointer; white-space:nowrap;
+}
+.pub-connexion:hover{background:rgba(255,255,255,.24);}
+.pub-titre{margin:0 0 2px; font-size:20px; line-height:1.25; word-break:break-word;}
+.pub-lecture{
+display:inline-flex; align-items:center; gap:6px;
+font-size:12px; font-weight:600; padding:4px 10px; border-radius:999px;
+background:rgba(15,122,110,.12); color:var(--accent, #0f7a6e);
+border:1px solid rgba(15,122,110,.25);
+}
+.alerte-serie{
+margin-top:6px; font-size:13px; line-height:1.5;
+padding:9px 11px; border-radius:9px;
+background:rgba(200,120,20,.10); color:#8a5209;
+border:1px solid rgba(200,120,20,.28);
+}
+.alerte-serie a{color:#8a5209; font-weight:600;}
+.alerte-serie.vide{display:none;}
+.pub-retire{
+margin-left:8px;
+background:rgba(200,120,20,.12); color:#a8630f;
+border-color:rgba(200,120,20,.3);
+}
+.pub-pied{
+margin-top:22px; text-align:center; font-size:12px; line-height:1.6;
+color:var(--text-dim);
+}
+.pub-pied a{color:var(--text-dim);}
+@media(max-width:480px){
+.pub-entete .org{margin-left:auto; width:auto; text-align:right;}
+.pub-connexion{margin-left:0; width:100%; padding:11px 14px;}
+}
+
+::-webkit-scrollbar{width:10px; height:10px;}
+::-webkit-scrollbar-thumb{background:var(--border); border-radius:6px;}
+</style>
 </head>
 <body>
-
-<!-- Toute l'interface est rendue ici par js/app.js. -->
 <div id="app"></div>
-
-<!-- Zone d'impression de l'étiquette : masquée à l'écran, seule visible à
-     l'impression (voir la règle @media print dans css/style.css). -->
 <div id="print-area"></div>
 
-<noscript>
-  <div style="max-width:420px;margin:12vh auto;padding:0 18px;font-family:system-ui,sans-serif;">
-    <h1>WiTracEQUIP</h1>
-    <p>Cette application a besoin de JavaScript pour fonctionner.
-       Activez-le dans les réglages de votre navigateur, puis rechargez la page.</p>
-  </div>
-</noscript>
+<script>
+/* =========================================================================
+WiTracEQUIP — carnet technique d'équipement (QR code)
+Client-side SPA, connecté en direct à Supabase (organization_id / RLS).
+Un seul fichier HTML — à héberger tel quel (Netlify, Vercel, GitHub Pages,
+ou ton propre domaine witracequip.fr).
+========================================================================= */
 
-<script type="module" src="js/app.js"></script>
+/* =========================================================================
+ADRESSE PUBLIQUE DE L'APPLICATION
+-------------------------------------------------------------------------
+Un QR code imprimé contient une adresse, et cette adresse est gravée dans
+l'étiquette pour toujours : si l'application déménage, toutes les étiquettes
+déjà collées deviennent mortes.
+
+Tant que cette ligne est vide, l'appli utilise l'adresse depuis laquelle elle
+est ouverte — pratique pour tester, mais à ne PAS utiliser pour imprimer des
+étiquettes en série.
+
+Dès que le domaine définitif est en place, renseigner cette ligne :
+const APP_BASE_URL = 'https://witracequip.fr/';
+========================================================================= */
+const APP_BASE_URL = 'https://witracequip.fr/';
+
+/* =========================================================================
+ÉTIQUETTE IMPRIMÉE
+L'étiquette ne contient QUE le QR code et l'identifiant de l'équipement
+(immatriculation pour un véhicule, n° de série pour un appareil) : rien
+d'autre, pour tenir sur une imprimante thermique.
+Ajustez la taille selon le format de vos étiquettes.
+========================================================================= */
+const ETIQUETTE = {
+taille_qr_mm: 30, // côté du QR imprimé, en millimètres
+afficher_identifiant: true, // n° de série / immatriculation sous le QR
+};
+
+const SUPABASE_URL = 'https://oeqgyjyqdwlymlpfkdyn.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_w3Lh6JYXepKHspWG5e06FQ_BpXaGQnE';
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+/* Logo WiTracEQUIP (utilisé sur l'écran de connexion et la page d'invitation) */
+const LOGO_DATA_URL = 'assets/icons/icon-192.png';
+
+const CHAMP_TYPES = [
+{v:'text', l:'Texte'},
+{v:'number', l:'Nombre'},
+{v:'date', l:'Date'},
+{v:'textarea', l:'Texte long'},
+];
+
+/* Rôles et droits
+- utilisateur : créer un équipement, remplir/ajouter des interventions, imprimer le QR
+- responsable : tout cela + supprimer (archiver) un équipement
+- admin : tout cela + gérer les profils (inviter, changer de rôle, suspendre)
+Ces règles sont AUSSI appliquées côté base (RLS + triggers) : masquer un bouton
+ici n'est qu'un confort d'affichage, la sécurité réelle est dans Supabase. */
+const ROLE_LABELS = {
+admin: 'Administrateur',
+responsable: 'Responsable',
+utilisateur: 'Utilisateur',
+};
+const ROLES_ASSIGNABLES = ['admin', 'responsable', 'utilisateur'];
+
+const ROLE_RESUME = {
+admin: "Tous les droits, y compris gérer l'équipe et inviter d'autres administrateurs.",
+responsable: 'Peut créer, remplir, imprimer et supprimer un équipement.',
+utilisateur: 'Peut créer, remplir et imprimer — mais pas supprimer.',
+};
+
+/* Champ mot de passe avec aperçu (le petit œil) */
+const ICONE_OEIL = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`;
+const ICONE_OEIL_BARRE = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>`;
+
+function champMotDePasse(autocomplete){
+return `
+<div class="pw-wrap">
+<input type="password" name="password" placeholder="••••••••" minlength="6" required autocomplete="${autocomplete}">
+<button type="button" class="pw-toggle" data-action="toggle-pw"
+aria-label="Afficher le mot de passe" title="Afficher le mot de passe">${ICONE_OEIL}</button>
+</div>`;
+}
+
+/* =========================================================================
+MODÈLES MÉTIERS
+Parcs types des secteurs visés, avec les champs qui comptent pour la
+traçabilité réglementaire. Un administrateur les déploie en un clic chez
+un nouveau client, puis ajuste librement.
+========================================================================= */
+const MODELES_METIERS = [
+{
+cle: 'hotellerie',
+nom: 'Hôtellerie & résidences',
+description: "Le parc technique d'un établissement recevant du public.",
+types: [
+{ nom: 'Climatisation / groupe froid', champs: [
+{label:'Marque', type:'text'}, {label:'Modèle', type:'text'},
+{label:'Puissance (kW)', type:'number'}, {label:'Emplacement', type:'text'},
+{label:'Fluide frigorigène', type:'text'},
+{label:"Dernier contrôle d'étanchéité", type:'date'},
+{label:'Prochaine inspection', type:'date'} ]},
+{ nom: 'Groupe électrogène', champs: [
+{label:'Marque', type:'text'}, {label:'Modèle', type:'text'},
+{label:'Puissance (kVA)', type:'number'}, {label:'Emplacement', type:'text'},
+{label:'Heures de fonctionnement', type:'number'},
+{label:'Dernier essai en charge', type:'date'}, {label:'Prochain essai', type:'date'} ]},
+{ nom: 'Extincteur', champs: [
+{label:'Type (eau, CO2, poudre)', type:'text'}, {label:'Capacité', type:'text'},
+{label:'Emplacement', type:'text'}, {label:'Date de fabrication', type:'date'},
+{label:'Dernière vérification annuelle', type:'date'},
+{label:'Prochaine révision décennale', type:'date'} ]},
+{ nom: 'Ascenseur', champs: [
+{label:'Marque', type:'text'}, {label:"N° d'appareil", type:'text'},
+{label:'Emplacement', type:'text'}, {label:'Société de maintenance', type:'text'},
+{label:'Dernier contrôle technique', type:'date'}, {label:'Prochain contrôle', type:'date'} ]},
+{ nom: 'Équipement de cuisine', champs: [
+{label:'Type', type:'text'}, {label:'Marque', type:'text'}, {label:'Modèle', type:'text'},
+{label:'Emplacement', type:'text'}, {label:'Dernier entretien', type:'date'} ]},
+{ nom: 'Installation électrique', champs: [
+{label:'Emplacement (TGBT, tableau divisionnaire)', type:'text'},
+{label:'Bureau de contrôle', type:'text'},
+{label:'Dernière vérification annuelle', type:'date'},
+{label:'Observations levées', type:'textarea'} ]},
+],
+},
+{
+cle: 'btp',
+nom: 'BTP & levage',
+description: 'Matériel de chantier soumis à vérification générale périodique.',
+types: [
+{ nom: 'Engin de chantier', champs: [
+{label:'Marque', type:'text'}, {label:'Modèle', type:'text'},
+{label:'Année', type:'number'}, {label:'Heures', type:'number'},
+{label:'Dernière VGP', type:'date'}, {label:'Prochaine VGP', type:'date'} ]},
+{ nom: 'Nacelle élévatrice', champs: [
+{label:'Marque', type:'text'}, {label:'Modèle', type:'text'},
+{label:'Hauteur de travail (m)', type:'number'},
+{label:'Dernière VGP', type:'date'}, {label:'Prochaine VGP', type:'date'},
+{label:'Organisme de contrôle', type:'text'} ]},
+{ nom: 'Chariot élévateur', champs: [
+{label:'Marque', type:'text'}, {label:'Modèle', type:'text'},
+{label:'Capacité (kg)', type:'number'}, {label:'Heures', type:'number'},
+{label:'Dernière VGP', type:'date'}, {label:'Prochaine VGP', type:'date'} ]},
+{ nom: 'Échafaudage', champs: [
+{label:'Type', type:'text'}, {label:'Hauteur (m)', type:'number'},
+{label:'Chantier', type:'text'}, {label:'Date de montage', type:'date'},
+{label:'Dernière vérification', type:'date'} ]},
+{ nom: 'EPI antichute', champs: [
+{label:'Type (harnais, longe, antichute)', type:'text'}, {label:'Taille', type:'text'},
+{label:'Attribué à', type:'text'}, {label:'Date de mise en service', type:'date'},
+{label:'Dernière vérification annuelle', type:'date'} ]},
+{ nom: 'Groupe électrogène de chantier', champs: [
+{label:'Marque', type:'text'}, {label:'Puissance (kVA)', type:'number'},
+{label:'Heures', type:'number'}, {label:'Dernier entretien', type:'date'} ]},
+],
+},
+{
+cle: 'sante',
+nom: 'Santé & biomédical',
+description: 'Parc d\'un établissement de soins ou d\'un cabinet.',
+types: [
+{ nom: 'Dispositif médical', champs: [
+{label:'Fabricant', type:'text'}, {label:'Modèle', type:'text'},
+{label:'Service / localisation', type:'text'}, {label:'Classe', type:'text'},
+{label:'Date de mise en service', type:'date'},
+{label:'Prochaine maintenance préventive', type:'date'} ]},
+{ nom: 'Défibrillateur (DAE)', champs: [
+{label:'Marque', type:'text'}, {label:'Modèle', type:'text'},
+{label:'Emplacement', type:'text'},
+{label:'Péremption des électrodes', type:'date'},
+{label:'Péremption de la batterie', type:'date'},
+{label:'Dernière vérification', type:'date'} ]},
+{ nom: 'Lit médicalisé', champs: [
+{label:'Marque', type:'text'}, {label:'Modèle', type:'text'},
+{label:'Service', type:'text'}, {label:'Dernière vérification électrique', type:'date'} ]},
+{ nom: 'Équipement de stérilisation', champs: [
+{label:'Marque', type:'text'}, {label:'Modèle', type:'text'},
+{label:'Service', type:'text'}, {label:'Dernier contrôle de charge', type:'date'},
+{label:'Prochaine requalification', type:'date'} ]},
+{ nom: 'Groupe électrogène de secours', champs: [
+{label:'Marque', type:'text'}, {label:'Puissance (kVA)', type:'number'},
+{label:'Emplacement', type:'text'}, {label:'Dernier essai en charge', type:'date'},
+{label:'Prochain essai', type:'date'} ]},
+{ nom: 'Climatisation zone sensible', champs: [
+{label:'Emplacement (bloc, pharmacie, labo)', type:'text'},
+{label:'Puissance (kW)', type:'number'},
+{label:'Dernier contrôle', type:'date'}, {label:'Prochain contrôle', type:'date'} ]},
+],
+},
+{
+cle: 'industrie',
+nom: 'Industrie & logistique',
+description: 'Atelier, ligne de production, entrepôt, chaîne du froid.',
+types: [
+{ nom: 'Machine de production', champs: [
+{label:'Fabricant', type:'text'}, {label:'Modèle', type:'text'},
+{label:"N° d'inventaire", type:'text'}, {label:'Ligne / atelier', type:'text'},
+{label:'Date de mise en service', type:'date'},
+{label:'Prochaine maintenance préventive', type:'date'} ]},
+{ nom: 'Chariot élévateur', champs: [
+{label:'Marque', type:'text'}, {label:'Modèle', type:'text'},
+{label:'Capacité (kg)', type:'number'}, {label:'Heures', type:'number'},
+{label:'Dernière VGP', type:'date'}, {label:'Prochaine VGP', type:'date'} ]},
+{ nom: 'Pont roulant / palan', champs: [
+{label:'Marque', type:'text'}, {label:'Capacité (t)', type:'number'},
+{label:'Emplacement', type:'text'},
+{label:'Dernière VGP', type:'date'}, {label:'Prochaine VGP', type:'date'} ]},
+{ nom: 'Compresseur / appareil à pression', champs: [
+{label:'Marque', type:'text'}, {label:'Volume (L)', type:'number'},
+{label:'Pression de service (bar)', type:'number'}, {label:'Emplacement', type:'text'},
+{label:'Dernière inspection', type:'date'},
+{label:'Prochaine requalification', type:'date'} ]},
+{ nom: 'Chambre froide', champs: [
+{label:'Emplacement', type:'text'}, {label:'Volume (m3)', type:'number'},
+{label:'Fluide frigorigène', type:'text'},
+{label:"Dernier contrôle d'étanchéité", type:'date'},
+{label:'Prochain contrôle', type:'date'} ]},
+{ nom: 'Installation électrique', champs:
+[
+{label:'Emplacement', type:'text'}, {label:'Bureau de contrôle', type:'text'},
+{label:'Dernière vérification annuelle', type:'date'},
+{label:'Observations levées', type:'textarea'} ]},
+],
+},
+{
+cle: 'flotte',
+nom: 'Flotte & atelier automobile',
+description: 'Véhicules de service, location, garage ou concession.',
+types: [
+{ nom: 'Véhicule', champs: [
+{label:'Marque', type:'text'}, {label:'Modèle', type:'text'},
+{label:'Kilométrage', type:'number'},
+{label:'Prochain contrôle technique', type:'date'},
+{label:'Prochaine révision', type:'date'},
+{label:'Conducteur attribué', type:'text'} ]},
+{ nom: 'Élévateur de garage / pont', champs: [
+{label:'Marque', type:'text'}, {label:'Capacité (t)', type:'number'},
+{label:'Emplacement', type:'text'},
+{label:'Dernière VGP', type:'date'}, {label:'Prochaine VGP', type:'date'} ]},
+{ nom: 'Outillage de diagnostic', champs: [
+{label:'Marque', type:'text'}, {label:'Modèle', type:'text'},
+{label:'Version logicielle', type:'text'},
+{label:'Dernière mise à jour', type:'date'} ]},
+{ nom: "Compresseur d'atelier", champs: [
+{label:'Marque', type:'text'}, {label:'Volume (L)', type:'number'},
+{label:'Pression (bar)', type:'number'},
+{label:'Dernière inspection', type:'date'} ]},
+],
+},
+];
+
+function roleLabel(r){ return ROLE_LABELS[r] || r || '—'; }
+function isAdmin(){ return state.profile?.role === 'admin'; }
+function peutSupprimer(){ return ['admin','responsable'].includes(state.profile?.role); }
+
+const state = {
+session: null,
+profile: null, // { id, organization_id, full_name, role }
+orgName: '',
+route: parseHash(),
+types: [],
+typesLoaded: false,
+loading: true,
+authMode: 'login', // 'login' | 'signup'
+authError: '',
+authNotice: '',
+authBusy: false,
+accessError: '', // 'ACCES_SUSPENDU' ou message d'erreur au chargement du profil
+};
+
+function parseHash(){
+const h = location.hash.replace(/^#\/?/, '');
+const parts = h.split('/').filter(Boolean);
+// Sans route explicite, on arrive sur l'accueil, pas sur la liste.
+return { name: parts[0] || 'accueil', param: parts[1] || null };
+}
+
+function nav(path){ location.hash = path; }
+
+window.addEventListener('hashchange', () => {
+state.route = parseHash();
+// Ouvrir une fiche force son rechargement, quelle que soit la façon d'y arriver
+// (clic, scan d'un QR code, retour arrière, lien collé) : plusieurs personnes
+// travaillent sur la même base, les données en cache peuvent être périmées.
+if(state.route.name === 'equip') equipDetail.id = null;
+if(state.route.name === 'p' || state.route.name === 'equip') fichePublique.token = null;
+render();
+});
+
+/* ---------------------------------------------------------------------- */
+/* Helpers */
+/* ---------------------------------------------------------------------- */
+
+function esc(s){
+return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function initials(name){
+if(!name) return '?';
+return name.trim().split(/\s+/).slice(0,2).map(w=>w[0]).join('').toUpperCase();
+}
+function fmtDate(d){
+if(!d) return '—';
+// Une date seule (AAAA-MM-JJ) est interprétée par JavaScript comme minuit UTC.
+// Aux Antilles (UTC-4), elle s'afficherait donc la veille. On la construit
+// explicitement en heure locale pour que la date saisie soit la date affichée.
+const m = (typeof d === 'string') && d.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+try{
+const dt = m ? new Date(+m[1], +m[2] - 1, +m[3]) : new Date(d);
+return dt.toLocaleDateString('fr-FR', {day:'2-digit', month:'short', year:'numeric'});
+}catch(e){ return d; }
+}
+function fmtDateTime(d){
+if(!d) return '—';
+try{ return new Date(d).toLocaleString('fr-FR', {day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit'}); }
+catch(e){ return d; }
+}
+function uuid(){
+return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c=>{
+const r = Math.random()*16|0, v = c==='x'? r : (r&0x3|0x8);
+return v.toString(16);
+});
+}
+
+/* ---------------------------------------------------------------------- */
+/* Data layer */
+/* ---------------------------------------------------------------------- */
+
+async function loadProfileAndOrg(){
+const uid = state.session.user.id;
+const { data: profile, error } = await sb.from('profiles').select('id, organization_id, full_name, role, active').eq('id', uid).maybeSingle();
+if(error) throw error;
+if(!profile){
+// Le trigger d'inscription n'a pas encore tourné (rare / latence) — on réessaie une fois.
+await new Promise(r=>setTimeout(r, 800));
+const retry = await sb.from('profiles').select('id, organization_id, full_name, role, active').eq('id', uid).maybeSingle();
+// Profil invisible malgré une session valide = accès coupé côté base
+// (profil suspendu ou organisation suspendue : current_org_id() renvoie NULL).
+if(retry.error || !retry.data) throw new Error('ACCES_SUSPENDU');
+state.profile = retry.data;
+} else {
+state.profile = profile;
+}
+const { data: org } = await sb.from('organizations').select('nom').eq('id', state.profile.organization_id).maybeSingle();
+state.orgName = org?.nom || '';
+}
+
+async function loadTypes(force){
+if(state.typesLoaded && !force) return state.types;
+const { data, error } = await sb.from('equipment_types').select('id, nom, champs, created_at').order('nom');
+if(error) throw error;
+state.types = data || [];
+state.typesLoaded = true;
+return state.types;
+}
+
+async function listEquipements({ search, typeId, showArchived }){
+let q = sb.from('equipements').select('id, nom, serial_value, valeurs, archived, type_id, created_at').order('created_at', {ascending:false});
+if(!showArchived) q = q.eq('archived', false);
+if(typeId) q = q.eq('type_id', typeId);
+if(search) q = q.ilike('nom', `%${search}%`);
+const { data, error } = await q;
+if(error) throw error;
+return data || [];
+}
+
+async function getEquipement(id){
+const { data, error } = await sb.from('equipements').select('*').eq('id', id).maybeSingle();
+if(error) throw error;
+return data;
+}
+
+async function listInterventions(equipementId){
+const { data, error } = await sb.from('interventions').select('*').eq('equipement_id', equipementId).order('date', {ascending:false});
+if(error) throw error;
+return data || [];
+}
+
+/* --- Gestion des profils (admin uniquement) ------------------------- */
+
+async function listMembers(){
+const { data, error } = await sb.from('profiles')
+.select('id, full_name, role, active, acces_tous_types, fondateur, created_at').order('created_at');
+if(error) throw error;
+return data || [];
+}
+
+/* Cloisonnement par métier : quels types chaque profil a le droit de voir. */
+async function listAcces(){
+const { data, error } = await sb.from('acces_types').select('profile_id, type_id');
+if(error) throw error;
+return data || [];
+}
+
+async function setAccesTousTypes(id, valeur){
+const { error } = await sb.from('profiles').update({ acces_tous_types: valeur }).eq('id', id);
+if(error) throw error;
+}
+
+async function setAccesType(profileId, typeId, autoriser){
+if(autoriser){
+const { error } = await sb.from('acces_types').insert({ profile_id: profileId, type_id: typeId });
+if(error) throw error;
+} else {
+const { error } = await sb.from('acces_types').delete()
+.eq('profile_id', profileId).eq('type_id', typeId);
+if(error) throw error;
+}
+}
+
+async function listInvites(){
+const { data, error } = await sb.from('invites')
+.select('*').is('used_at', null).order('created_at', {ascending:false});
+if(error) throw error;
+const now = Date.now();
+return (data || []).filter(i => new Date(i.expires_at).getTime() > now);
+}
+
+async function createInvite(role, label, accesTousTypes, typesAutorises){
+const { data, error } = await sb.from('invites')
+.insert({
+organization_id: state.profile.organization_id,
+role,
+label: label || null,
+acces_tous_types: accesTousTypes,
+types_autorises: accesTousTypes ? [] : typesAutorises,
+})
+.select().single();
+if(error) throw error;
+return data;
+}
+
+async function cancelInvite(id){
+const { error } = await sb.from('invites').delete().eq('id', id);
+if(error) throw error;
+}
+
+async function setMemberRole(id, role){
+const { error } = await sb.from('profiles').update({ role }).eq('id', id);
+if(error) throw error;
+}
+
+async function setMemberActive(id, active){
+const { error } = await sb.from('profiles').update({ active }).eq('id', id);
+if(error) throw error;
+}
+
+/* Base de toutes les adresses fabriquées par l'appli (QR codes, invitations). */
+function baseUrl(){
+const b = (APP_BASE_URL || '').trim();
+return b ? b.replace(/\/+$/, '') + '/' : (location.origin + location.pathname);
+}
+function adresseDefinitive(){ return !!(APP_BASE_URL || '').trim(); }
+function lienEquipement(id){ return baseUrl() + '#/equip/' + id; }
+/* Adresse portee par le QR code : consultable par n'importe qui, en lecture seule. */
+function lienPublic(token){ return baseUrl() + '#/p/' + token; }
+function inviteUrl(token){ return baseUrl() + '#/join/' + token; }
+
+async function copierDansPressePapier(texte, btn){
+try{
+await navigator.clipboard.writeText(texte);
+}catch(e){
+const ta = document.createElement('textarea');
+ta.value = texte; document.body.appendChild(ta); ta.select();
+try{ document.execCommand('copy'); }catch(_){}
+document.body.removeChild(ta);
+}
+if(btn){
+const avant = btn.textContent;
+btn.textContent = 'Copié !';
+setTimeout(()=>{ btn.textContent = avant; }, 1600);
+}
+}
+
+/* ---------------------------------------------------------------------- */
+/* Render root */
+/* ---------------------------------------------------------------------- */
+
+function render(){
+const app = document.getElementById('app');
+if(state.loading){
+app.innerHTML = `<div class="center-screen"><div class="spinner"></div></div>`;
+return;
+}
+// Consultation publique : l'adresse portée par le QR code collé sur
+// l'équipement. Aucun compte, aucune inscription — un contrôleur, un
+// inspecteur ou un assureur scanne et lit le carnet. En lecture seule :
+// rien de modifiable, et la base reste fermée (une seule fonction est
+// ouverte au visiteur, elle ne renvoie que CET équipement).
+if(state.route.name === 'p' && state.route.param){
+app.innerHTML = renderRoutePublique(state.route.param);
+return;
+}
+if(state.accessError){
+app.innerHTML = renderAccesSuspendu();
+return;
+}
+if(!state.session){
+// Lien d'invitation : accessible sans être connecté.
+if(state.route.name === 'join' && state.route.param){
+app.innerHTML = renderJoin(state.route.param);
+return;
+}
+// Étiquettes imprimées avant la mise en place du lien public : elles
+// portent l'adresse interne de la fiche. Un visiteur qui les scanne
+// obtient la même consultation en lecture seule, pas un écran de
+// connexion. L'administrateur peut couper ces anciens liens équipement
+// par équipement avec « Changer le lien ».
+if(state.route.name === 'equip' && state.route.param){
+app.innerHTML = viewFichePublique(state.route.param);
+return;
+}
+app.innerHTML = renderAuth();
+return;
+}
+app.innerHTML = renderShell();
+}
+
+/* ---------------------------------------------------------------------- */
+/* Numero de serie deja enregistre : on previent, on ne bloque pas */
+/* ---------------------------------------------------------------------- */
+
+/* Deux camions peuvent legitimement porter le meme numero de chassis partiel,
+et un operateur presse ne doit jamais se retrouver coince par une machine.
+On signale donc le doublon sans empecher l'enregistrement.
+Volontairement sans render() : reafficher la vue effacerait la saisie en
+cours. On ecrit directement dans la zone d'alerte. */
+let serieTimer = null;
+let serieDemande = 0;
+
+function zoneAlerteSerie(){ return document.getElementById('alerte-serie'); }
+
+function afficherAlerteSerie(html){
+const zone = zoneAlerteSerie();
+if(!zone) return;
+zone.innerHTML = html || '';
+zone.classList.toggle('vide', !html);
+}
+
+function verifierSerie(valeur, excludeId){
+const v = (valeur || '').trim();
+clearTimeout(serieTimer);
+
+if(v.length < 3){ afficherAlerteSerie(''); return; }
+
+const demande = ++serieDemande;
+serieTimer = setTimeout(async () => {
+try{
+let q = sb.from('equipements')
+.select('id, nom, archived, type_id')
+.eq('serial_value', v)
+.limit(4);
+if(excludeId) q = q.neq('id', excludeId);
+const { data, error } = await q;
+if(error) throw error;
+if(demande !== serieDemande) return; // la saisie a continué entre-temps
+
+const trouves = data || [];
+if(!trouves.length){ afficherAlerteSerie(''); return; }
+
+const lignes = trouves.map(e => {
+const t = state.types.find(x => x.id === e.type_id);
+return `<div>• <a href="#/equip/${e.id}">${esc(e.nom)}</a>`
++ `${t ? ' — ' + esc(t.nom) : ''}`
++ `${e.archived ? ' <em>(retiré du service)</em>' : ''}</div>`;
+}).join('');
+
+afficherAlerteSerie(
+`<strong>Ce numéro est déjà enregistré</strong>${trouves.length > 1 ? ` (${trouves.length} fiches)` : ''} :`
++ lignes
++ `<div style="margin-top:4px;">Vous pouvez tout de même enregistrer : ce n'est qu'un avertissement.</div>`
+);
+}catch(e){
+// Une vérification qui échoue ne doit jamais empêcher de saisir.
+if(demande === serieDemande) afficherAlerteSerie('');
+}
+}, 400);
+}
+
+/* ---------------------------------------------------------------------- */
+/* Consultation publique - lecture seule, sans compte */
+/* ---------------------------------------------------------------------- */
+
+let fichePublique = { token:null, data:null, loading:false, error:'' };
+
+/* Le technicien qui scanne une etiquette veut souvent enchainer sur la saisie
+de son intervention. On retient l'etiquette qu'il avait sous les yeux pour
+le ramener directement sur cette fiche une fois connecte. */
+function connexionDepuisScan(){
+try{ sessionStorage.setItem('wt_retour_scan', fichePublique.token || state.route.param || ''); }catch(e){}
+state.authError = ''; state.authNotice = '';
+nav('/connexion');
+}
+
+function retourApresConnexion(){
+let t = '';
+try{ t = sessionStorage.getItem('wt_retour_scan') || ''; sessionStorage.removeItem('wt_retour_scan'); }catch(e){}
+if(t){ nav('/p/' + t); state.route = parseHash(); }
+}
+let resolvePublic = { token:null, busy:false };
+
+/* Une personne déjà connectée qui scanne une étiquette de son parc n'a pas
+besoin de la vue publique : on l'emmène sur la fiche complète, où elle peut
+saisir l'intervention. Si le jeton ne correspond à rien qu'elle ait le droit
+de voir, elle retombe sur la vue publique comme tout le monde. */
+function renderRoutePublique(token){
+if(!state.session){ return viewFichePublique(token); }
+
+if(resolvePublic.token !== token){
+resolvePublic = { token, busy:true };
+sb.from('equipements').select('id').eq('public_token', token).maybeSingle()
+.then(({ data }) => {
+if(data && data.id){ nav('/equip/' + data.id); return; }
+resolvePublic.busy = false; render();
+})
+.catch(() => { resolvePublic.busy = false; render(); });
+}
+if(resolvePublic.busy) return `<div class="center-screen"><div class="spinner"></div></div>`;
+return viewFichePublique(token);
+}
+
+function viewFichePublique(token){
+if(fichePublique.token !== token){
+fichePublique = { token, data:null, loading:true, error:'' };
+sb.rpc('fiche_publique', { p_token: token })
+.then(({ data, error }) => {
+if(error) throw error;
+fichePublique.data = data || null;
+fichePublique.loading = false; render();
+})
+.catch(e => {
+fichePublique.error = (e && e.message) ? e.message : String(e);
+fichePublique.loading = false; render();
+});
+}
+
+if(fichePublique.loading) return `<div class="center-screen"><div class="spinner"></div></div>`;
+
+if(fichePublique.error || !fichePublique.data){
+return `
+<div class="pub-page">
+${enTetePublique('')}
+<div class="card stack">
+<h2 class="pub-titre">Fiche indisponible</h2>
+<div class="small muted">
+Cette étiquette ne correspond à aucune fiche consultable. Elle a pu être
+remplacée, ou la consultation publique a été fermée par le propriétaire
+de l'équipement.
+</div>
+</div>
+${piedPublic()}
+</div>`;
+}
+
+const d = fichePublique.data;
+const champs = Array.isArray(d.champs) ? d.champs : [];
+const valeurs = d.valeurs || {};
+const ivs = Array.isArray(d.interventions) ? d.interventions : [];
+
+const infoRows = champs.map(c => {
+const brut = valeurs[c.key];
+const val = !brut ? '—' : (c.type === 'date' ? fmtDate(brut) : brut);
+return `<tr><td class="muted">${esc(c.label)}</td><td>${esc(val)}</td></tr>`;
+}).join('');
+
+const ivRows = ivs.map(iv => `
+<tr>
+<td class="iv-date">${fmtDate(iv.date)}</td>
+<td data-l="Type">${esc(iv.type)}</td>
+<td data-l="Technicien">${esc(iv.technicien)}</td>
+<td class="muted" data-l="Description">${esc(iv.description || '—')}</td>
+</tr>
+`).join('');
+
+const derniere = ivs.length ? fmtDate(ivs[0].date) : null;
+
+return `
+<div class="pub-page">
+${enTetePublique(d.organisation || '')}
+
+<div class="card stack">
+<div>
+<h2 class="pub-titre">${esc(d.nom || '')}</h2>
+<div class="small muted">
+${esc(d.type || '')}${d.serial_value ? ' · ' + esc(d.serial_value) : ''}
+</div>
+</div>
+<div>
+<span class="pub-lecture">🔒 Consultation en lecture seule</span>
+${d.archived ? `<span class="pub-lecture pub-retire">⚠️ Retiré du service</span>` : ''}
+</div>
+</div>
+
+<div class="card" style="margin-top:14px;">
+<h3 class="small" style="text-transform:uppercase;letter-spacing:.02em;color:var(--text-dim);">Informations</h3>
+<div style="overflow-x:auto;">
+<table>
+<tr><td class="muted">Mise en service du suivi</td><td>${fmtDate(d.created_at)}</td></tr>
+${derniere ? `<tr><td class="muted">Dernière intervention</td><td>${derniere}</td></tr>` : ''}
+${infoRows}
+</table>
+</div>
+</div>
+
+<div class="card" style="margin-top:14px;">
+<h3>Historique des interventions</h3>
+${ivs.length ? `
+<div style="overflow-x:auto;">
+<table class="pub-ivs">
+<thead><tr><th>Date</th><th>Type</th><th>Technicien</th><th>Description</th></tr></thead>
+<tbody>${ivRows}</tbody>
+</table>
+</div>
+` : `<div class="empty small">Aucune intervention enregistrée à ce jour.</div>`}
+</div>
+
+${piedPublic()}
+</div>`;
+}
+
+function enTetePublique(org){
+return `
+<div class="pub-entete">
+<img src="${LOGO_DATA_URL}" alt="">
+<div>
+<div class="nom">WiTracEQUIP</div>
+<div class="by">Passeport technique d'équipement</div>
+</div>
+${org ? `<div class="org">${esc(org)}</div>` : ''}
+<button class="pub-connexion" data-action="connexion-depuis-scan">Se connecter</button>
+</div>`;
+}
+
+function piedPublic(){
+return `
+<div class="pub-pied">
+Carnet d'entretien tenu avec WiTracEQUIP — by WiDIAG MQ.<br>
+Cette page est une consultation libre : elle ne permet aucune modification.<br>
+Technicien de l'équipe ? « Se connecter » en haut de page ouvre la fiche complète.
+</div>`;
+}
+
+function renderAccesSuspendu(){
+const suspendu = state.accessError === 'ACCES_SUSPENDU';
+return `
+<div class="auth-wrap">
+<div class="auth-logo">
+<h1 style="font-size:20px;">${suspendu ? 'Accès suspendu' : 'Connexion impossible'}</h1>
+</div>
+<div class="card stack">
+<div class="alert alert-error" style="margin:0;">
+${suspendu
+? "Votre accès à WiTracEQUIP est actuellement suspendu."
+: esc(state.accessError)}
+</div>
+<div class="small muted">
+${suspendu
+? "Contactez l'administrateur de votre organisation pour le rétablir."
+: "Réessayez dans un instant, ou reconnectez-vous."}
+</div>
+<button class="btn btn-block" data-action="logout">Se déconnecter</button>
+</div>
+</div>
+`;
+}
+
+function renderShell(){
+const r = state.route;
+let content = '';
+try{
+if(r.name === 'accueil') content = viewAccueil();
+else if(r.name === 'dashboard' || r.name === 'equipements') content = viewDashboard();
+else if(r.name === 'types') content = viewTypes();
+else if(r.name === 'equip-new') content = viewEquipNew();
+else if(r.name === 'equip') content = viewEquipDetail(r.param);
+else if(r.name === 'equipe') content = isAdmin() ? viewEquipe() : viewNonAutorise();
+else content = viewDashboard();
+}catch(e){
+content = `<div class="alert alert-error">Erreur d'affichage : ${esc(e.message||e)}</div>`;
+}
+
+return `
+<div class="topbar">
+<div class="brand">
+<img class="logo" src="assets/icons/icon-192.png" alt="WiTracEQUIP">
+<div>
+WiTracEQUIP
+<div class="by">by WiDIAG MQ</div>
+</div>
+</div>
+<div class="topbar-spacer"></div>
+<div class="org-pill">${esc(state.orgName || '…')}</div>
+<div class="user-menu">
+<button class="user-btn" data-action="toggle-menu">
+<span class="avatar">${initials(state.profile?.full_name || state.session.user.email)}</span>
+</button>
+<div class="dropdown" id="user-dropdown">
+<div class="small muted" style="padding:8px 10px;">
+${esc(state.session.user.email)}
+<div style="margin-top:4px;"><span class="badge badge-role">${esc(roleLabel(state.profile?.role))}</span></div>
+</div>
+<button data-action="logout">Se déconnecter</button>
+</div>
+</div>
+</div>
+<div class="tabs">
+<div class="tab ${r.name==='accueil'?'active':''}" data-action="go" data-path="/">Accueil</div>
+<div class="tab ${(r.name==='dashboard'||r.name==='equipements'||r.name==='equip'||r.name==='equip-new')?'active':''}" data-action="go" data-path="/equipements">Équipements</div>
+<div class="tab ${r.name==='types'?'active':''}" data-action="go" data-path="/types">Types d'équipement</div>
+${isAdmin() ? `<div class="tab ${r.name==='equipe'?'active':''}" data-action="go" data-path="/equipe">Équipe</div>` : ''}
+</div>
+<main>${content}</main>
+`;
+}
+
+/* ---------------------------------------------------------------------- */
+/* Auth view */
+/* ---------------------------------------------------------------------- */
+
+function renderAuth(){
+// L'inscription libre n'existe pas : un compte ne peut être créé qu'en
+// ouvrant un lien d'invitation (#/join/...). Cet écran ne sert qu'à se connecter.
+return `
+<div class="auth-wrap">
+<div class="auth-logo">
+<img class="logo brand-logo" src="${LOGO_DATA_URL}" alt="WiTracEQUIP">
+<h1 style="font-size:20px;">WiTracEQUIP</h1>
+<div class="small muted">Le passeport technique de vos équipements — by WiDIAG MQ</div>
+</div>
+
+${state.authError ? `<div class="alert alert-error">${esc(state.authError)}</div>` : ''}
+${state.authNotice ? `<div class="alert alert-success">${esc(state.authNotice)}</div>` : ''}
+
+<form class="card stack" data-action="submit-auth">
+<div class="field">
+<label>Email</label>
+<input type="email" name="email" placeholder="vous@exemple.com" required autocomplete="email">
+</div>
+<div class="field">
+<label>Mot de passe</label>
+${champMotDePasse('current-password')}
+</div>
+<button class="btn btn-primary btn-block" type="submit" ${state.authBusy?'disabled':''}>
+${state.authBusy ? '…' : 'Se connecter'}
+</button>
+</form>
+
+<div class="small muted" style="text-align:center;margin-top:14px;">
+L'accès à WiTracEQUIP se fait uniquement sur invitation.<br>
+Vous avez reçu un lien d'invitation ? Ouvrez-le pour créer votre compte.
+</div>
+</div>
+`;
+}
+
+async function handleAuthSubmit(form){
+state.authError = ''; state.authNotice = ''; state.authBusy = true; render();
+const fd = new FormData(form);
+const email = fd.get('email').trim();
+const password = fd.get('password');
+try{
+const { error } = await sb.auth.signInWithPassword({ email, password });
+if(error) throw error;
+// onAuthStateChange se charge de la suite
+}catch(e){
+state.authError = translateAuthError(e.message || String(e));
+}finally{
+state.authBusy = false; render();
+}
+}
+
+function translateAuthError(msg){
+const m = msg.toLowerCase();
+if(m.includes('invalid login credentials')) return "Email ou mot de passe incorrect.";
+if(m.includes('user already registered') || m.includes('already registered')) return "Un compte existe déjà avec cet email.";
+if(m.includes('email not confirmed')) return "Merci de confirmer votre email avant de vous connecter (lien envoyé par email).";
+if(m.includes('password should be at least')) return "Le mot de passe doit faire au moins 6 caractères.";
+if(m.includes('inscription_sur_invitation'))
+return "La création de compte se fait uniquement via un lien d'invitation.";
+if(m.includes('organisation_suspendue'))
+return "L'organisation qui vous invite est actuellement suspendue. Contactez WiDIAG MQ.";
+if(m.includes('invite_invalide') || m.includes('database error saving new user'))
+return "Ce lien d'invitation n'est plus valable. Demandez-en un nouveau à votre administrateur.";
+return msg;
+}
+
+/* ---------------------------------------------------------------------- */
+/* View: Accueil */
+/* ---------------------------------------------------------------------- */
+
+let accueilCache = { chiffres: null, loading: false, error: '' };
+
+async function chargerChiffres(){
+const [eq, iv] = await Promise.all([
+sb.from('equipements').select('id, archived'),
+sb.from('interventions').select('date').order('date', { ascending: false }),
+]);
+if(eq.error) throw eq.error;
+if(iv.error) throw iv.error;
+const equipements = eq.data || [];
+const interventions = iv.data || [];
+return {
+actifs: equipements.filter(e => !e.archived).length,
+interventions: interventions.length,
+derniere: interventions.length ? interventions[0].date : null,
+};
+}
+
+function viewAccueil(){
+if(accueilCache.chiffres === null && !accueilCache.loading){
+accueilCache.loading = true;
+chargerChiffres()
+.then(c => { accueilCache.chiffres = c; accueilCache.loading = false; render(); })
+.catch(e => { accueilCache.error = e.message; accueilCache.loading = false; render(); });
+}
+
+const prenom = (state.profile?.full_name || '').trim().split(/\s+/)[0] || '';
+const c = accueilCache.chiffres;
+const parcVide = c && c.actifs === 0;
+
+const etapes = [
+{ n:'1', titre:'Créer',
+texte:"Ajoutez un équipement et renseignez sa fiche. Son QR code est généré automatiquement.",
+lien:'/equip-new', bouton:'Ajouter un équipement' },
+{ n:'2', titre:'Renseigner',
+texte:"À chaque passage, scannez le QR code et consignez l'intervention : date, nature, intervenant.",
+lien:'/equipements', bouton:'Voir le parc' },
+{ n:'3', titre:'Imprimer',
+texte:"Imprimez l'étiquette et collez-la sur l'équipement. Le carnet est accessible en deux secondes.",
+lien:'/equipements', bouton:'Voir le parc' },
+];
+
+return `
+<div class="accueil-hero">
+<div class="accueil-marque">
+<img src="${LOGO_DATA_URL}" alt="">
+<div>
+<div class="accueil-titre">Bienvenue${prenom ? ', ' + esc(prenom) : ''}</div>
+<div class="accueil-org">${esc(state.orgName || '')}</div>
+</div>
+</div>
+<p class="accueil-phrase">
+Merci d'avoir choisi WiTracEQUIP pour suivre vos équipements. Chaque machine,
+véhicule ou appareil porte désormais son carnet d'entretien complet —
+consultable et à jour, sur un simple scan.
+</p>
+</div>
+
+<div class="accueil-section-titre">Votre solution en trois étapes</div>
+<div class="etapes-accueil">
+${etapes.map((e, i) => `
+<div class="etape-accueil ${(parcVide && i === 0) ? 'mise-en-avant' : ''}">
+<div class="etape-num">${e.n}</div>
+<div class="etape-titre">${e.titre}</div>
+<p>${e.texte}</p>
+<button class="btn btn-sm ${(parcVide && i === 0) ? 'btn-primary' : ''}"
+data-action="go" data-path="${e.lien}">${e.bouton}</button>
+</div>`).join('')}
+</div>
+
+${accueilCache.error
+? `<div class="alert alert-error" style="margin-top:14px;">${esc(accueilCache.error)}</div>`
+: !c
+? `<div class="spinner"></div>`
+: `<div class="accueil-chiffres">
+<div class="chiffre">
+<div class="chiffre-val">${c.actifs}</div>
+<div class="chiffre-lib">équipement${c.actifs > 1 ? 's' : ''} suivi${c.actifs > 1 ? 's' : ''}</div>
+</div>
+<div class="chiffre">
+<div class="chiffre-val">${c.interventions}</div>
+<div class="chiffre-lib">intervention${c.interventions > 1 ? 's' : ''} enregistrée${c.interventions > 1 ? 's' : ''}</div>
+</div>
+<div class="chiffre">
+<div class="chiffre-val" style="font-size:20px;">${c.derniere ? fmtDate(c.derniere) : '—'}</div>
+<div class="chiffre-lib">dernière intervention</div>
+</div>
+</div>`}
+
+${parcVide ? `
+<div class="alert alert-info" style="margin-top:14px;">
+Votre parc est encore vide. ${isAdmin()
+? `Commencez par créer un type d'équipement — ou partez d'un <strong>modèle métier</strong> pour tout créer d'un coup.`
+: `Votre administrateur doit d'abord créer les types d'équipement.`}
+</div>` : ''}
+`;
+}
+
+/* ---------------------------------------------------------------------- */
+/* View: Dashboard (équipements) */
+/* ---------------------------------------------------------------------- */
+
+let dashboardCache = { items: null, search:'', typeId:'', showArchived:false, loading:false, error:'' };
+
+function viewDashboard(){
+if(dashboardCache.items === null && !dashboardCache.loading){
+dashboardCache.loading = true;
+listEquipements({ search: dashboardCache.search, typeId: dashboardCache.typeId, showArchived: dashboardCache.showArchived })
+.then(items => { dashboardCache.items = items; dashboardCache.loading = false; render(); })
+.catch(e => { dashboardCache.error = e.message; dashboardCache.loading = false; render(); });
+}
+
+const typeOptions = state.types.map(t => `<option value="${t.id}" ${dashboardCache.typeId===t.id?'selected':''}>${esc(t.nom)}</option>`).join('');
+
+let list = '';
+if(dashboardCache.error){
+list = `<div class="alert alert-error">${esc(dashboardCache.error)}</div>`;
+} else if(dashboardCache.items === null){
+list = `<div class="spinner"></div>`;
+} else if(dashboardCache.items.length === 0){
+list = `<div class="empty"><div class="big">🔧</div>Aucun équipement pour l'instant.<br><span class="small">Ajoutez votre premier équipement pour générer son QR code.</span></div>`;
+} else {
+list = `<div class="card" style="padding:0 18px;">` + dashboardCache.items.map(eq => {
+const t = state.types.find(t=>t.id===eq.type_id);
+return `
+<div class="list-item" style="cursor:pointer;" data-action="go" data-path="/equip/${eq.id}">
+<div class="thumb">${esc(initials(eq.nom))}</div>
+<div style="flex:1;min-width:0;">
+<div style="font-weight:650;">${esc(eq.nom)} ${eq.archived?'<span class="badge badge-warn">supprimé</span>':''}</div>
+<div class="small muted">${esc(t?.nom || 'Type inconnu')}${eq.serial_value ? ' · N/S ' + esc(eq.serial_value) : ''}</div>
+</div>
+<div class="small muted">${fmtDate(eq.created_at)}</div>
+</div>`;
+}).join('') + `</div>`;
+}
+
+return `
+<div class="row between wrap" style="margin-bottom:14px;">
+<h2>Équipements</h2>
+${state.typesLoaded && state.types.length ? `<button class="btn btn-primary" data-action="go" data-path="/equip-new">+ Nouvel équipement</button>`
+: `<button class="btn btn-primary" data-action="go" data-path="/types">Créer un type d'équipement d'abord</button>`}
+</div>
+
+<div class="card" style="margin-bottom:14px;">
+<div class="row wrap" style="gap:10px;">
+<input type="search" placeholder="Rechercher par nom…" style="flex:2;min-width:160px;" value="${esc(dashboardCache.search)}" data-action="dash-search">
+<select style="flex:1;min-width:140px;" data-action="dash-filter-type">
+<option value="">Tous les types</option>
+${typeOptions}
+</select>
+<label style="display:flex;align-items:center;gap:6px;text-transform:none;font-weight:500;font-size:13.5px;color:var(--text);margin:0;">
+<input type="checkbox" style="width:auto;" ${dashboardCache.showArchived?'checked':''} data-action="dash-archived">
+Voir les supprimés
+</label>
+</div>
+</div>
+
+${list}
+`;
+}
+
+function refreshDashboard(){
+dashboardCache.items = null; dashboardCache.error='';
+accueilCache.chiffres = null; // les compteurs d'accueil se recalculent
+render();
+}
+
+/* ---------------------------------------------------------------------- */
+/* View: Types d'équipement */
+/* ---------------------------------------------------------------------- */
+
+let typeForm = { open:false, id:null, nom:'', champs:[], busy:false, error:'' };
+let modeleState = { ouvert:false, busy:false };
+
+async function appliquerModele(cle){
+const modele = MODELES_METIERS.find(m => m.cle === cle);
+if(!modele) return;
+
+// On ne recrée pas ce qui existe déjà : le modèle complète, il n'écrase jamais.
+const existants = new Set(state.types.map(t => (t.nom||'').trim().toLowerCase()));
+const aCreer = modele.types.filter(t => !existants.has(t.nom.trim().toLowerCase()));
+
+if(!aCreer.length){
+alert('Tous les types de ce modèle sont déjà présents dans cette organisation.');
+return;
+}
+
+const resume = aCreer.map(t => ' • ' + t.nom).join('\n');
+const ignores = modele.types.length - aCreer.length;
+if(!confirm(
+`Ajouter ${aCreer.length} type(s) d'équipement :\n\n${resume}\n\n` +
+(ignores ? `${ignores} type(s) déjà présent(s) seront ignorés.\n\n` : '') +
+`Vous pourrez ensuite renommer, ajouter ou retirer des champs librement.`)) return;
+
+modeleState.busy = true; render();
+try{
+const lignes = aCreer.map(t => ({
+organization_id: state.profile.organization_id,
+nom: t.nom,
+champs: t.champs.map(c => ({ key: slugify(c.label), label: c.label, type: c.type })),
+}));
+const { error } = await sb.from('equipment_types').insert(lignes);
+if(error) throw error;
+await loadTypes(true);
+modeleState = { ouvert:false, busy:false };
+dashboardCache.items = null; accueilCache.chiffres = null;
+render();
+}catch(e){
+modeleState.busy = false; render();
+alert('Erreur : ' + e.message);
+}
+}
+
+function ouvrirTypeForm(type){
+typeForm = type
+? { open:true, id:type.id, nom:type.nom,
+// On conserve la clé d'origine de chaque champ : c'est elle qui relie
+// le champ aux valeurs déjà saisies sur les équipements existants.
+champs:(type.champs||[]).map(c => ({ key:c.key, label:c.label, type:c.type })),
+busy:false, error:'' }
+: { open:true, id:null, nom:'', champs:[], busy:false, error:'' };
+render();
+}
+
+function viewTypes(){
+const rows = state.types.map(t => `
+<div class="list-item">
+<div class="thumb">🏷️</div>
+<div style="flex:1;min-width:0;">
+<div style="font-weight:650;">${esc(t.nom)}</div>
+<div class="small muted">${(t.champs||[]).length} champ(s) personnalisé(s)${(t.champs||[]).length ? ' · ' + (t.champs||[]).map(c=>esc(c.label)).join(', ') : ''}</div>
+</div>
+${isAdmin() ? `<button class="btn btn-sm" data-action="edit-type" data-id="${t.id}">Modifier</button>` : ''}
+</div>
+`).join('');
+
+return `
+<div class="row between wrap" style="margin-bottom:14px;">
+<h2>Types d'équipement</h2>
+${isAdmin()
+? `<button class="btn btn-primary" data-action="toggle-type-form">${typeForm.open?'Annuler':'+ Nouveau type'}</button>`
+: ''}
+</div>
+
+${typeForm.open && isAdmin() ? renderTypeForm() : ''}
+
+${(isAdmin() && !typeForm.open) ? `
+<div class="card" style="margin-bottom:14px;">
+<div class="row between wrap" style="gap:10px;">
+<div style="flex:1;min-width:200px;">
+<h3>Partir d'un modèle métier</h3>
+<div class="hint" style="margin:4px 0 0;">
+Crée d'un coup le parc type d'un secteur, avec les champs qui comptent
+pour la traçabilité. Rien n'est écrasé, tout reste modifiable ensuite.
+</div>
+</div>
+<button class="btn btn-sm" data-action="toggle-modeles">
+${modeleState.ouvert ? 'Masquer' : 'Voir les modèles'}
+</button>
+</div>
+${modeleState.ouvert ? `
+<div class="modeles">
+${MODELES_METIERS.map(m => `
+<div class="modele">
+<div class="modele-nom">${esc(m.nom)}</div>
+<div class="small muted">${esc(m.description)}</div>
+<div class="modele-types">${m.types.map(t => esc(t.nom)).join(' · ')}</div>
+<button class="btn btn-sm btn-primary" data-action="appliquer-modele"
+data-cle="${m.cle}" ${modeleState.busy?'disabled':''}>
+${modeleState.busy ? 'Création…' : `Ajouter ces ${m.types.length} types`}
+</button>
+</div>`).join('')}
+</div>` : ''}
+</div>` : ''}
+
+<div class="card" style="padding:0 18px;">
+${state.types.length ? rows : `<div class="empty"><div class="big">🏷️</div>Aucun type d'équipement.<br><span class="small">${isAdmin() ? 'Créez-en un (ex. « Véhicule », « Dispositif médical », « Équipement industriel »…) pour commencer à ajouter des équipements.' : 'Aucun type ne vous a été attribué. Contactez votre administrateur.'}</span></div>`}
+</div>
+`;
+}
+function renderTypeForm(){
+const champsRows = typeForm.champs.map((c, i) => `
+<div class="champ-row">
+<input type="text" placeholder="Nom du champ (ex : Kilométrage)" value="${esc(c.label)}" data-action="champ-label" data-i="${i}">
+<select data-action="champ-type" data-i="${i}">
+${CHAMP_TYPES.map(ct=>`<option value="${ct.v}" ${ct.v===c.type?'selected':''}>${ct.l}</option>`).join('')}
+</select>
+<button type="button" class="icon-btn" data-action="champ-remove" data-i="${i}" title="Supprimer">✕</button>
+</div>
+`).join('');
+
+const modification = !!typeForm.id;
+
+return `
+<div class="card" style="margin-bottom:14px;">
+<h3>${modification ? 'Modifier le type' : 'Nouveau type'}</h3>
+${typeForm.error ? `<div class="alert alert-error">${esc(typeForm.error)}</div>` : ''}
+<div class="field" style="margin-top:12px;">
+<label>Nom du type</label>
+<input type="text" placeholder="Ex : Véhicule" id="type-nom-input" value="${esc(typeForm.nom)}" data-action="type-nom">
+</div>
+<label>Champs personnalisés (optionnel)</label>
+<div style="margin-bottom:8px;">${champsRows}</div>
+<button type="button" class="btn btn-sm" data-action="champ-add">+ Ajouter un champ</button>
+<div class="hint">Ces champs apparaîtront dans le formulaire d'ajout d'équipement de ce type (ex : marque, modèle, capacité, kilométrage…).</div>
+${modification ? `
+<div class="hint">
+Ajouter un champ est sans risque : les équipements existants l'afficheront, vide,
+jusqu'à ce qu'il soit renseigné. Retirer un champ le fait disparaître des fiches
+mais n'efface rien : le remettre avec le même nom fait réapparaître les valeurs.
+</div>` : ''}
+<div class="row wrap" style="margin-top:14px;">
+<button class="btn btn-primary" data-action="save-type" ${typeForm.busy?'disabled':''}>${typeForm.busy?'Enregistrement…':(modification ? 'Enregistrer les modifications' : 'Enregistrer le type')}</button>
+<button class="btn" type="button" data-action="toggle-type-form">Annuler</button>
+</div>
+</div>
+`;
+}
+
+async function saveType(){
+typeForm.error = '';
+const nom = typeForm.nom.trim();
+if(!nom){ typeForm.error = 'Le nom du type est obligatoire.'; render(); return; }
+const champs = typeForm.champs
+.filter(c => c.label.trim())
+// c.key existe déjà pour un champ créé précédemment : on le garde, sinon
+// renommer un libellé détacherait le champ des valeurs déjà saisies.
+.map(c => ({ key: c.key || slugify(c.label), label: c.label.trim(), type: c.type }));
+typeForm.busy = true; render();
+try{
+if(typeForm.id){
+const { error } = await sb.from('equipment_types')
+.update({ nom, champs }).eq('id', typeForm.id);
+if(error) throw error;
+} else {
+const { error } = await sb.from('equipment_types').insert({
+organization_id: state.profile.organization_id,
+nom, champs
+});
+if(error) throw error;
+}
+typeForm = { open:false, id:null, nom:'', champs:[], busy:false, error:'' };
+await loadTypes(true);
+dashboardCache.items = null; accueilCache.chiffres = null;
+render();
+}catch(e){
+typeForm.busy = false; typeForm.error = e.message; render();
+}
+}
+
+function slugify(s){
+return s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]+/g,'_').replace(/^_+|_+$/g,'') || ('champ_' + Math.random().toString(36).slice(2,6));
+}
+
+/* ---------------------------------------------------------------------- */
+/* View: Équipe — gestion des profils (admin uniquement) */
+/* ---------------------------------------------------------------------- */
+
+let equipeCache;
+/* Un seul endroit définit cet état : le dupliquer, c'est oublier un champ
+lors d'une remise à zéro et casser la vue au retour de connexion. */
+function resetEquipeCache(){
+equipeCache = {
+members: null, invites: null, acces: null, loading: false, error: '',
+inviteRole: 'utilisateur', inviteLabel: '', inviteBusy: false, inviteError: '',
+inviteTousTypes: true, inviteTypes: [],
+dernierToken: null,
+};
+}
+resetEquipeCache();
+
+function chargerEquipe(force){
+if(equipeCache.loading) return;
+if(equipeCache.members !== null && !force) return;
+equipeCache.loading = true;
+Promise.all([listMembers(), listInvites(), listAcces()])
+.then(([m, i, a]) => {
+equipeCache.members = m; equipeCache.invites = i; equipeCache.acces = a;
+equipeCache.loading = false; equipeCache.error = ''; render();
+})
+.catch(e => { equipeCache.error = e.message; equipeCache.loading = false; render(); });
+}
+
+function rafraichirEquipe(){ equipeCache.members = null; chargerEquipe(true); }
+
+function viewNonAutorise(){
+return `<div class="alert alert-error">Cette section est réservée à l'administrateur.</div>`;
+}
+
+function viewEquipe(){
+chargerEquipe(false);
+
+if(equipeCache.error) return `<div class="alert alert-error">${esc(equipeCache.error)}</div>`;
+if(equipeCache.members === null) return `<div class="spinner"></div>`;
+
+const moi = state.profile?.id;
+
+const acces = equipeCache.acces || [];
+
+const membres = equipeCache.members.map(m => {
+const estMoi = m.id === moi;
+const estAdmin = m.role === 'admin';
+// Le fondateur de l'organisation est intouchable depuis l'application :
+// c'est ce qui empêche un administrateur de déloger celui qui l'a nommé.
+const estFondateur = !!m.fondateur;
+const verrouille = estFondateur || estMoi;
+
+// Un administrateur voit tout par construction : pas de cloisonnement à régler.
+const blocAcces = estAdmin ? '' : `
+<div class="acces">
+<label class="case">
+<input type="checkbox" data-action="acces-tous" data-id="${m.id}" ${m.acces_tous_types?'checked':''}>
+<span><strong>Tous les types d'équipement</strong></span>
+</label>
+${m.acces_tous_types
+? `<div class="small muted" style="margin-left:24px;">Ce profil voit l'ensemble du parc.</div>`
+: (state.types.length
+? `<div class="acces-liste">
+${state.types.map(t => `
+<label class="case">
+<input type="checkbox" data-action="acces-type"
+data-id="${m.id}" data-type="${t.id}"
+${acces.some(a => a.profile_id === m.id && a.type_id === t.id) ? 'checked' : ''}>
+<span>${esc(t.nom)}</span>
+</label>`).join('')}
+</div>`
+: `<div class="small muted" style="margin-left:24px;">Aucun type d'équipement à attribuer.</div>`)}
+</div>`;
+
+return `
+<div class="member">
+<div class="thumb">${esc(initials(m.full_name))}</div>
+<div class="who">
+<div style="font-weight:650;">
+${esc(m.full_name || 'Sans nom')}
+${estMoi ? '<span class="small muted">(vous)</span>' : ''}
+${estFondateur ? '<span class="badge badge-neutral">fondateur</span>' : ''}
+${!m.active ? '<span class="badge badge-off">suspendu</span>' : ''}
+</div>
+<div class="small muted">Membre depuis le ${fmtDate(m.created_at)}</div>
+</div>
+${verrouille
+? `<span class="badge badge-role">${esc(roleLabel(m.role))}</span>`
+: `<select data-action="member-role" data-id="${m.id}">
+${ROLES_ASSIGNABLES.map(r=>`<option value="${r}" ${r===m.role?'selected':''}>${esc(roleLabel(r))}</option>`).join('')}
+</select>`}
+${verrouille ? '' : `
+<button class="btn btn-sm ${m.active?'btn-danger':''}"
+data-action="member-active" data-id="${m.id}" data-active="${m.active?'0':'1'}">
+${m.active ? 'Suspendre' : 'Réactiver'}
+</button>
+<button class="btn btn-sm btn-danger" data-action="member-supprimer"
+data-id="${m.id}" data-nom="${esc(m.full_name || 'ce profil')}">
+Supprimer
+</button>`}
+${blocAcces}
+</div>`;
+}).join('');
+
+const invitations = (equipeCache.invites || []).map(i => `
+<div class="member">
+<div class="who">
+<div style="font-weight:650;">
+${esc(i.label || 'Invitation')}
+<span class="badge badge-role">${esc(roleLabel(i.role))}</span>
+</div>
+<div class="small muted">
+${i.acces_tous_types
+? 'Tous les types'
+: 'Accès : ' + esc(state.types.filter(t => (i.types_autorises||[]).includes(t.id)).map(t => t.nom).join(', ') || 'aucun type')}
+· valable jusqu'au ${fmtDate(i.expires_at)}
+</div>
+<div class="invite-link">
+<code>${esc(inviteUrl(i.token))}</code>
+<button class="btn btn-sm" data-action="copier-lien" data-token="${esc(i.token)}">Copier</button>
+</div>
+</div>
+<button class="btn btn-sm btn-danger" data-action="annuler-invite" data-id="${i.id}">Annuler</button>
+</div>
+`).join('');
+
+return `
+<div class="row between wrap" style="margin-bottom:14px;">
+<h2>Équipe</h2>
+<span class="badge badge-role">${esc(state.orgName || '')}</span>
+</div>
+
+<div class="card">
+<h3>Inviter quelqu'un</h3>
+<div class="hint" style="margin-bottom:12px;">
+Vous fixez le rôle <strong>et</strong> le périmètre métier avant d'envoyer le lien.
+La personne rejoint votre organisation avec exactement ces droits, sans pouvoir
+les choisir ni les modifier.
+</div>
+${equipeCache.inviteError ? `<div class="alert alert-error">${esc(equipeCache.inviteError)}</div>` : ''}
+
+<div class="grid-2">
+<div class="field">
+<label>Rôle</label>
+<select data-action="invite-role">
+${ROLES_ASSIGNABLES.map(r=>`<option value="${r}" ${r===equipeCache.inviteRole?'selected':''}>${esc(roleLabel(r))}</option>`).join('')}
+</select>
+<div class="hint">${esc(ROLE_RESUME[equipeCache.inviteRole] || '')}</div>
+</div>
+<div class="field">
+<label>Nom de la personne (facultatif)</label>
+<input type="text" placeholder="Ex : Marc Dupont"
+value="${esc(equipeCache.inviteLabel)}" data-action="invite-label">
+</div>
+</div>
+
+${equipeCache.inviteRole === 'admin' ? `
+<div class="alert alert-warn-admin">
+<strong>Ce profil aura tous les pouvoirs sur votre organisation :</strong>
+gérer le parc, inviter et supprimer des profils, et nommer d'autres administrateurs.
+Il verra l'ensemble des métiers. Il ne pourra en revanche jamais toucher à votre
+propre profil, protégé en tant que fondateur.
+</div>
+` : `
+<label>Périmètre métier</label>
+<div class="acces" style="margin-bottom:12px;">
+<label class="case">
+<input type="checkbox" data-action="invite-tous-types" ${equipeCache.inviteTousTypes?'checked':''}>
+<span><strong>Tous les types d'équipement</strong></span>
+</label>
+${equipeCache.inviteTousTypes
+? `<div class="small muted" style="margin-left:24px;">Cette personne verra l'ensemble du parc.</div>`
+: (state.types.length
+? `<div class="acces-liste">
+${state.types.map(t => `
+<label class="case">
+<input type="checkbox" data-action="invite-type" data-type="${t.id}"
+${equipeCache.inviteTypes.includes(t.id) ? 'checked' : ''}>
+<span>${esc(t.nom)}</span>
+</label>`).join('')}
+</div>
+<div class="small muted" style="margin-left:24px;margin-top:6px;">
+${equipeCache.inviteTypes.length
+? 'Ne verra que : ' + esc(state.types.filter(t=>equipeCache.inviteTypes.includes(t.id)).map(t=>t.nom).join(', '))
+: 'Aucun type coché : cette personne ne verrait aucun équipement.'}
+</div>`
+: `<div class="small muted" style="margin-left:24px;">Aucun type d'équipement créé pour l'instant.</div>`)}
+</div>`}
+
+<div class="row wrap">
+<button class="btn btn-primary" data-action="creer-invite" ${equipeCache.inviteBusy?'disabled':''}>
+${equipeCache.inviteBusy ? 'Création…' : 'Générer le lien'}
+</button>
+</div>
+${equipeCache.dernierToken ? `
+<div class="alert alert-success" style="margin:14px 0 0;">
+Lien créé — transmettez-le à la personne concernée.
+<div class="invite-link">
+<code>${esc(inviteUrl(equipeCache.dernierToken))}</code>
+<button class="btn btn-sm" data-action="copier-lien" data-token="${esc(equipeCache.dernierToken)}">Copier</button>
+</div>
+</div>` : ''}
+</div>
+
+<div class="card">
+<h3>Membres (${equipeCache.members.length})</h3>
+${membres || `<div class="empty small">Aucun membre.</div>`}
+</div>
+
+<div class="card">
+<h3>Invitations en attente (${(equipeCache.invites||[]).length})</h3>
+${invitations || `<div class="empty small">Aucune invitation en attente.</div>`}
+</div>
+`;
+}
+
+async function actionCreerInvite(){
+// Un administrateur voit tout par construction : pas de périmètre à restreindre.
+const estAdmin = equipeCache.inviteRole === 'admin';
+if(estAdmin){ equipeCache.inviteTousTypes = true; equipeCache.inviteTypes = []; }
+
+if(estAdmin && !confirm(
+"Créer un lien d'invitation ADMINISTRATEUR ?\n\n" +
+"Cette personne pourra gérer tout le parc, inviter et supprimer des profils, " +
+"et nommer d'autres administrateurs.\n\n" +
+"Elle ne pourra jamais toucher à votre propre profil, protégé en tant que fondateur.")) return;
+
+if(!equipeCache.inviteTousTypes && equipeCache.inviteTypes.length === 0){
+equipeCache.inviteError = "Choisissez au moins un type d'équipement, sinon cette personne n'aurait accès à rien.";
+render(); return;
+}
+equipeCache.inviteError = ''; equipeCache.inviteBusy = true; render();
+try{
+const inv = await createInvite(
+equipeCache.inviteRole,
+equipeCache.inviteLabel.trim(),
+equipeCache.inviteTousTypes,
+equipeCache.inviteTypes
+);
+equipeCache.dernierToken = inv.token;
+equipeCache.inviteLabel = '';
+equipeCache.invites = await listInvites();
+}catch(e){
+equipeCache.inviteError = e.message;
+}finally{
+equipeCache.inviteBusy = false; render();
+}
+}
+
+async function actionAnnulerInvite(id){
+if(!confirm("Annuler cette invitation ? Le lien ne fonctionnera plus.")) return;
+try{
+await cancelInvite(id);
+equipeCache.invites = await listInvites();
+render();
+}catch(e){ alert('Erreur : ' + e.message); }
+}
+
+async function actionRoleMembre(id, role){
+if(role === 'admin' && !confirm(
+"Promouvoir ce profil ADMINISTRATEUR ?\n\n" +
+"Il pourra gérer tout le parc, inviter et supprimer des profils, " +
+"et nommer d'autres administrateurs.\n\n" +
+"Votre propre profil restera protégé en tant que fondateur.")){
+rafraichirEquipe(); return;
+}
+try{
+await setMemberRole(id, role);
+rafraichirEquipe();
+}catch(e){ alert('Erreur : ' + e.message); rafraichirEquipe(); }
+}
+
+async function actionSupprimerMembre(id, nom){
+const msg =
+`Supprimer définitivement le profil de ${nom} ?\n\n` +
+`• Son compte de connexion est effacé de la base\n` +
+`• Il ne pourra plus jamais se connecter\n` +
+`• L'historique des interventions qu'il a enregistrées est CONSERVÉ\n\n` +
+`Cette action est irréversible. Pour un départ temporaire, préférez « Suspendre ».`;
+if(!confirm(msg)) return;
+try{
+const { error } = await sb.rpc('supprimer_profil', { p_profile_id: id });
+if(error) throw error;
+rafraichirEquipe();
+}catch(e){
+alert('Erreur : ' + e.message);
+rafraichirEquipe();
+}
+}
+
+async function actionAccesTous(id, valeur){
+try{
+await setAccesTousTypes(id, valeur);
+rafraichirEquipe();
+}catch(e){ alert('Erreur : ' + e.message); rafraichirEquipe(); }
+}
+
+async function actionAccesType(profileId, typeId, autoriser){
+try{
+await setAccesType(profileId, typeId, autoriser);
+rafraichirEquipe();
+}catch(e){ alert('Erreur : ' + e.message); rafraichirEquipe(); }
+}
+
+async function actionActiverMembre(id, active){
+const msg = active
+? "Réactiver ce profil ? La personne retrouvera l'accès à l'application."
+: "Suspendre ce profil ? La personne perdra immédiatement l'accès à toutes les données, sans rien supprimer.";
+if(!confirm(msg)) return;
+try{
+await setMemberActive(id, active);
+rafraichirEquipe();
+}catch(e){ alert('Erreur : ' + e.message); rafraichirEquipe(); }
+}
+
+/* ---------------------------------------------------------------------- */
+/* View: Rejoindre via un lien d'invitation (sans être connecté) */
+/* ---------------------------------------------------------------------- */
+
+let joinState = { token:null, loading:false, preview:null, error:'', busy:false, notice:'' };
+
+function renderJoin(token){
+if(joinState.token !== token){
+joinState = { token, loading:true, preview:null, error:'', busy:false, notice:'' };
+sb.rpc('invite_preview', { p_token: token })
+.then(({ data, error }) => {
+if(error) throw error;
+joinState.preview = (data && data[0]) || null;
+joinState.loading = false; render();
+})
+.catch(e => { joinState.error = e.message; joinState.loading = false; render(); });
+}
+
+if(joinState.loading) return `<div class="center-screen"><div class="spinner"></div></div>`;
+
+const p = joinState.preview;
+const invalide = !p || !p.valid;
+
+return `
+<div class="auth-wrap">
+<div class="auth-logo">
+<img class="logo" src="${LOGO_DATA_URL}" alt="WiTracEQUIP">
+<h1 style="font-size:20px;">WiTracEQUIP</h1>
+</div>
+
+${invalide ? `
+<div class="card">
+<div class="alert alert-error" style="margin:0;">
+Ce lien d'invitation n'est plus valable : il a déjà été utilisé, il a expiré, ou il a été annulé.
+</div>
+<div class="small muted" style="margin-top:12px;">
+Demandez un nouveau lien à l'administrateur de votre organisation.
+</div>
+<button class="btn btn-block" style="margin-top:14px;" data-action="go" data-path="/">
+Retour à la connexion
+</button>
+</div>
+` : `
+<div class="alert alert-info">
+${p.invite_role === 'admin'
+? `Vous allez créer l'organisation <strong>${esc(p.organization_name)}</strong>
+et en devenir l'<strong>administrateur</strong>.`
+: `Vous êtes invité à rejoindre <strong>${esc(p.organization_name)}</strong>
+en tant que <strong>${esc(roleLabel(p.invite_role))}</strong>.`}
+</div>
+${joinState.error ? `<div class="alert alert-error">${esc(joinState.error)}</div>` : ''}
+${joinState.notice ? `<div class="alert alert-success">${esc(joinState.notice)}</div>` : ''}
+<form class="card stack" data-action="submit-join">
+<div class="field">
+<label>Votre nom complet</label>
+<input type="text" name="full_name" placeholder="Prénom Nom" required>
+</div>
+<div class="field">
+<label>Email</label>
+<input type="email" name="email" placeholder="vous@exemple.com" required autocomplete="email">
+</div>
+<div class="field">
+<label>Mot de passe</label>
+${champMotDePasse('new-password')}
+</div>
+<button class="btn btn-primary btn-block" type="submit" ${joinState.busy?'disabled':''}>
+${joinState.busy ? '…' : 'Créer mon compte'}
+</button>
+</form>
+`}
+</div>
+`;
+}
+
+async function handleJoinSubmit(form){
+joinState.error = ''; joinState.notice = ''; joinState.busy = true; render();
+const fd = new FormData(form);
+try{
+const { data, error } = await sb.auth.signUp({
+email: fd.get('email').trim(),
+password: fd.get('password'),
+options: { data: { full_name: fd.get('full_name').trim(), invite_token: joinState.token } }
+});
+if(error) throw error;
+if(!data.session){
+joinState.notice = "Compte créé ! Vérifiez votre boîte mail pour confirmer votre adresse, puis connectez-vous.";
+}
+}catch(e){
+joinState.error = translateAuthError(e.message || String(e));
+}finally{
+joinState.busy = false; render();
+}
+}
+
+/* ---------------------------------------------------------------------- */
+/* View: Nouvel équipement */
+/* ---------------------------------------------------------------------- */
+
+let equipForm = { typeId:'', nom:'', serial_value:'', valeurs:{}, busy:false, error:'' };
+
+function viewEquipNew(){
+if(!equipForm.typeId && state.types.length) equipForm.typeId = state.types[0].id;
+const type = state.types.find(t=>t.id===equipForm.typeId);
+const champs = type?.champs || [];
+
+return `
+<div class="row" style="margin-bottom:14px;gap:10px;">
+<button class="icon-btn" data-action="go" data-path="/equipements" title="Retour">←</button>
+<h2>Nouvel équipement</h2>
+</div>
+<div class="card">
+${equipForm.error ? `<div class="alert alert-error">${esc(equipForm.error)}</div>` : ''}
+<div class="grid-2">
+<div class="field">
+<label>Type d'équipement</label>
+<select data-action="equip-type">
+${state.types.map(t=>`<option value="${t.id}" ${t.id===equipForm.typeId?'selected':''}>${esc(t.nom)}</option>`).join('')}
+</select>
+</div>
+<div class="field">
+<label>Nom / désignation</label>
+<input type="text" placeholder="Ex : Renault Kangoo — WD-12" value="${esc(equipForm.nom)}" data-action="equip-nom">
+</div>
+</div>
+<div class="field">
+<label>N° de série / immatriculation (optionnel)</label>
+<input type="text" placeholder="Ex : AB-123-CD" value="${esc(equipForm.serial_value)}" data-action="equip-serial">
+<div class="alerte-serie vide" id="alerte-serie"></div>
+</div>
+${champs.length ? `<label style="margin-top:6px;">Informations spécifiques au type</label>` : ''}
+<div class="grid-2">
+${champs.map(c => `
+<div class="field">
+<label style="text-transform:none;font-weight:600;color:var(--text);">${esc(c.label)}</label>
+${c.type==='textarea'
+? `<textarea data-action="equip-valeur" data-key="${c.key}">${esc(equipForm.valeurs[c.key]||'')}</textarea>`
+: `<input type="${c.type==='number'?'number':(c.type==='date'?'date':'text')}" value="${esc(equipForm.valeurs[c.key]||'')}" data-action="equip-valeur" data-key="${c.key}">`}
+</div>
+`).join('')}
+</div>
+<div class="row" style="margin-top:8px;">
+<button class="btn btn-primary" data-action="save-equip" ${equipForm.busy?'disabled':''}>${equipForm.busy?'Enregistrement…':"Créer l'équipement"}</button>
+<button class="btn" data-action="go" data-path="/equipements">Annuler</button>
+</div>
+</div>
+`;
+}
+
+async function saveEquip(){
+equipForm.error = '';
+const nom = equipForm.nom.trim();
+if(!nom){ equipForm.error = 'Le nom est obligatoire.'; render(); return; }
+if(!equipForm.typeId){ equipForm.error = "Choisissez un type d'équipement."; render(); return; }
+equipForm.busy = true; render();
+try{
+const { data, error } = await sb.from('equipements').insert({
+organization_id: state.profile.organization_id,
+type_id: equipForm.typeId,
+nom,
+serial_value: equipForm.serial_value.trim() || null,
+valeurs: equipForm.valeurs,
+archived: false
+}).select('id').single();
+if(error) throw error;
+equipForm = { typeId:'', nom:'', serial_value:'', valeurs:{}, busy:false, error:'' };
+refreshDashboard();
+nav('/equip/' + data.id);
+}catch(e){
+equipForm.busy = false; equipForm.error = e.message; render();
+}
+}
+
+/* ---------------------------------------------------------------------- */
+/* View: Détail équipement (QR + historique) */
+/* ---------------------------------------------------------------------- */
+
+let equipDetail = { id:null, item:null, interventions:null, loading:false, error:'',
+showIvForm:false, ivBusy:false, ivError:'',
+showEditForm:false, editBusy:false, editError:'' };
+
+function viewEquipDetail(id){
+if(equipDetail.id !== id){
+equipDetail = { id, item:null, interventions:null, loading:true, error:'',
+showIvForm:false, ivBusy:false, ivError:'',
+showEditForm:false, editBusy:false, editError:'' };
+Promise.all([getEquipement(id), listInterventions(id)])
+.then(([item, ivs]) => {
+equipDetail.item = item; equipDetail.interventions = ivs; equipDetail.loading = false; render();
+setTimeout(()=>drawQr(lienPublic(item.public_token)), 30);
+})
+.catch(e => { equipDetail.error = e.message; equipDetail.loading = false; render(); });
+return `<div class="spinner"></div>`;
+}
+
+if(equipDetail.loading) return `<div class="spinner"></div>`;
+if(equipDetail.error) return `<div class="alert alert-error">${esc(equipDetail.error)}</div>`;
+if(!equipDetail.item) return `<div class="empty">Équipement introuvable.</div>`;
+
+const eq = equipDetail.item;
+const type = state.types.find(t=>t.id===eq.type_id);
+const champs = type?.champs || [];
+const url = lienPublic(eq.public_token);
+
+const infoRows = champs.map(c => {
+const brut = eq.valeurs?.[c.key];
+const val = !brut ? '—' : (c.type === 'date' ? fmtDate(brut) : brut);
+return `<tr><td class="muted">${esc(c.label)}</td><td>${esc(val)}</td></tr>`;
+}).join('');
+
+const ivRows = (equipDetail.interventions||[]).map(iv => `
+<tr>
+<td>${fmtDate(iv.date)}</td>
+<td>${esc(iv.type)}</td>
+<td>${esc(iv.technicien)}</td>
+<td class="muted">${esc(iv.description||'—')}</td>
+</tr>
+`).join('');
+
+// Le QR est dessiné dans un <canvas> que chaque réaffichage recrée vide.
+// On le redessine donc après CHAQUE rendu de la fiche, sinon ouvrir un
+// formulaire efface le QR — et « Imprimer l'étiquette » sortirait une étiquette vierge.
+setTimeout(() => drawQr(url), 0);
+
+return `
+<div class="fiche-entete">
+<button class="icon-btn" data-action="go" data-path="/equipements" title="Retour">←</button>
+<div class="titre">
+<h2>${esc(eq.nom)} ${eq.archived?'<span class="badge badge-warn">supprimé</span>':''}</h2>
+<div class="small muted">${esc(type?.nom || '')}${eq.serial_value ? ' · N/S ' + esc(eq.serial_value) : ''}</div>
+</div>
+<div class="actions">
+${!eq.archived ? `<button class="btn btn-sm" data-action="toggle-edit-equip">${equipDetail.showEditForm ? 'Annuler' : 'Modifier'}</button>` : ''}
+${!eq.archived && peutSupprimer() ? `<button class="btn btn-danger btn-sm" data-action="archive-equip">Supprimer</button>` : ''}
+${eq.archived && peutSupprimer() ? `<button class="btn btn-sm" data-action="restore-equip">Restaurer</button>` : ''}
+</div>
+</div>
+
+${equipDetail.showEditForm && !eq.archived ? renderEditEquipForm(eq, champs) : ''}
+
+<div class="grid-2" style="align-items:start;">
+<div class="card">
+<h3 class="small" style="text-transform:uppercase;letter-spacing:.02em;color:var(--text-dim);">QR code</h3>
+<div class="qr-box">
+<canvas id="qr-canvas"></canvas>
+<div class="small muted" style="word-break:break-all;text-align:center;">${esc(url)}</div>
+
+<div class="small" style="text-align:center;line-height:1.55;${eq.partage_public ? '' : 'color:var(--text-dim);'}">
+${eq.partage_public
+? "Toute personne qui scanne cette étiquette lit le carnet d'entretien : contrôleur, inspecteur, assureur, acheteur. Sans compte et sans inscription — et sans rien pouvoir modifier."
+: "Consultation publique fermée : scanner l'étiquette ne montre plus rien."}
+</div>
+
+${peutSupprimer() ? `
+<div class="row" style="gap:8px;flex-wrap:wrap;justify-content:center;">
+<button class="btn btn-sm" data-action="toggle-partage">
+${eq.partage_public ? 'Fermer la consultation publique' : 'Rouvrir la consultation publique'}
+</button>
+${isAdmin() ? `<button class="btn btn-sm" data-action="regen-token">Changer le lien</button>` : ''}
+</div>` : ''}
+${(!adresseDefinitive() && isAdmin()) ? `
+<div class="alert alert-info small" style="margin:0;">
+Adresse provisoire : ce QR code pointe vers l'adresse actuelle de l'application.
+Ne pas imprimer d'étiquettes en série avant que le domaine définitif soit en place.
+</div>` : ''}
+<button class="btn btn-primary btn-block" data-action="print-qr">🖨️ Imprimer l'étiquette</button>
+</div>
+</div>
+
+<div class="card">
+<h3 class="small" style="text-transform:uppercase;letter-spacing:.02em;color:var(--text-dim);">Informations</h3>
+<table>
+<tr><td class="muted">Créé le</td><td>${fmtDateTime(eq.created_at)}</td></tr>
+${eq.archived ? `<tr><td class="muted">Retiré le</td><td>${fmtDateTime(eq.archived_at)}${eq.archived_by ? ' par ' + esc(eq.archived_by) : ''}</td></tr>` : ''}
+${eq.archived && eq.archive_reason ? `<tr><td class="muted">Motif du retrait</td><td>${esc(eq.archive_reason)}</td></tr>` : ''}
+${infoRows}
+</table>
+</div>
+</div>
+
+<div class="card" style="margin-top:14px;">
+<div class="row between">
+<h3>Historique des interventions</h3>
+<button class="btn btn-sm" data-action="toggle-iv-form">${equipDetail.showIvForm?'Annuler':'+ Ajouter'}</button>
+</div>
+
+${equipDetail.showIvForm ? renderIvForm() : ''}
+
+${equipDetail.interventions && equipDetail.interventions.length ? `
+<div style="overflow-x:auto;">
+<table>
+<thead><tr><th>Date</th><th>Type</th><th>Technicien</th><th>Description</th></tr></thead>
+<tbody>${ivRows}</tbody>
+</table>
+</div>
+` : `<div class="empty small">Aucune intervention enregistrée.</div>`}
+</div>
+
+`;
+}
+
+function renderEditEquipForm(eq, champs){
+return `
+<form class="card" style="margin-bottom:14px;" data-action="submit-edit-equip">
+<h3 class="small" style="text-transform:uppercase;letter-spacing:.02em;color:var(--text-dim);">Modifier la fiche</h3>
+${equipDetail.editError ? `<div class="alert alert-error">${esc(equipDetail.editError)}</div>` : ''}
+<div class="grid-2">
+<div class="field">
+<label>Nom / désignation</label>
+<input type="text" name="nom" value="${esc(eq.nom || '')}" required>
+</div>
+<div class="field">
+<label>N° de série / immatriculation</label>
+<input type="text" name="serial_value" value="${esc(eq.serial_value || '')}"
+data-action="edit-serial" data-exclude="${eq.id}">
+<div class="alerte-serie vide" id="alerte-serie"></div>
+</div>
+</div>
+${champs.length ? `<label style="margin-top:6px;">Informations spécifiques au type</label>` : ''}
+<div class="grid-2">
+${champs.map(c => {
+const val = eq.valeurs?.[c.key] ?? '';
+return `
+<div class="field">
+<label style="text-transform:none;font-weight:600;color:var(--text);">${esc(c.label)}</label>
+${c.type==='textarea'
+? `<textarea name="champ__${esc(c.key)}">${esc(val)}</textarea>`
+: `<input type="${c.type==='number'?'number':(c.type==='date'?'date':'text')}" name="champ__${esc(c.key)}" value="${esc(val)}">`}
+</div>`;
+}).join('')}
+</div>
+<div class="row wrap" style="margin-top:8px;">
+<button class="btn btn-primary" type="submit" ${equipDetail.editBusy?'disabled':''}>
+${equipDetail.editBusy ? 'Enregistrement…' : 'Enregistrer les modifications'}
+</button>
+<button class="btn" type="button" data-action="toggle-edit-equip">Annuler</button>
+</div>
+</form>
+`;
+}
+
+async function submitEditEquip(form){
+const fd = new FormData(form);
+const nom = (fd.get('nom') || '').trim();
+if(!nom){ equipDetail.editError = 'Le nom est obligatoire.'; render(); return; }
+const serial = (fd.get('serial_value') || '').trim();
+const valeurs = Object.assign({}, equipDetail.item?.valeurs || {});
+for(const [k, v] of fd.entries()){
+if(k.startsWith('champ__')) valeurs[k.slice(7)] = v;
+}
+
+equipDetail.editError = ''; equipDetail.editBusy = true; render();
+try{
+const { error } = await sb.from('equipements')
+.update({ nom, serial_value: serial || null, valeurs })
+.eq('id', equipDetail.id);
+if(error) throw error;
+equipDetail.item = await getEquipement(equipDetail.id);
+equipDetail.showEditForm = false;
+dashboardCache.items = null; accueilCache.chiffres = null;
+}catch(e){
+equipDetail.editError = e.message;
+}finally{
+equipDetail.editBusy = false; render();
+}
+}
+
+async function restoreEquipement(){
+if(!confirm("Restaurer cet équipement ? Il réapparaîtra dans la liste active.")) return;
+try{
+const { error } = await sb.from('equipements')
+.update({ archived:false, archived_at:null, archived_by:null, archive_reason:null })
+.eq('id', equipDetail.id);
+if(error) throw error;
+equipDetail.item = await getEquipement(equipDetail.id);
+dashboardCache.items = null; accueilCache.chiffres = null;
+render();
+}catch(e){
+alert('Erreur : ' + e.message);
+}
+}
+
+function drawQr(url){
+const canvas = document.getElementById('qr-canvas');
+if(!canvas || typeof QRious === 'undefined' || !url) return;
+new QRious({ element: canvas, value: url, size: 200, background: 'white', foreground: '#141b1e', level: 'M' });
+}
+
+function renderIvForm(){
+const today = new Date().toISOString().slice(0,10);
+return `
+<form class="card" style="background:var(--surface-2);margin:12px 0;" data-action="submit-iv">
+${equipDetail.ivError ? `<div class="alert alert-error">${esc(equipDetail.ivError)}</div>` : ''}
+<div class="grid-2">
+<div class="field">
+<label>Date <span class="oblig">obligatoire</span></label>
+<input type="date" name="date" value="${today}" required>
+</div>
+<div class="field">
+<label>Type d'intervention <span class="oblig">obligatoire</span></label>
+<input type="text" name="type" placeholder="Ex : Entretien, Réparation, Contrôle…" required>
+</div>
+</div>
+<div class="field">
+<label>Intervenant <span class="oblig">obligatoire</span></label>
+<input type="text" name="technicien" value="${esc(state.profile?.full_name||'')}" required
+placeholder="Nom de la personne intervenue">
+<div class="hint">Nom de la personne qui a réalisé l'intervention. C'est lui qui figurera
+sur le carnet en cas de contrôle — pré-rempli avec le vôtre, modifiable si vous
+saisissez pour un collègue.</div>
+</div>
+<div class="field"><label>Description</label><textarea name="description" placeholder="Détails de l'intervention…"></textarea></div>
+<button class="btn btn-primary" type="submit" ${equipDetail.ivBusy?'disabled':''}>${equipDetail.ivBusy?'Enregistrement…':"Enregistrer l'intervention"}</button>
+</form>
+`;
+}
+
+async function submitIntervention(form){
+// On lit et on valide AVANT tout réaffichage : une fiche d'intervention sans
+// intervenant ni date n'a aucune valeur de preuve, elle ne doit pas partir.
+const fd = new FormData(form);
+const date = (fd.get('date') || '').trim();
+const type = (fd.get('type') || '').trim();
+const technicien = (fd.get('technicien') || '').trim();
+const description = (fd.get('description') || '').trim();
+
+if(!date){
+equipDetail.ivError = "La date de l'intervention est obligatoire.";
+render(); return;
+}
+if(!type){
+equipDetail.ivError = "Le type d'intervention est obligatoire (entretien, réparation, contrôle…).";
+render(); return;
+}
+if(!technicien){
+equipDetail.ivError = "Le nom de l'intervenant est obligatoire : c'est lui qui engage la traçabilité de la fiche.";
+render(); return;
+}
+
+equipDetail.ivError = ''; equipDetail.ivBusy = true; render();
+try{
+const { error } = await sb.from('interventions').insert({
+equipement_id: equipDetail.id,
+date, type, technicien,
+description: description || null
+});
+if(error) throw error;
+equipDetail.showIvForm = false;
+equipDetail.interventions = await listInterventions(equipDetail.id);
+equipDetail.ivBusy = false;
+render();
+}catch(e){
+equipDetail.ivBusy = false; equipDetail.ivError = e.message; render();
+}
+}
+
+/* Un retrait doit toujours pouvoir s'expliquer : la base refuse un equipement
+retire sans motif ni nom d'operateur. On demande donc le motif avant, plutot
+que de laisser la base renvoyer une erreur technique a l'utilisateur. */
+async function archiveEquipement(){
+const qui = (state.profile?.full_name || state.session?.user?.email || '').trim();
+if(!qui){ alert("Votre nom doit être renseigné dans votre profil avant de retirer un équipement."); return; }
+
+const motif = (window.prompt(
+"Retirer cet équipement du parc.\n\n" +
+"Motif du retrait (obligatoire) — par exemple : vendu, réformé, hors service, volé, restitué au loueur.\n\n" +
+"La fiche et son historique restent conservés et consultables via « Voir les supprimés ».", '') || '').trim();
+
+if(!motif){
+if(motif === '') alert("Retrait annulé : un motif est obligatoire.");
+return;
+}
+
+try{
+const { error } = await sb.from('equipements').update({
+archived: true,
+archived_at: new Date().toISOString(),
+archived_by: qui,
+archive_reason: motif
+}).eq('id', equipDetail.id);
+if(error) throw error;
+equipDetail.item = await getEquipement(equipDetail.id);
+refreshDashboard();
+render();
+}catch(e){
+alert('Erreur : ' + e.message);
+}
+}
+
+/* Ouvrir ou fermer la consultation libre d'un equipement. Fermee, l'etiquette
+deja collee ne montre plus rien : la fiche redevient interne. */
+async function actionTogglePartage(){
+const eq = equipDetail.item;
+if(!eq) return;
+const ouvrir = !eq.partage_public;
+if(!ouvrir && !confirm("Fermer la consultation publique ? Les étiquettes déjà collées sur cet équipement ne montreront plus rien à ceux qui les scannent.")) return;
+try{
+const { error } = await sb.from('equipements')
+.update({ partage_public: ouvrir }).eq('id', eq.id);
+if(error) throw error;
+eq.partage_public = ouvrir;
+render();
+}catch(e){ alert('Erreur : ' + e.message); }
+}
+
+/* Changer le jeton : l'ancienne etiquette devient muette, la fiche et son
+historique ne bougent pas. Utile si une etiquette part avec un vehicule vendu. */
+async function actionRegenererLienPublic(){
+const eq = equipDetail.item;
+if(!eq) return;
+if(!confirm("Changer le lien public ? Toutes les étiquettes déjà imprimées pour cet équipement cesseront de fonctionner : il faudra en réimprimer une. La fiche et son historique sont conservés.")) return;
+try{
+const nouveau = (crypto && crypto.randomUUID) ? crypto.randomUUID() : null;
+if(!nouveau) throw new Error("Navigateur trop ancien pour générer un nouveau lien.");
+const { error } = await sb.from('equipements')
+.update({ public_token: nouveau, ancien_lien_actif: false }).eq('id', eq.id);
+if(error) throw error;
+eq.public_token = nouveau;
+render();
+}catch(e){ alert('Erreur : ' + e.message); }
+}
+
+function printQr(){
+const eq = equipDetail.item;
+const printArea = document.getElementById('print-area');
+if(!eq || !printArea) return;
+
+const url = lienPublic(eq.public_token);
+
+// QR généré spécialement pour l'impression, en haute définition : une
+// imprimante thermique tire à ~203 points par pouce, le QR de 200 px affiché
+// à l'écran sortirait baveux et difficile à scanner.
+let source = null;
+if(typeof QRious !== 'undefined'){
+const hd = document.createElement('canvas');
+new QRious({ element: hd, value: url, size: 800, background:'white', foreground:'#000000', level:'M' });
+source = hd;
+} else {
+source = document.getElementById('qr-canvas'); // repli
+}
+if(!source) return;
+
+const ident = (eq.serial_value || '').trim();
+const cote = ETIQUETTE.taille_qr_mm;
+
+printArea.innerHTML = `
+<img id="print-qr-img" alt="" style="width:${cote}mm;height:${cote}mm;">
+${(ETIQUETTE.afficher_identifiant && ident) ? `<div class="etiquette-id">${esc(ident)}</div>` : ''}
+`;
+
+const img = document.getElementById('print-qr-img');
+// L'image est une donnée encodée : il faut attendre qu'elle soit décodée,
+// sinon l'impression part avant et l'étiquette sort vide.
+img.onload = () => window.print();
+img.onerror = () => window.print();
+img.src = source.toDataURL('image/png');
+}
+
+/* ---------------------------------------------------------------------- */
+/* Event delegation */
+/* ---------------------------------------------------------------------- */
+
+document.addEventListener('click', (e) => {
+const t = e.target.closest('[data-action]');
+if(!t) return;
+const action = t.dataset.action;
+
+if(action === 'go'){ nav(t.dataset.path); closeMenus(); }
+else if(action === 'toggle-menu'){ e.stopPropagation(); document.getElementById('user-dropdown')?.classList.toggle('open'); }
+else if(action === 'logout'){ sb.auth.signOut(); }
+else if(action === 'auth-mode'){ state.authMode = t.dataset.mode; state.authError=''; state.authNotice=''; render(); }
+else if(action === 'toggle-type-form'){ typeForm.open ? (typeForm = { open:false, id:null, nom:'', champs:[], busy:false, error:'' }, render()) : ouvrirTypeForm(null); }
+else if(action === 'edit-type'){
+const type = state.types.find(x => x.id === t.dataset.id);
+if(type) ouvrirTypeForm(type);
+}
+else if(action === 'champ-add'){ typeForm.champs.push({label:'', type:'text'}); render(); }
+else if(action === 'champ-remove'){ typeForm.champs.splice(+t.dataset.i, 1); render(); }
+else if(action === 'save-type'){ saveType(); }
+else if(action === 'save-equip'){ saveEquip(); }
+else if(action === 'toggle-iv-form'){ equipDetail.showIvForm = !equipDetail.showIvForm; render(); }
+else if(action === 'archive-equip'){ archiveEquipement(); }
+else if(action === 'restore-equip'){ restoreEquipement(); }
+else if(action === 'toggle-edit-equip'){ equipDetail.showEditForm = !equipDetail.showEditForm; equipDetail.editError=''; render(); }
+else if(action === 'print-qr'){ printQr(); }
+else if(action === 'connexion-depuis-scan'){ connexionDepuisScan(); }
+else if(action === 'toggle-partage'){ actionTogglePartage(); }
+else if(action === 'regen-token'){ actionRegenererLienPublic(); }
+else if(action === 'creer-invite'){ actionCreerInvite(); }
+else if(action === 'annuler-invite'){ actionAnnulerInvite(t.dataset.id); }
+else if(action === 'member-active'){ actionActiverMembre(t.dataset.id, t.dataset.active === '1'); }
+else if(action === 'member-supprimer'){ actionSupprimerMembre(t.dataset.id, t.dataset.nom); }
+else if(action === 'toggle-modeles'){ modeleState.ouvert = !modeleState.ouvert; render(); }
+else if(action === 'appliquer-modele'){ appliquerModele(t.dataset.cle); }
+else if(action === 'copier-lien'){ copierDansPressePapier(inviteUrl(t.dataset.token), t); }
+else if(action === 'toggle-pw'){
+// Manipulation directe du DOM : surtout pas de render(), qui effacerait la saisie.
+const input = t.parentElement && t.parentElement.querySelector('input');
+if(input){
+const etaitVisible = input.type === 'text';
+input.type = etaitVisible ? 'password' : 'text';
+t.innerHTML = etaitVisible ? ICONE_OEIL : ICONE_OEIL_BARRE;
+const libelle = etaitVisible ? 'Afficher le mot de passe' : 'Masquer le mot de passe';
+t.setAttribute('aria-label', libelle);
+t.setAttribute('title', libelle);
+input.focus();
+}
+}
+});
+
+document.addEventListener('input', (e) => {
+const t = e.target.closest('[data-action]');
+if(!t) return;
+const action = t.dataset.action;
+if(action === 'dash-search'){ dashboardCache.search = t.value; debounce(refreshDashboard); }
+else if(action === 'dash-filter-type'){ dashboardCache.typeId = t.value; refreshDashboard(); }
+else if(action === 'dash-archived'){ dashboardCache.showArchived = t.checked; refreshDashboard(); }
+else if(action === 'type-nom'){ typeForm.nom = t.value; }
+else if(action === 'champ-label'){ typeForm.champs[+t.dataset.i].label = t.value; }
+else if(action === 'champ-type'){ typeForm.champs[+t.dataset.i].type = t.value; }
+else if(action === 'equip-nom'){ equipForm.nom = t.value; }
+else if(action === 'equip-serial'){ equipForm.serial_value = t.value; verifierSerie(t.value, null); }
+else if(action === 'edit-serial'){ verifierSerie(t.value, t.dataset.exclude || null); }
+else if(action === 'equip-type'){ equipForm.typeId = t.value; render(); }
+else if(action === 'equip-valeur'){ equipForm.valeurs[t.dataset.key] = t.value; }
+else if(action === 'invite-role'){ equipeCache.inviteRole = t.value; render(); }
+else if(action === 'invite-label'){ equipeCache.inviteLabel = t.value; }
+else if(action === 'invite-tous-types'){
+equipeCache.inviteTousTypes = t.checked;
+if(t.checked) equipeCache.inviteTypes = [];
+equipeCache.inviteError = ''; render();
+}
+else if(action === 'invite-type'){
+const id = t.dataset.type;
+equipeCache.inviteTypes = t.checked
+? [...new Set([...equipeCache.inviteTypes, id])]
+: equipeCache.inviteTypes.filter(x => x !== id);
+equipeCache.inviteError = ''; render();
+}
+else if(action === 'member-role'){ actionRoleMembre(t.dataset.id, t.value); }
+else if(action === 'acces-tous'){ actionAccesTous(t.dataset.id, t.checked); }
+else if(action === 'acces-type'){ actionAccesType(t.dataset.id, t.dataset.type, t.checked); }
+});
+
+document.addEventListener('submit', (e) => {
+const t = e.target.closest('[data-action]');
+if(!t) return;
+e.preventDefault();
+const action = t.dataset.action;
+if(action === 'submit-auth') handleAuthSubmit(t);
+else if(action === 'submit-iv') submitIntervention(t);
+else if(action === 'submit-join') handleJoinSubmit(t);
+else if(action === 'submit-edit-equip') submitEditEquip(t);
+});
+
+document.addEventListener('click', (e) => {
+if(!e.target.closest('.user-menu')) closeMenus();
+});
+function closeMenus(){ document.getElementById('user-dropdown')?.classList.remove('open'); }
+
+let debounceTimer;
+function debounce(fn, ms=350){ clearTimeout(debounceTimer); debounceTimer = setTimeout(fn, ms); }
+
+/* ---------------------------------------------------------------------- */
+/* Auth bootstrap */
+/* ---------------------------------------------------------------------- */
+
+sb.auth.onAuthStateChange(async (event, session) => {
+state.session = session;
+state.accessError = '';
+if(session){
+try{
+await loadProfileAndOrg();
+await loadTypes(true);
+retourApresConnexion();
+}catch(e){
+console.error(e);
+state.accessError = (e && e.message) ? e.message : 'Erreur de chargement du profil.';
+}
+} else {
+state.profile = null; state.orgName = '';
+dashboardCache = { items: null, search:'', typeId:'', showArchived:false, loading:false, error:'' };
+resetEquipeCache();
+accueilCache = { chiffres: null, loading: false, error: '' };
+joinState = { token:null, loading:false, preview:null, error:'', busy:false, notice:'' };
+state.typesLoaded = false; state.types = [];
+}
+state.loading = false;
+render();
+});
+
+render(); // premier rendu (spinner) pendant que la session se charge
+</script>
+
+<!-- =========================================================================
+     Progressive Web App — enregistrement du Service Worker
+     -------------------------------------------------------------------------
+     Met en cache la coquille de l'application au premier chargement, pour
+     qu'elle démarre ensuite sans réseau (voir sw.js).
+     ========================================================================= -->
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').catch((e) => {
+      console.error('[SW] Échec d\'enregistrement :', e);
+    });
+  });
+}
+</script>
 </body>
 </html>

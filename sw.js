@@ -2,63 +2,42 @@
    WiTracEQUIP — Service Worker
    -------------------------------------------------------------------------
    Rôle : rendre l'application installable et la faire démarrer sans réseau.
-   Il met en cache la « coquille » de l'application — le HTML, le CSS, les
-   modules JavaScript, les icônes, les deux bibliothèques externes — de sorte
-   qu'ouvrir WiTracEQUIP dans un sous-sol affiche l'interface au lieu du
-   dinosaure hors-ligne du navigateur.
+   Il met en cache la « coquille » de l'application — le HTML (autonome,
+   avec son CSS et son JavaScript inline), le manifest, les icônes, les
+   deux bibliothèques externes — de sorte qu'ouvrir WiTracEQUIP dans un
+   sous-sol affiche l'interface au lieu du dinosaure hors-ligne du
+   navigateur.
 
    Ce qu'il NE met PAS en cache, et c'est essentiel
    ------------------------------------------------
    Aucune requête vers Supabase ne passe par ici. Ni les données, ni surtout
-   les jetons d'authentification. Deux raisons, chacune suffisante :
+   les jetons d'authentification :
 
      - CORRECTION : mettre en cache une réponse d'API servirait des données
        périmées sans que personne ne le sache. Sur un carnet d'entretien,
        afficher une vieille valeur en la présentant comme actuelle est pire
-       que d'afficher une erreur franche. La fraîcheur des données est gérée
-       explicitement par js/services/offline.js, qui date ce qu'il conserve et
-       le signale à l'écran.
+       que d'afficher une erreur franche.
 
      - SÉCURITÉ : le cache du Service Worker n'est pas cloisonné par compte.
        Y laisser une réponse authentifiée la rendrait lisible au compte
        suivant sur le même appareil — exactement ce que le cloisonnement RLS
        s'emploie à empêcher côté serveur.
-
-   Séparation des responsabilités
-   ------------------------------
-     Service Worker (ici)  → les FICHIERS de l'application
-     offline.js            → les DONNÉES métier et la file d'attente
    ========================================================================= */
 
 /* Changer ce numéro à chaque déploiement : c'est ce qui déclenche le
    remplacement de l'ancien cache par le nouveau chez tous les utilisateurs. */
-const VERSION = 'wte-v1.0.0';
+const VERSION = 'wte-v2.0.0';
 
 const CACHE_SHELL = `${VERSION}-shell`;
 const CACHE_EXTERNE = `${VERSION}-externe`;
 
-/* La coquille de l'application. Tout ce qui est ici est téléchargé à
-   l'installation : si l'un de ces fichiers manque, l'application ne démarre
-   pas hors ligne. */
+/* La coquille de l'application : un seul fichier HTML autonome (CSS et
+   JavaScript inline) + le manifest + les icônes. Si l'un de ces fichiers
+   manque, l'application ne démarre pas hors ligne. */
 const FICHIERS_SHELL = [
   './',
   'index.html',
   'manifest.json',
-  'css/style.css',
-
-  'js/app.js',
-  'js/config.js',
-  'js/core/store.js',
-  'js/core/dom.js',
-  'js/services/supabase.js',
-  'js/services/offline.js',
-  'js/modules/routing.js',
-  'js/modules/auth.js',
-  'js/modules/equipements.js',
-  'js/modules/interventions.js',
-  'js/modules/types.js',
-  'js/modules/equipe.js',
-  'js/modules/qrcode.js',
 
   'assets/icons/icon-192.png',
   'assets/icons/icon-512.png',
@@ -85,9 +64,6 @@ self.addEventListener('install', (event) => {
     caches.open(CACHE_SHELL)
       .then((cache) => cache.addAll(FICHIERS_SHELL))
       .catch((e) => {
-        // Un fichier introuvable ferait échouer addAll en bloc. On le signale
-        // plutôt que d'échouer en silence : c'est presque toujours une faute
-        // de frappe dans FICHIERS_SHELL après un renommage.
         console.error('[SW] Mise en cache initiale incomplète :', e);
       })
   );
@@ -176,12 +152,6 @@ self.addEventListener('fetch', (event) => {
 
 /* =========================================================================
    MISE À JOUR IMMÉDIATE (sur demande de la page)
-   -------------------------------------------------------------------------
-   Par défaut, une nouvelle version attend la fermeture de tous les onglets
-   avant de prendre la main. C'est le comportement voulu : remplacer les
-   modules JavaScript sous les pieds d'une page ouverte peut mêler ancien et
-   nouveau code. L'application peut toutefois demander l'activation immédiate
-   si elle propose explicitement le rechargement à l'utilisateur.
    ========================================================================= */
 
 self.addEventListener('message', (event) => {
