@@ -1028,3 +1028,21 @@ padding-bottom:4px; border-bottom:1px solid var(--border);}
 .appareil-ligne{display:flex; align-items:center; gap:5px; flex-wrap:wrap; margin:2px 0; color:var(--text);}
 .appareil-ligne svg{color:var(--text-dim);}
 .btn-lien-petit{border:none; background:none; padding:0 2px; color:var(--primary); font-weight:650; font-size:12.5px; text-decoration:underline; cursor:pointer;}
+
+/* ===== v2.17.2 : Journal d'activité ===== */
+.activite-liste{padding:4px 16px;}
+.activite-jour{font-size:11.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--text-dim); padding:12px 0 4px;}
+.activite-jour::first-letter{text-transform:uppercase;}
+.activite-ligne{display:flex; gap:12px; align-items:flex-start; padding:11px 0; border-bottom:1px solid var(--border);}
+.activite-ligne:last-child{border-bottom:none;}
+.activite-ico{flex:none; width:34px; height:34px; border-radius:10px; display:flex; align-items:center; justify-content:center;}
+.activite-ico.bleu{background:color-mix(in srgb, #2563eb 12%, transparent); color:#2563eb;}
+.activite-ico.vert{background:color-mix(in srgb, #16a34a 12%, transparent); color:#16a34a;}
+.activite-ico.or{background:color-mix(in srgb, #d97706 14%, transparent); color:#b45309;}
+.activite-ico.rouge{background:color-mix(in srgb, #dc2626 12%, transparent); color:#dc2626;}
+.activite-corps{flex:1; min-width:0;}
+.activite-type{font-size:12.5px; font-weight:650; color:var(--text-dim);}
+.activite-titre{font-weight:650; margin-top:1px; overflow-wrap:anywhere;}
+.activite-detail{margin-top:2px; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;}
+.activite-actions{display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-top:4px;}
+.activite-archiver{flex:none; color:var(--text-dim);}
