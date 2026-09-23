@@ -229,6 +229,13 @@ const { error } = await sb.from('demandes_support')
 if(error) throw error;
 }
 
+/* Renvoie une erreur claire si la base a refusé (aucune ligne modifiée). */
+async function renommerMembre(id, nom){
+const { data, error } = await sb.from('profiles').update({ full_name: nom }).eq('id', id).select('id');
+if(error) throw error;
+if(!data || !data.length) throw new Error("Vous n'avez pas le droit de modifier ce profil.");
+}
+
 async function supprimerDemandeSupport(id){
 const { error } = await sb.from('demandes_support').delete().eq('id', id);
 if(error) throw error;
