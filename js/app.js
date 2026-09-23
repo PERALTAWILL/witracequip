@@ -1040,7 +1040,7 @@ let typeForm = { open:false, id:null, nom:'', champs:[], busy:false, error:'' };
 let modeleState = { ouvert:false, busy:false };
 
 async function appliquerModele(cle){
-const modele = MODELES_METIERS.find(m => m.cle === cle);
+const modele = modelesMetiers().find(m => m.cle === cle);
 if(!modele) return;
 
 // On ne recrée pas ce qui existe déjà : le modèle complète, il n'écrase jamais.
@@ -1140,7 +1140,7 @@ ${modeleState.ouvert ? 'Masquer' : 'Voir les modèles'}
 </div>
 ${modeleState.ouvert ? `
 <div class="modeles">
-${MODELES_METIERS.map(m => `
+${modelesMetiers().map(m => `
 <div class="modele">
 <div class="modele-nom">${esc(m.nom)}</div>
 <div class="small muted">${esc(m.description)}</div>
@@ -1927,8 +1927,9 @@ render();
 if(!state.horsLigne) return;
 try{
 await loadProfileAndOrg(); await chargerStatutSuperAdmin(); await loadTypes(true);
+try{ await chargerModeles(); }catch(err){ console.error('[modèles]', err); }
 state.horsLigne = false;
-sauverInstantane({ profile: state.profile, orgName: state.orgName, superAdmin: state.superAdmin, types: state.types });
+sauverInstantane({ profile: state.profile, orgName: state.orgName, superAdmin: state.superAdmin, types: state.types, modeles: state.modeles });
 dashboardCache.horsLigneLe = null;
 refreshDashboard();
 }catch(e){}
@@ -2223,6 +2224,7 @@ else if(action === 'photo-fermer'){ if(t.tagName === 'BUTTON' || e.target === t)
 else if(action === 'photo-suivante'){ changerPhoto(+t.dataset.sens); }
 else if(action === 'photo-supprimer'){ supprimerPhotoOuverte(); }
 else if(action === 'abandonner-equip-attente'){ abandonnerEquipEnAttente(t.dataset.id); }
+else if(action.startsWith('mm-')){ actionModele(action, t); }
 else if(action === 'archive-equip'){ ouvrirModalArchiver([equipDetail.id]); }
 else if(action === 'suppr-equip-un'){ ouvrirModalSupprimerEquip([t.dataset.id]); }
 else if(action === 'equip-archiver-sel'){ ouvrirModalArchiver((dashboardCache.items||[]).filter(e => !e.archived && dashboardCache.sel.includes(e.id)).map(e => e.id)); }
@@ -2352,6 +2354,7 @@ else if(action === 'member-role'){ actionRoleMembre(t.dataset.id, t.value); }
 else if(action === 'deplacer-membre'){ actionDeplacerMembre(t.dataset.id, t.value); }
 else if(action === 'acces-tous'){ actionAccesTous(t.dataset.id, t.checked); }
 else if(action === 'acces-type'){ actionAccesType(t.dataset.id, t.dataset.type, t.checked); }
+else if(action.startsWith('mm-')){ saisieModele(action, t); }
 });
 
 document.addEventListener('submit', (e) => {
@@ -2437,8 +2440,9 @@ try{
 await loadProfileAndOrg();
 await chargerStatutSuperAdmin();
 await loadTypes(true);
+try{ await chargerModeles(); }catch(err){ console.error('[modèles]', err); }
 state.horsLigne = false;
-sauverInstantane({ profile: state.profile, orgName: state.orgName, superAdmin: state.superAdmin, types: state.types });
+sauverInstantane({ profile: state.profile, orgName: state.orgName, superAdmin: state.superAdmin, types: state.types, modeles: state.modeles });
 retourApresConnexion();
 // Préchargement discret : la liste des équipements est prête avant qu'on l'ouvre.
 if(dashboardCache.items === null) setTimeout(() => { if(state.session && dashboardCache.items === null) chargerEquipements(); }, 300);
@@ -2453,6 +2457,7 @@ if(estErreurReseau(e) && inst.profile && inst.profile.id === session.user.id){
 // Pas de réseau : on démarre sur le dernier état connu.
 state.profile = inst.profile; state.orgName = inst.orgName || ''; state.superAdmin = !!inst.superAdmin;
 state.types = inst.types || []; state.typesLoaded = true; state.horsLigne = true;
+state.modeles = inst.modeles || null;
 retourApresConnexion();
 try{ state.enAttenteCount = await offlineCompterEnAttente(); }catch(err){}
 state.loading = false;

@@ -35,7 +35,7 @@ reactivation_client: 'Client réactivé',
 
 function isSuperAdmin(){ return state.superAdmin === true; }
 function peutReglages(){ return isAdmin() || isSuperAdmin(); }
-function nomModele(cle){ return (MODELES_METIERS.find(m => m.cle === cle) || {}).nom || ''; }
+function nomModele(cle){ return (modelesMetiers().find(m => m.cle === cle) || {}).nom || ''; }
 
 /* Peu d'onglets, chacun avec une seule mission. Les membres et les invitations
    d'un client se gèrent DANS sa fiche : plus d'onglet Membres ni Invitations
@@ -48,7 +48,7 @@ return [
 { cle:'clients', l:'Clients', n: reglages.clients ? reglages.clients.filter(c => !c.est_mon_organisation).length : null,
 aide:"Ouvrez un client pour voir tout son parc et gérer sa fiche, ses membres et ses invitations." },
 { cle:'support', l:'Support', n: aTraiter || null, alerte: aTraiter > 0,
-aide:"Les demandes envoyées par vos clients. Une fois traitées, elles passent dans « Traitées »." },
+aide:"Les demandes de vos clients, et les modèles métier proposés quand vous créez un client." },
 journal,
 ];
 }
@@ -144,15 +144,17 @@ const courant = onglets.find(o => o.cle === onglet);
 let contenu = '';
 if(onglet === 'clients') contenu = sous ? viewClientDetail(sous) : viewClients();
 else if(onglet === 'equipe') contenu = viewMembres() + viewInvitations();
-else if(onglet === 'support') contenu = viewSupportAdmin();
+else if(onglet === 'support') contenu = isSuperAdmin()
+? sousMenuSupport(sous === 'modeles' ? 'modeles' : 'demandes') + (sous === 'modeles' ? viewModelesMetier() : viewSupportAdmin())
+: viewSupportAdmin();
 else if(onglet === 'journal') contenu = viewJournal();
 
 // Super-admin : la navigation principale mène déjà à Clients / Support /
 // Journal ; pas de seconde rangée d'onglets, juste le titre de la section.
 if(isSuperAdmin()){
-const titres = { clients:'Clients', support:'Support clients', journal:'Journal' };
+const titres = { clients:'Clients', support:'Support', journal:'Journal' };
 return `
-${sous ? '' : `<div class="row between wrap" style="margin-bottom:6px;"><h2>${titres[onglet]}</h2></div>
+${sous && onglet !== 'support' ? '' : `<div class="row between wrap" style="margin-bottom:6px;"><h2>${titres[onglet]}</h2></div>
 ${courant?.aide ? `<div class="reglages-aide">${esc(courant.aide)}</div>` : ''}`}
 ${contenu}`;
 }
@@ -277,7 +279,7 @@ render();
 function renderClientForm(){
 const f = reglages.clientForm;
 const modif = !!f.id;
-const modele = MODELES_METIERS.find(m => m.cle === f.modele);
+const modele = modelesMetiers().find(m => m.cle === f.modele);
 return `
 <form class="card" data-action="submit-client" style="margin-bottom:14px;">
 <h3>${modif ? 'Modifier la fiche client' : 'Nouveau client'}</h3>
@@ -297,7 +299,7 @@ ${f.error ? `<div class="alert alert-error">${esc(f.error)}</div>` : ''}
 <div class="field"><label>Modèle métier</label>
 <select name="modele" data-action="client-modele">
 <option value="">— Aucun pour l'instant —</option>
-${MODELES_METIERS.map(m => `<option value="${m.cle}" ${m.cle === f.modele ? 'selected' : ''}>${esc(m.nom)}</option>`).join('')}
+${modelesMetiers().map(m => `<option value="${m.cle}" ${m.cle === f.modele ? 'selected' : ''}>${esc(m.nom)}</option>`).join('')}
 </select>
 <div class="hint">${modele
 ? `Crée chez ce client : ${esc(modele.types.map(t => t.nom).join(', '))}. Les types déjà présents ne sont jamais dupliqués ni écrasés.`
@@ -1348,4 +1350,262 @@ dashboardCache.sel = [];
 if(equipDetail.id){ equipDetail.id = null; }   // force le rechargement de la fiche ouverte
 reglages.journal = null;
 refreshDashboard();
+}
+
+/* ---------------------------------------------------------------------- */
+/* Support → Modèles métier (fondateur)                                    */
+/* ---------------------------------------------------------------------- */
+/* Les modèles proposés à la création d'un client (et dans « Partir d'un
+modèle métier » de la page Types). Modifier un modèle ne change pas les
+types déjà créés chez les clients : ils leur appartiennent. */
+
+let modeleEdit = null; // { nouveau, cle, nom, description, types:[{nom, champs:[{label,type}]}], ouverts:[], busy, error }
+
+function sousMenuSupport(actif){
+const aTraiter = (reglages.support || []).filter(d => d.statut !== 'traite').length;
+const nb = (state.modeles || []).length;
+return `
+<div class="sous-menu" role="tablist">
+<button class="${actif === 'demandes' ? 'active' : ''}" data-action="go" data-path="/reglages/support">${iconeNav('inbox', 16)} Demandes clients ${aTraiter ? `<span class="onglet-compteur alerte">${aTraiter}</span>` : ''}</button>
+<button class="${actif === 'modeles' ? 'active' : ''}" data-action="go" data-path="/reglages/support/modeles">${iconeNav('tag', 16)} Modèles métier <span class="onglet-compteur">${nb}</span></button>
+</div>`;
+}
+
+function copieModele(m){ return JSON.parse(JSON.stringify(m)); }
+
+function viewModelesMetier(){
+if(modeleEdit) return renderModeleEdit();
+const liste = state.modeles || [];
+const clients = (reglages.clients || []).filter(c => !c.est_mon_organisation);
+return `
+<div class="row between wrap" style="margin-bottom:12px;gap:10px;">
+<div class="hint" style="margin:0;flex:1;min-width:220px;">Proposés quand vous créez un client, et dans « Partir d'un modèle métier » de la page Types.
+Les modifier ne change rien chez les clients déjà créés.</div>
+<button class="btn btn-primary" data-action="mm-nouveau">+ Nouveau métier</button>
+</div>
+${liste.length ? `<div class="mm-grille">
+${liste.map(m => {
+const nbChamps = (m.types || []).reduce((n, t) => n + (t.champs || []).length, 0);
+const utilisateurs = clients.filter(c => c.modele_metier === m.cle).length;
+return `
+<div class="card mm-carte">
+<div class="mm-titre">${esc(m.nom)}</div>
+${m.description ? `<div class="small muted">${esc(m.description)}</div>` : ''}
+<div class="mm-chiffres small">${(m.types || []).length} type${(m.types || []).length > 1 ? 's' : ''} · ${nbChamps} champ${nbChamps > 1 ? 's' : ''}${utilisateurs ? ` · <strong>${utilisateurs} client${utilisateurs > 1 ? 's' : ''}</strong>` : ''}</div>
+<div class="mm-types">${(m.types || []).map(t => `<span class="mm-puce">${esc(t.nom)}</span>`).join('')}</div>
+<div class="row mm-actions">
+<button class="btn btn-sm btn-primary" data-action="mm-modifier" data-cle="${esc(m.cle)}">${iconeNav('pencil', 14)} Modifier</button>
+<button class="btn btn-sm" data-action="mm-dupliquer" data-cle="${esc(m.cle)}">Dupliquer</button>
+<button class="icon-btn btn-poubelle mm-suppr" data-action="mm-supprimer" data-cle="${esc(m.cle)}" title="Supprimer ce métier" aria-label="Supprimer ce métier">${iconeNav('trash', 17)}</button>
+</div>
+</div>`;}).join('')}
+</div>` : `<div class="card empty"><div class="empty-icone">${iconeNav('tag', 30)}</div><strong>Aucun modèle métier</strong><br><span class="small">Créez-en un pour préparer d'un coup le parc type d'un secteur.</span></div>`}`;
+}
+
+function renderModeleEdit(){
+const e = modeleEdit;
+const typesHtml = e.types.map((t, i) => {
+const ouvert = e.ouverts.includes(i);
+return `
+<div class="mm-type ${ouvert ? 'ouvert' : ''}">
+<div class="mm-type-tete">
+<button type="button" class="mm-type-plier" data-action="mm-type-plier" data-t="${i}" aria-expanded="${ouvert}" title="${ouvert ? 'Replier' : 'Voir les champs'}">${ouvert ? '▾' : '▸'}</button>
+<input type="text" class="mm-type-nom" placeholder="Nom du type (ex : Extincteur)" value="${esc(t.nom)}" data-action="mm-type-nom" data-t="${i}">
+<span class="small muted mm-type-n">${t.champs.length} champ${t.champs.length > 1 ? 's' : ''}</span>
+<div class="mm-type-actions">
+<button type="button" class="icon-btn" data-action="mm-type-deplacer" data-t="${i}" data-sens="-1" title="Monter" ${i === 0 ? 'disabled' : ''}>↑</button>
+<button type="button" class="icon-btn" data-action="mm-type-deplacer" data-t="${i}" data-sens="1" title="Descendre" ${i === e.types.length - 1 ? 'disabled' : ''}>↓</button>
+<button type="button" class="icon-btn btn-poubelle" data-action="mm-type-suppr" data-t="${i}" title="Retirer ce type">${iconeNav('trash', 16)}</button>
+</div>
+</div>
+${ouvert ? `
+<div class="mm-champs">
+${t.champs.length ? t.champs.map((c, j) => `
+<div class="mm-champ">
+<input type="text" placeholder="Nom du champ (ex : Date de fabrication)" value="${esc(c.label)}" data-action="mm-champ-label" data-t="${i}" data-c="${j}">
+<select data-action="mm-champ-type" data-t="${i}" data-c="${j}">
+${CHAMP_TYPES.map(ct => `<option value="${ct.v}" ${ct.v === c.type ? 'selected' : ''}>${ct.l}</option>`).join('')}
+</select>
+<div class="mm-champ-actions">
+<button type="button" class="icon-btn" data-action="mm-champ-deplacer" data-t="${i}" data-c="${j}" data-sens="-1" title="Monter" ${j === 0 ? 'disabled' : ''}>↑</button>
+<button type="button" class="icon-btn" data-action="mm-champ-deplacer" data-t="${i}" data-c="${j}" data-sens="1" title="Descendre" ${j === t.champs.length - 1 ? 'disabled' : ''}>↓</button>
+<button type="button" class="icon-btn" data-action="mm-champ-suppr" data-t="${i}" data-c="${j}" title="Retirer ce champ">✕</button>
+</div>
+</div>`).join('') : `<div class="small muted" style="margin-bottom:8px;">Aucun champ : l'équipement n'aura que son nom et son n° de série.</div>`}
+<button type="button" class="btn btn-sm" data-action="mm-champ-ajouter" data-t="${i}">+ Ajouter un champ</button>
+</div>` : ''}
+</div>`;
+}).join('');
+
+return `
+<div class="card">
+<div class="row between wrap" style="gap:10px;margin-bottom:10px;">
+<h3>${e.nouveau ? 'Nouveau métier' : 'Modifier le métier'}</h3>
+<button class="btn btn-sm btn-lien" data-action="mm-annuler">← Retour aux métiers</button>
+</div>
+${e.error ? `<div class="alert alert-error">${esc(e.error)}</div>` : ''}
+<div class="grid-2">
+<div class="field">
+<label>Nom du métier <span class="oblig">obligatoire</span></label>
+<input type="text" placeholder="Ex : Restauration collective" value="${esc(e.nom)}" data-action="mm-nom">
+</div>
+<div class="field">
+<label>Description</label>
+<input type="text" placeholder="Une phrase pour le reconnaître" value="${esc(e.description)}" data-action="mm-desc">
+</div>
+</div>
+
+<div class="row between wrap" style="gap:8px;margin:6px 0 8px;">
+<label style="margin:0;">Types d'équipement (${e.types.length})</label>
+${e.types.length ? `<button type="button" class="btn btn-sm btn-lien" data-action="mm-tout-plier">${e.ouverts.length ? 'Tout replier' : 'Tout déplier'}</button>` : ''}
+</div>
+<div class="mm-types-liste">${typesHtml || `<div class="small muted" style="margin-bottom:8px;">Aucun type pour l'instant.</div>`}</div>
+<button type="button" class="btn btn-sm" data-action="mm-type-ajouter">+ Ajouter un type d'équipement</button>
+
+<div class="hint" style="margin-top:14px;">Les changements s'appliquent aux prochains clients créés avec ce métier.
+Les types déjà créés chez vos clients ne bougent pas : modifiez-les depuis la fiche du client → Types.</div>
+<div class="row wrap" style="margin-top:14px;gap:8px;">
+<button class="btn btn-primary" data-action="mm-enregistrer" ${e.busy ? 'disabled' : ''}>${e.busy ? 'Enregistrement…' : (e.nouveau ? 'Créer le métier' : 'Enregistrer')}</button>
+<button class="btn" data-action="mm-annuler">Annuler</button>
+</div>
+</div>`;
+}
+
+function ouvrirModele(cle, dupliquer){
+if(!cle){
+modeleEdit = { nouveau:true, cle:null, nom:'', description:'', types:[{ nom:'', champs:[{ label:'', type:'text' }] }], ouverts:[0], busy:false, error:'' };
+} else {
+const m = (state.modeles || []).find(x => x.cle === cle);
+if(!m) return;
+const c = copieModele(m);
+modeleEdit = { nouveau: !!dupliquer, cle: dupliquer ? null : c.cle, ordre: c.ordre,
+nom: dupliquer ? c.nom + ' (copie)' : c.nom, description: c.description || '',
+types: (c.types || []).map(t => ({ nom: t.nom || '', champs: (t.champs || []).map(x => ({ label: x.label || '', type: x.type || 'text' })) })),
+ouverts: [], busy:false, error:'' };
+}
+render(); remonterEnHaut();
+}
+
+function deplacer(liste, i, sens){
+const j = i + sens;
+if(j < 0 || j >= liste.length) return false;
+[liste[i], liste[j]] = [liste[j], liste[i]];
+return true;
+}
+
+const CLICS_MODELE = ['mm-nouveau','mm-modifier','mm-dupliquer','mm-supprimer','mm-annuler','mm-enregistrer','mm-type-ajouter',
+'mm-type-plier','mm-tout-plier','mm-type-deplacer','mm-type-suppr','mm-champ-ajouter','mm-champ-suppr','mm-champ-deplacer'];
+
+function actionModele(action, t){
+if(!CLICS_MODELE.includes(action)) return; // un clic dans un champ de saisie ne redessine rien
+const e = modeleEdit;
+const i = +t.dataset.t, j = +t.dataset.c, sens = +t.dataset.sens;
+if(action === 'mm-nouveau') return ouvrirModele(null);
+if(action === 'mm-modifier') return ouvrirModele(t.dataset.cle);
+if(action === 'mm-dupliquer') return ouvrirModele(t.dataset.cle, true);
+if(action === 'mm-supprimer') return actionSupprimerModele(t.dataset.cle);
+if(!e) return;
+if(action === 'mm-annuler'){ modeleEdit = null; }
+else if(action === 'mm-enregistrer'){ return actionEnregistrerModele(); }
+else if(action === 'mm-type-ajouter'){
+e.types.push({ nom:'', champs:[{ label:'', type:'text' }] });
+e.ouverts = [...e.ouverts, e.types.length - 1];
+render();
+requestAnimationFrame(() => { const l = document.querySelectorAll('.mm-type-nom'); l[l.length - 1]?.focus(); });
+return;
+}
+else if(action === 'mm-type-plier'){ e.ouverts = e.ouverts.includes(i) ? e.ouverts.filter(x => x !== i) : [...e.ouverts, i]; }
+else if(action === 'mm-tout-plier'){ e.ouverts = e.ouverts.length ? [] : e.types.map((_, k) => k); }
+else if(action === 'mm-type-deplacer'){
+if(deplacer(e.types, i, sens)){
+// Les types dépliés suivent leur type.
+e.ouverts = e.ouverts.map(k => k === i ? i + sens : (k === i + sens ? i : k));
+}
+}
+else if(action === 'mm-type-suppr'){
+const ty = e.types[i];
+const vide = !ty.nom.trim() && !ty.champs.some(c => c.label.trim());
+const faire = () => { e.types.splice(i, 1); e.ouverts = e.ouverts.filter(k => k !== i).map(k => k > i ? k - 1 : k); render(); };
+if(vide) return faire();
+confirmer(`Retirer le type « ${ty.nom || 'sans nom'} » de ce métier ?\n\nRien n'est effacé chez vos clients.`, { ok:'Retirer' }).then(ok => { if(ok) faire(); });
+return;
+}
+else if(action === 'mm-champ-ajouter'){
+e.types[i].champs.push({ label:'', type:'text' });
+render();
+requestAnimationFrame(() => { const l = document.querySelectorAll(`[data-action="mm-champ-label"][data-t="${i}"]`); l[l.length - 1]?.focus(); });
+return;
+}
+else if(action === 'mm-champ-suppr'){ e.types[i].champs.splice(j, 1); }
+else if(action === 'mm-champ-deplacer'){ deplacer(e.types[i].champs, j, sens); }
+render();
+}
+
+function saisieModele(action, t){
+const e = modeleEdit; if(!e) return;
+const i = +t.dataset.t, j = +t.dataset.c;
+if(action === 'mm-nom') e.nom = t.value;
+else if(action === 'mm-desc') e.description = t.value;
+else if(action === 'mm-type-nom') e.types[i].nom = t.value;
+else if(action === 'mm-champ-label') e.types[i].champs[j].label = t.value;
+else if(action === 'mm-champ-type') e.types[i].champs[j].type = t.value;
+}
+
+async function actionEnregistrerModele(){
+const e = modeleEdit;
+e.error = '';
+const nom = e.nom.trim().replace(/\s+/g, ' ');
+if(!nom){ e.error = 'Donnez un nom au métier.'; render(); remonterEnHaut(); return; }
+const autres = (state.modeles || []).filter(m => m.cle !== e.cle);
+if(autres.some(m => m.nom.trim().toLowerCase() === nom.toLowerCase())){ e.error = `Un métier s'appelle déjà « ${nom} ».`; render(); remonterEnHaut(); return; }
+const types = e.types
+.map(t => ({ nom: t.nom.trim().replace(/\s+/g, ' '), champs: t.champs.map(c => ({ label: c.label.trim().replace(/\s+/g, ' '), type: c.type })).filter(c => c.label) }))
+.filter(t => t.nom || t.champs.length);
+const sansNom = types.findIndex(t => !t.nom);
+if(sansNom >= 0){ e.error = `Le type n° ${sansNom + 1} n'a pas de nom.`; e.ouverts = [...new Set([...e.ouverts, sansNom])]; render(); remonterEnHaut(); return; }
+const vus = new Set();
+for(const t of types){
+const k = t.nom.toLowerCase();
+if(vus.has(k)){ e.error = `Le type « ${t.nom} » apparaît deux fois.`; render(); remonterEnHaut(); return; }
+vus.add(k);
+const labels = new Set();
+for(const c of t.champs){
+const kc = slugify(c.label);
+if(labels.has(kc)){ e.error = `Dans « ${t.nom} », le champ « ${c.label} » apparaît deux fois.`; render(); remonterEnHaut(); return; }
+labels.add(kc);
+}
+}
+let cle = e.cle;
+if(e.nouveau){
+const base = slugify(nom).slice(0, 40) || 'metier';
+cle = base; let n = 2;
+while((state.modeles || []).some(m => m.cle === cle)) cle = base + '_' + (n++);
+}
+const ordre = e.nouveau ? Math.max(0, ...(state.modeles || []).map(m => m.ordre || 0)) + 1 : (e.ordre || 0);
+e.busy = true; render();
+try{
+await enregistrerModele({ cle, nom, description: e.description.trim(), types, ordre }, e.nouveau);
+await chargerModeles();
+modeleEdit = null;
+toast(e.nouveau ? `Métier « ${nom} » créé` : `Métier « ${nom} » enregistré`);
+}catch(err){
+e.busy = false; e.error = err.message;
+}
+render();
+}
+
+async function actionSupprimerModele(cle){
+const m = (state.modeles || []).find(x => x.cle === cle);
+if(!m) return;
+const n = (reglages.clients || []).filter(c => !c.est_mon_organisation && c.modele_metier === cle).length;
+if(!await confirmer(`Supprimer le métier « ${m.nom} » ?\n\nIl ne sera plus proposé pour les nouveaux clients.` +
+(n ? ` ${n} client${n > 1 ? 's le portent : leurs équipements et leurs types restent' : ' le porte : ses équipements et ses types restent'} intacts, seule l'étiquette du métier est retirée.` : ' Aucun client ne l\'utilise.'),
+{ danger:true, ok:'Supprimer' })) return;
+try{
+await supprimerModele(cle);
+await chargerModeles();
+if(n) chargerClients(true);
+toast('Métier supprimé');
+render();
+}catch(err){ toast('Erreur : ' + err.message, 'erreur'); }
 }
