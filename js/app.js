@@ -1715,6 +1715,8 @@ render();
 .catch(err => toast('Erreur : ' + err.message, 'erreur'));
 }
 else if(action === 'support-supprimer'){ actionSupprimerDemande(t.dataset.id); }
+else if(action === 'renommer-membre'){ ouvrirRenommage(t.dataset.id); }
+else if(action === 'renommer-annuler'){ reglages.renommage = null; render(); }
 else if(action === 'support-filtre'){ reglages.supportFiltre = t.dataset.filtre; render(); }
 else if(action === 'toggle-invite-client'){ reglages.inviteOuvert = !reglages.inviteOuvert; render(); }
 else if(action === 'restore-equip'){ restoreEquipement(); }
@@ -1809,6 +1811,7 @@ else if(action === 'submit-edit-equip') submitEditEquip(t);
 else if(action === 'submit-iv-edit') submitEditIntervention(t);
 else if(action === 'submit-client') submitClientForm(t);
 else if(action === 'submit-support') submitSupport(t);
+else if(action === 'submit-renommer') submitRenommage(t);
 });
 
 document.addEventListener('click', (e) => {

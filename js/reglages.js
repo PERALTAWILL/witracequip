@@ -85,6 +85,7 @@ invite:{ orgId:'', role:'utilisateur', label:'', tousTypes:true, types:[], busy:
 journal:null, journalError:'',
 support:null, supportError:'', supportFiltre:'ouvertes',
 inviteOuvert:false,
+renommage:null, // { id, valeur, busy, error } : membre dont on modifie le nom
 };
 }
 resetReglages();
@@ -506,12 +507,14 @@ ${verrouille
 : `<input type="checkbox" class="case-sel" data-action="sel-membre" data-id="${m.id}" ${coche ? 'checked' : ''}>`}
 <div class="thumb">${esc(initials(m.full_name))}</div>
 <div class="who">
+${peutRenommer(m) && reglages.renommage?.id === m.id ? renderRenommage() : `
 <div style="font-weight:650;">
 ${esc(m.full_name || 'Sans nom')}
+${peutRenommer(m) ? `<button class="btn-crayon" data-action="renommer-membre" data-id="${m.id}" title="Modifier le nom et le prénom">✎</button>` : ''}
 ${estMoi ? '<span class="small muted">(vous)</span>' : ''}
 ${m.fondateur ? '<span class="badge badge-neutral">fondateur</span>' : ''}
 ${!m.active ? '<span class="badge badge-off">suspendu</span>' : ''}
-</div>
+</div>`}
 <div class="small muted">
 ${email ? esc(email) + ' · ' : ''}membre depuis le ${fmtDate(m.created_at)}
 ${avecClient && m.organizations ? ` · <a href="#/reglages/clients/${m.organization_id}">${esc(m.organizations.nom)}</a>` : ''}
@@ -524,6 +527,47 @@ ${ROLES_ASSIGNABLES.map(r => `<option value="${r}" ${r === m.role ? 'selected' :
 </select>`}
 ${blocAcces}
 </div>`;
+}
+
+/* Nom et prénom : modifiables par l'administrateur (et le super-admin) pour
+   les membres qu'il gère, et par chacun pour lui-même. Les interventions
+   déjà enregistrées gardent le nom saisi à l'époque : c'est l'historique. */
+function peutRenommer(m){ return m.id === state.profile?.id || !membreVerrouille(m); }
+
+function renderRenommage(){
+const r = reglages.renommage;
+return `
+<form class="renommage" data-action="submit-renommer">
+<input type="text" name="nom" value="${esc(r.valeur)}" placeholder="Prénom Nom" maxlength="80" autocomplete="off" required>
+<button class="btn btn-sm btn-primary" type="submit" ${r.busy ? 'disabled' : ''}>${r.busy ? '…' : 'Enregistrer'}</button>
+<button class="btn btn-sm" type="button" data-action="renommer-annuler">Annuler</button>
+${r.error ? `<div class="small" style="color:var(--danger);width:100%;">${esc(r.error)}</div>` : ''}
+</form>`;
+}
+
+function ouvrirRenommage(id){
+const m = (reglages.membres || []).find(x => x.id === id);
+if(!m) return;
+reglages.renommage = { id, valeur: m.full_name || '', busy:false, error:'' };
+render();
+requestAnimationFrame(() => { const i = document.querySelector('.renommage input'); if(i){ i.focus(); i.select(); } });
+}
+
+async function submitRenommage(form){
+const r = reglages.renommage;
+if(!r) return;
+const nom = (new FormData(form).get('nom') || '').toString().trim().replace(/\s+/g, ' ');
+if(nom.length < 2){ r.error = 'Indiquez au moins le prénom et le nom.'; render(); return; }
+r.valeur = nom; r.busy = true; r.error = ''; render();
+try{
+await renommerMembre(r.id, nom);
+const m = (reglages.membres || []).find(x => x.id === r.id);
+if(m) m.full_name = nom;
+if(r.id === state.profile?.id) state.profile.full_name = nom;
+reglages.renommage = null;
+toast('Nom mis à jour');
+render();
+}catch(e){ r.busy = false; r.error = e.message; render(); }
 }
 
 async function actionMembresActive(ids, active){
