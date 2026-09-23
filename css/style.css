@@ -1081,3 +1081,14 @@ padding-bottom:4px; border-bottom:1px solid var(--border);}
 .st-type-mob{display:none;}
 @media(max-width:640px){ .st-table th:nth-child(2), .st-table td:nth-child(2){display:none;} .st-type-mob{display:block;} .st-source{width:100%;} .st-axe{font-size:10px;} }
 @media(max-width:760px){ .st-kpis{grid-template-columns:repeat(2, 1fr);} .st-deux{grid-template-columns:1fr;} .st-source select{min-width:0; width:100%;} .st-entete > div:last-child{width:100%;} .st-entete .btn{flex:1;} }
+
+/* ---- Ordinateur autorisé par le téléphone (v2.17.5) ---- */
+.poste-ecran .poste-carte{text-align:left;}
+.poste-qr{display:flex; justify-content:center; align-items:center; min-height:236px; margin-bottom:12px;}
+.poste-qr canvas{width:220px; height:220px; border-radius:10px; border:1px solid var(--border); background:#fff; padding:6px;}
+.poste-etapes{margin:0 0 10px 18px; padding:0; line-height:1.6;}
+.poste-pause-ico{width:56px; height:56px; border-radius:16px; background:var(--surface-2); color:var(--primary); display:flex; align-items:center; justify-content:center; margin-bottom:12px;}
+.bandeau-ordi{display:flex; align-items:center; gap:8px; flex-wrap:wrap; background:var(--surface-2); border:1px solid var(--border); border-radius:10px; padding:8px 12px; margin-bottom:14px; font-size:13px; color:var(--text-dim);}
+.bandeau-ordi .btn-lien-petit{margin-left:auto;}
+.bandeau-ordi.alerte{background:var(--danger-bg); color:var(--danger); border-color:var(--danger); font-weight:600;}
+.ordi-actif{color:var(--primary); font-weight:600;}
