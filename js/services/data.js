@@ -72,6 +72,10 @@ async function reinitialiserMotDePasse(id, mdp){
 const { error } = await sb.rpc('reinitialiser_mot_de_passe', { p_id: id, p_mdp: mdp });
 if(error) throw error;
 }
+async function libererAppareil(id){
+const { error } = await sb.rpc('liberer_appareil', { p_id: id });
+if(error) throw error;
+}
 async function mdpChangeFait(){
 const { error } = await sb.rpc('mdp_change_fait');
 if(error) throw error;
@@ -130,7 +134,7 @@ if(error) throw error;
 
 async function listMembers(){
 const { data, error } = await sb.from('profiles')
-.select('id, organization_id, full_name, role, active, acces_tous_types, fondateur, created_at, organizations(nom, code_client, active)')
+.select('id, organization_id, full_name, role, active, acces_tous_types, fondateur, created_at, appareil_info, appareil_lie_le, organizations(nom, code_client, active)')
 .order('created_at');
 if(error) throw error;
 return data || [];
