@@ -428,6 +428,8 @@ if(v.nouveau === v.actuel) return "Le nouveau mot de passe doit être différent
 // ne doit pas pouvoir changer le mot de passe.
 const verif = await sb.auth.signInWithPassword({ email, password: v.actuel });
 if(verif.error) return /invalid/i.test(verif.error.message) ? 'Mot de passe actuel incorrect.' : traduireErreurMdp(verif.error.message);
+// Nouvelle session sur le même appareil : on la rattache à l'appareil.
+if(await lierAppareil() === 'refuse'){ setTimeout(refuserAppareil, 0); return null; }
 const { error } = await sb.auth.updateUser({ password: v.nouveau });
 if(error) return traduireErreurMdp(error.message);
 try{ await mdpChangeFait(); }catch(e){}
@@ -631,10 +633,7 @@ const password = fd.get('password');
 try{
 const { error } = await sb.auth.signInWithPassword({ email, password });
 if(error) throw error;
-// Un compte = une personne : cette connexion ferme les autres appareils
-// connectés au même compte (sauf pour le fondateur). Voir sql/19.
-try{ await sb.rpc('fermer_autres_sessions'); }catch(err){ console.error('[session]', err); }
-// onAuthStateChange se charge de la suite
+// onAuthStateChange se charge de la suite (dont la vérification de l'appareil)
 }catch(e){
 state.authError = translateAuthError(e.message || String(e));
 }finally{
@@ -2368,6 +2367,7 @@ else if(action === 'renommer-membre'){ ouvrirRenommage(t.dataset.id); }
 else if(action === 'renommer-moi'){ renommerMoi(); }
 else if(action === 'changer-mdp'){ closeMenus(); changerMonMotDePasse(); }
 else if(action === 'reset-mdp'){ reinitialiserMdpMembre(t.dataset.id); }
+else if(action === 'liberer-appareil'){ actionLibererAppareil(t.dataset.id); }
 else if(action === 'nouvel-equip-client'){
 equipForm = { typeId:'', orgId:t.dataset.id, nom:'', serial_value:'', valeurs:{}, busy:false, error:'' };
 nav('/equip-new');
@@ -2547,7 +2547,44 @@ setTimeout(() => appliquerSession(session), 0);
 /* La dernière connexion l'emporte : l'appareil qui était connecté avant
 perd l'accès aux données (vérifié côté base, sql/19) et on l'en informe. */
 let deconnexionVolontaire = false;
-const MSG_SESSION_FERMEE = "Vous avez été déconnecté : ce compte vient d'être ouvert sur un autre appareil (un compte = une personne). Si ce n'était pas vous, changez votre mot de passe ou prévenez votre administrateur.";
+const MSG_SESSION_FERMEE = "Vous avez été déconnecté : l'accès de ce compte a été modifié par WiDIAG MQ (mot de passe ou appareil). Reconnectez-vous.";
+const MSG_APPAREIL_REFUSE = "Ce compte est déjà utilisé sur un autre appareil. Un compte = une personne = un appareil. Pour l'utiliser sur celui-ci, demandez à WiDIAG MQ de réaccorder l'accès (widiagmq@gmail.com · 06 96 20 93 19).";
+
+/* Identifiant de CET appareil (navigateur), créé une fois et gardé.
+La base n'en garde que l'empreinte. Voir sql/20. */
+function idAppareil(){
+let id = null;
+try{ id = localStorage.getItem('wte_appareil'); }catch(e){}
+if(!id || id.length < 16){
+id = (crypto.randomUUID ? crypto.randomUUID() : String(Math.random()).slice(2) + Date.now()) + '-' + Math.random().toString(36).slice(2, 10);
+try{ localStorage.setItem('wte_appareil', id); }catch(e){}
+}
+return id;
+}
+function infoAppareil(){
+const ua = navigator.userAgent || '';
+const os = /iPhone/.test(ua) ? 'iPhone' : /iPad/.test(ua) ? 'iPad' : /Android/.test(ua) ? 'Android'
+: /Windows/.test(ua) ? 'Windows' : /Mac OS X/.test(ua) ? 'Mac' : /Linux/.test(ua) ? 'Linux' : 'Appareil';
+const nav = /Edg\//.test(ua) ? 'Edge' : /SamsungBrowser/.test(ua) ? 'Samsung Internet' : /Firefox|FxiOS/.test(ua) ? 'Firefox'
+: /CriOS|Chrome/.test(ua) ? 'Chrome' : /Safari/.test(ua) ? 'Safari' : 'navigateur';
+const appli = matchMedia('(display-mode: standalone)').matches || navigator.standalone ? ' (appli installée)' : '';
+return `${os} · ${nav}${appli}`;
+}
+/* 'ok' | 'refuse' | null (pas de réponse : réseau) */
+async function lierAppareil(){
+try{
+const { data, error } = await sb.rpc('lier_appareil', { p_appareil: idAppareil(), p_info: infoAppareil() });
+if(error) return null;
+return data;
+}catch(e){ return null; }
+}
+async function refuserAppareil(){
+state.authError = MSG_APPAREIL_REFUSE;
+deconnexionVolontaire = true;
+effacerInstantanes();
+try{ await sb.auth.signOut({ scope:'local' }); }catch(e){}
+nav('/');
+}
 let verifSessionEnCours = false;
 
 async function verifierSession(){
@@ -2577,6 +2614,12 @@ async function appliquerSession(session){
 if(session !== state.session) return; // une autre session est arrivée entre-temps
 state.accessError = '';
 if(session){
+// Un compte = un appareil : on vérifie AVANT de charger quoi que ce soit.
+if(navigator.onLine){
+const lien = await lierAppareil();
+if(session !== state.session) return;
+if(lien === 'refuse'){ await refuserAppareil(); return; }
+}
 try{
 await loadProfileAndOrg();
 await chargerStatutSuperAdmin();

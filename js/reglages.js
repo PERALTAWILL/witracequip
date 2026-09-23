@@ -29,6 +29,9 @@ suppression_intervention: 'Intervention supprimée',
 suppression_membre: 'Membre supprimé',
 deplacement_membre: 'Profil changé de client',
 reinitialisation_mdp: 'Mot de passe réinitialisé',
+liaison_appareil: 'Compte lié à un appareil',
+acces_refuse_appareil: 'Connexion refusée (autre appareil)',
+liberation_appareil: 'Appareil libéré',
 suppression_client: 'Client supprimé',
 suspension_client: 'Client suspendu',
 reactivation_client: 'Client réactivé',
@@ -661,6 +664,9 @@ ${estMoi ? '<span class="small muted">(vous)</span>' : ''}
 ${m.fondateur ? '<span class="badge badge-neutral">fondateur</span>' : ''}
 ${!m.active ? '<span class="badge badge-off">suspendu</span>' : ''}
 </div>`}
+${isSuperAdmin() && !m.fondateur ? `<div class="small appareil-ligne">${iconeNav('smartphone', 13)} ${m.appareil_lie_le
+? `Lié à : <strong>${esc(m.appareil_info || 'un appareil')}</strong> depuis le ${fmtDate(m.appareil_lie_le)} <button class="btn-lien-petit" data-action="liberer-appareil" data-id="${m.id}">Libérer l'appareil</button>`
+: `<span class="muted">Aucun appareil lié : le premier utilisé sera retenu</span>`}</div>` : ''}
 <div class="small muted">
 ${email ? esc(email) + ' · ' : ''}membre depuis le ${fmtDate(m.created_at)}
 ${avecClient && m.organizations ? ` · <a href="#/reglages/clients/${m.organization_id}">${esc(m.organizations.nom)}</a>` : ''}
@@ -681,6 +687,20 @@ ${[...(reglages.clients || [])].sort((a, b) => a.nom.localeCompare(b.nom, 'fr'))
 </label>` : ''}
 ${blocAcces}
 </div>`;
+}
+
+/* Fondateur : réaccorder l'accès sur un autre appareil. */
+async function actionLibererAppareil(id){
+const m = (reglages.membres || []).find(x => x.id === id);
+if(!m) return;
+if(!await confirmer(`Libérer l'appareil de ${m.full_name || 'ce profil'} ?\n\nAppareil actuel : ${m.appareil_info || 'inconnu'}.\nLa personne est déconnectée partout. Le prochain appareil sur lequel elle se connecte deviendra son appareil autorisé.`, { ok:"Libérer l'appareil", danger:false })) return;
+try{
+await libererAppareil(id);
+m.appareil_info = null; m.appareil_lie_le = null;
+reglages.journal = null;
+toast('Appareil libéré : la personne peut se connecter sur son nouvel appareil');
+render();
+}catch(e){ toast('Erreur : ' + e.message, 'erreur'); }
 }
 
 /* Nom et prénom : modifiables par l'administrateur (et le super-admin) pour
