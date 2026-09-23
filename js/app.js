@@ -458,7 +458,7 @@ return null;
 },
 });
 if(ok) toast('Mot de passe enregistré');
-else { effacerInstantanes(); sb.auth.signOut(); }
+else { deconnexionVolontaire = true; effacerInstantanes(); sb.auth.signOut({ scope:'local' }); }
 }
 
 /* Fondateur : mot de passe provisoire pour un profil. */
@@ -631,6 +631,9 @@ const password = fd.get('password');
 try{
 const { error } = await sb.auth.signInWithPassword({ email, password });
 if(error) throw error;
+// Un compte = une personne : cette connexion ferme les autres appareils
+// connectés au même compte (sauf pour le fondateur). Voir sql/19.
+try{ await sb.rpc('fermer_autres_sessions'); }catch(err){ console.error('[session]', err); }
 // onAuthStateChange se charge de la suite
 }catch(e){
 state.authError = translateAuthError(e.message || String(e));
@@ -2295,7 +2298,7 @@ const action = t.dataset.action;
 
 if(action === 'go'){ nav(t.dataset.path); closeMenus(); }
 else if(action === 'toggle-menu'){ e.stopPropagation(); document.getElementById('user-dropdown')?.classList.toggle('open'); }
-else if(action === 'logout'){ effacerInstantanes(); sb.auth.signOut(); }
+else if(action === 'logout'){ deconnexionVolontaire = true; effacerInstantanes(); sb.auth.signOut({ scope:'local' }); }
 else if(action === 'dash-recharger'){ dashboardCache.error = ''; dashboardCache.items = null; render(); chargerEquipements(); }
 else if(action === 'auth-mode'){ state.authMode = t.dataset.mode; state.authError=''; state.authNotice=''; render(); }
 else if(action === 'toggle-type-form'){ typeForm.open ? (typeForm = { open:false, id:null, nom:'', champs:[], busy:false, error:'' }, render()) : ouvrirTypeForm(null); }
@@ -2527,12 +2530,48 @@ lancée dedans attend ce même verrou → blocage définitif de TOUTES les requ�
 Équipements figé). On se contente de noter la session, puis on travaille
 en dehors du callback (setTimeout 0), comme le recommande Supabase. */
 sb.auth.onAuthStateChange((event, session) => {
+// Déconnexion qui ne vient pas du bouton : session fermée ailleurs
+// (compte ouvert sur un autre appareil, mot de passe réinitialisé…).
+if(event === 'SIGNED_OUT' && state.profile && !deconnexionVolontaire && !state.authError) state.authError = MSG_SESSION_FERMEE;
+if(event === 'SIGNED_OUT') deconnexionVolontaire = false;
 const memeUtilisateur = !!(session && state.session && state.profile && state.profile.id === session.user.id);
 state.session = session;
 // Rafraîchissement du jeton, retour au premier plan : même utilisateur, rien à recharger.
 if(session && memeUtilisateur && event !== 'INITIAL_SESSION') return;
 setTimeout(() => appliquerSession(session), 0);
 });
+
+/* ---------------------------------------------------------------------- */
+/* Un compte = une personne                                                */
+/* ---------------------------------------------------------------------- */
+/* La dernière connexion l'emporte : l'appareil qui était connecté avant
+perd l'accès aux données (vérifié côté base, sql/19) et on l'en informe. */
+let deconnexionVolontaire = false;
+const MSG_SESSION_FERMEE = "Vous avez été déconnecté : ce compte vient d'être ouvert sur un autre appareil (un compte = une personne). Si ce n'était pas vous, changez votre mot de passe ou prévenez votre administrateur.";
+let verifSessionEnCours = false;
+
+async function verifierSession(){
+if(verifSessionEnCours || !state.session || !state.profile || state.superAdmin || !navigator.onLine) return;
+verifSessionEnCours = true;
+try{
+const { data, error } = await sb.rpc('ma_session_active');
+if(!error && data === false) await deconnexionForcee();
+}catch(e){ /* réseau : on réessaiera */ }
+finally{ verifSessionEnCours = false; }
+}
+
+async function deconnexionForcee(){
+state.authError = MSG_SESSION_FERMEE;
+deconnexionVolontaire = true; // le message est déjà posé
+effacerInstantanes();
+if(dialogueOuvert) dialogueOuvert.fermer(null);
+try{ await sb.auth.signOut({ scope:'local' }); }catch(e){}
+nav('/');
+}
+
+setInterval(verifierSession, 60000);
+document.addEventListener('visibilitychange', () => { if(document.visibilityState === 'visible') verifierSession(); });
+window.addEventListener('online', () => setTimeout(verifierSession, 1500));
 
 async function appliquerSession(session){
 if(session !== state.session) return; // une autre session est arrivée entre-temps
@@ -2546,6 +2585,7 @@ try{ await chargerModeles(); }catch(err){ console.error('[modèles]', err); }
 state.horsLigne = false;
 sauverInstantane({ profile: state.profile, orgName: state.orgName, superAdmin: state.superAdmin, types: state.types, modeles: state.modeles });
 if(state.profile?.mdp_a_changer) setTimeout(imposerNouveauMotDePasse, 400);
+setTimeout(verifierSession, 2000);
 retourApresConnexion();
 // Préchargement discret : la liste des équipements est prête avant qu'on l'ouvre.
 if(dashboardCache.items === null) setTimeout(() => { if(state.session && dashboardCache.items === null) chargerEquipements(); }, 300);
