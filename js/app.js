@@ -546,39 +546,15 @@ derniere: interventions.length ? interventions[0].date : null,
 /* ---------------------------------------------------------------------- */
 /* Accueil du fondateur (super-admin) : tableau de bord de l'activité      */
 /* ---------------------------------------------------------------------- */
-/* Pas de parc propre : on montre ce qui fait la journée d'un prestataire —
-   ses clients, ce qui arrive à échéance chez eux, les demandes à traiter. */
+/* Pas de parc propre : ses chiffres clés et ses clients, en un coup d'œil. */
 let fondateurCache = { donnees:null, loading:false, error:'' };
-
-/* Champs date qui annoncent une échéance : « Prochain(e) … », « Péremption … ». */
-function estChampEcheance(c){
-return c.type === 'date' && /^(prochain|prochaine|peremption)/.test(c.key || '');
-}
 
 async function chargerTableauFondateur(){
 const debutMois = new Date(); debutMois.setDate(1);
 const iso = `${debutMois.getFullYear()}-${String(debutMois.getMonth() + 1).padStart(2, '0')}-01`;
-const [eq, iv] = await Promise.all([
-sb.from('equipements').select('id, nom, organization_id, type_id, valeurs').eq('archived', false),
-sb.from('interventions').select('id').gte('date', iso),
-]);
-if(eq.error) throw eq.error;
+const iv = await sb.from('interventions').select('id').gte('date', iso);
 if(iv.error) throw iv.error;
-const aujourdHui = new Date(); aujourdHui.setHours(0, 0, 0, 0);
-const limite = new Date(aujourdHui); limite.setDate(limite.getDate() + 45);
-const echeances = [];
-for(const e of eq.data || []){
-const type = state.types.find(t => t.id === e.type_id);
-for(const c of (type?.champs || []).filter(estChampEcheance)){
-const v = e.valeurs?.[c.key];
-const m = typeof v === 'string' && v.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-if(!m) continue;
-const d = new Date(+m[1], +m[2] - 1, +m[3]);
-if(d <= limite) echeances.push({ equip:e, libelle:c.label, date:v, jours: Math.round((d - aujourdHui) / 86400000) });
-}
-}
-echeances.sort((a, b) => a.jours - b.jours);
-return { interventionsMois: (iv.data || []).length, echeances };
+return { interventionsMois: (iv.data || []).length };
 }
 
 function viewAccueilFondateur(){
@@ -603,8 +579,6 @@ const chiffre = (v) => v === null || v === undefined ? '<span class="sq sq-ligne
 
 if(scannerState.ouvert) setTimeout(() => attacherScanner(), 0);
 
-const echeances = d ? d.echeances.slice(0, 8) : null;
-const nbRetard = d ? d.echeances.filter(x => x.jours < 0).length : 0;
 
 return `
 <div class="hero-fondateur">
@@ -624,31 +598,12 @@ return `
 </div>
 </div>
 
-<div class="accueil-deux">
-<div class="card">
-<div class="row between wrap"><h3 style="margin:0;">À prévoir chez vos clients</h3>
-${nbRetard ? `<span class="badge badge-off">${nbRetard} en retard</span>` : ''}</div>
-<div class="hint" style="margin:2px 0 8px;">Échéances des 45 prochains jours : contrôles, révisions, péremptions.</div>
-${fondateurCache.error ? `<div class="alert alert-error">${esc(fondateurCache.error)}</div>`
-: echeances === null ? squeletteListe(4).replace('card liste-select', 'liste-select')
-: echeances.length ? echeances.map(x => `
-<div class="ligne-select cliquable" data-action="go" data-path="/equip/${x.equip.id}">
-<div class="echeance-pastille ${x.jours < 0 ? 'retard' : x.jours <= 15 ? 'proche' : ''}">${x.jours < 0 ? 'retard' : x.jours === 0 ? "auj." : x.jours + ' j'}</div>
-<div class="ligne-corps">
-<div class="ligne-titre">${esc(x.equip.nom)}</div>
-<div class="small muted">${esc(nomClientDe(x.equip.organization_id))} · ${esc(x.libelle)} : ${fmtDate(x.date)}</div>
-</div>
-<span class="chevron">›</span>
-</div>`).join('') + (d.echeances.length > 8 ? `<div class="small muted" style="padding-top:8px;">+ ${d.echeances.length - 8} autre(s) échéance(s)</div>` : '')
-: `<div class="empty small">Rien d'urgent : aucune échéance dans les 45 jours. 👌</div>`}
-</div>
-
 <div class="card">
 <div class="row between wrap"><h3 style="margin:0;">Vos clients</h3>
 <button class="btn btn-sm" data-action="go" data-path="/reglages/clients">Tous les clients</button></div>
 <div style="margin-top:8px;">
 ${reglages.clients === null ? squeletteListe(4).replace('card liste-select', 'liste-select')
-: clients.length ? [...clients].sort((a, b) => (b.created_at || '').localeCompare(a.created_at || '')).slice(0, 6).map(c => `
+: clients.length ? [...clients].sort((a, b) => (b.created_at || '').localeCompare(a.created_at || '')).slice(0, 8).map(c => `
 <div class="ligne-select cliquable" data-action="go" data-path="/reglages/clients/${c.id}">
 <div class="avatar-client" style="--teinte:${teinteClient(c.nom)};">${esc(initials(c.nom))}</div>
 <div class="ligne-corps">
@@ -658,7 +613,6 @@ ${reglages.clients === null ? squeletteListe(4).replace('card liste-select', 'li
 <span class="chevron">›</span>
 </div>`).join('')
 : `<div class="empty small">Aucun client. <a href="#/reglages/clients">Créer le premier</a></div>`}
-</div>
 </div>
 </div>
 
