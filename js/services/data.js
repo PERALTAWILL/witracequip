@@ -222,6 +222,14 @@ if(error) throw error;
 return data || [];
 }
 
+/* Super-admin : supprimer des lignes du journal, ou tout vider (ids = null). */
+async function supprimerJournal(ids){
+let q = sb.from('journal').delete();
+q = ids ? q.in('id', ids) : q.not('id', 'is', null);
+const { error } = await q;
+if(error) throw error;
+}
+
 async function listDemandesSupport(){
 const { data, error } = await sb.from('demandes_support').select('*').order('created_at', { ascending:false }).limit(200);
 if(error) throw error;
