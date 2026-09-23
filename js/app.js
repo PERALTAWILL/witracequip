@@ -262,7 +262,8 @@ return `
 Carnet d'entretien tenu avec WiTracEQUIP — by WiDIAG MQ.<br>
 Cette page est une consultation libre : elle ne permet aucune modification.<br>
 Technicien de l'équipe ? « Se connecter » en haut de page ouvre la fiche complète.
-</div>`;
+</div>
+${piedSupport()}`;
 }
 
 function renderAccesSuspendu(){
@@ -285,6 +286,7 @@ ${suspendu
 </div>
 <button class="btn btn-block" data-action="logout">Se déconnecter</button>
 </div>
+${piedSupport()}
 </div>
 `;
 }
@@ -298,13 +300,16 @@ else if(r.name === 'dashboard' || r.name === 'equipements') content = viewDashbo
 else if(r.name === 'types') content = viewTypes();
 else if(r.name === 'equip-new') content = viewEquipNew();
 else if(r.name === 'equip') content = viewEquipDetail(r.param);
-else if(r.name === 'equipe') content = isAdmin() ? viewEquipe() : viewNonAutorise();
+else if(r.name === 'reglages') content = viewReglages(r.param, r.sub);
+else if(r.name === 'equipe') content = viewReglages('membres'); // ancienne adresse
+else if(r.name === 'support') content = viewSupport();
 else content = viewDashboard();
 }catch(e){
 content = `<div class="alert alert-error">Erreur d'affichage : ${esc(e.message||e)}</div>`;
 }
 
 const equipementsActif = (r.name==='dashboard'||r.name==='equipements'||r.name==='equip'||r.name==='equip-new');
+const reglagesActif = (r.name==='reglages'||r.name==='equipe');
 
 return `
 <div class="shell">
@@ -320,7 +325,8 @@ return `
 <div class="sidebar-link ${r.name==='accueil'?'active':''}" data-action="go" data-path="/">${iconeNav('home')}<span>Accueil</span></div>
 <div class="sidebar-link ${equipementsActif?'active':''}" data-action="go" data-path="/equipements">${iconeNav('box')}<span>Équipements</span></div>
 <div class="sidebar-link ${r.name==='types'?'active':''}" data-action="go" data-path="/types">${iconeNav('tag')}<span>Types d'équipement</span></div>
-${isAdmin() ? `<div class="sidebar-link ${r.name==='equipe'?'active':''}" data-action="go" data-path="/equipe">${iconeNav('users')}<span>Équipe</span></div>` : ''}
+${peutReglages() ? `<div class="sidebar-link ${reglagesActif?'active':''}" data-action="go" data-path="/reglages">${iconeNav('gear')}<span>Réglages</span></div>` : ''}
+<div class="sidebar-link ${r.name==='support'?'active':''}" data-action="go" data-path="/support">${iconeNav('help')}<span>Support</span></div>
 </nav>
 <div class="sidebar-spacer"></div>
 ${state.enAttenteCount > 0 ? `<div class="sidebar-sync" title="${state.enAttenteCount} intervention${state.enAttenteCount>1?'s':''} en attente d'envoi (sans réseau)">${iconeNav('clock',15)}<span>${state.enAttenteCount} en attente</span></div>` : ''}
@@ -345,20 +351,23 @@ ${state.enAttenteCount > 0 ? `<span class="badge-attente" title="${state.enAtten
 <div class="dropdown" id="user-dropdown">
 <div class="small muted" style="padding:8px 10px;">
 ${esc(state.session.user.email)}
-<div style="margin-top:4px;"><span class="badge badge-role">${esc(roleLabel(state.profile?.role))}</span></div>
+<div style="margin-top:4px;"><span class="badge badge-role">${esc(roleLabel(state.profile?.role))}</span>${isSuperAdmin() ? ' <span class="badge badge-neutral">super-admin</span>' : ''}</div>
 </div>
+<button data-action="go" data-path="/support">Support & réclamations</button>
 <button data-action="logout">Se déconnecter</button>
 </div>
 </div>
 </div>
-<main>${content}</main>
+<main>${content}${piedSupport()}</main>
 </div>
+${renderModal()}
 
 <nav class="bottom-nav">
 <div class="bottom-nav-item ${r.name==='accueil'?'active':''}" data-action="go" data-path="/">${iconeNav('home',20)}<span>Accueil</span></div>
 <div class="bottom-nav-item ${equipementsActif?'active':''}" data-action="go" data-path="/equipements">${iconeNav('box',20)}<span>Équip.</span></div>
 <div class="bottom-nav-item ${r.name==='types'?'active':''}" data-action="go" data-path="/types">${iconeNav('tag',20)}<span>Types</span></div>
-${isAdmin() ? `<div class="bottom-nav-item ${r.name==='equipe'?'active':''}" data-action="go" data-path="/equipe">${iconeNav('users',20)}<span>Équipe</span></div>` : ''}
+${peutReglages() ? `<div class="bottom-nav-item ${reglagesActif?'active':''}" data-action="go" data-path="/reglages">${iconeNav('gear',20)}<span>Réglages</span></div>` : ''}
+<div class="bottom-nav-item ${r.name==='support'?'active':''}" data-action="go" data-path="/support">${iconeNav('help',20)}<span>Support</span></div>
 </nav>
 </div>
 `;
@@ -400,6 +409,7 @@ ${state.authBusy ? '…' : 'Se connecter'}
 L'accès à WiTracEQUIP se fait uniquement sur invitation.<br>
 Vous avez reçu un lien d'invitation ? Ouvrez-le pour créer votre compte.
 </div>
+${piedSupport()}
 </div>
 `;
 }
@@ -670,13 +680,17 @@ nav(chemin);
 /* View: Dashboard (équipements) */
 /* ---------------------------------------------------------------------- */
 
-let dashboardCache = { items: null, search:'', typeId:'', showArchived:false, loading:false, error:'' };
+let dashboardCache = { items: null, search:'', typeId:'', showArchived:false, loading:false, error:'', sel:[] };
 
 function viewDashboard(){
 if(dashboardCache.items === null && !dashboardCache.loading){
 dashboardCache.loading = true;
 listEquipements({ search: dashboardCache.search, typeId: dashboardCache.typeId, showArchived: dashboardCache.showArchived })
-.then(items => { dashboardCache.items = items; dashboardCache.loading = false; render(); })
+.then(items => {
+dashboardCache.items = items; dashboardCache.loading = false;
+dashboardCache.sel = (dashboardCache.sel || []).filter(id => items.some(e => e.id === id));
+render();
+})
 .catch(e => { dashboardCache.error = e.message; dashboardCache.loading = false; render(); });
 }
 
@@ -690,19 +704,40 @@ list = `<div class="spinner"></div>`;
 } else if(dashboardCache.items.length === 0){
 list = `<div class="empty"><div class="big">🔧</div>Aucun équipement pour l'instant.<br><span class="small">Ajoutez votre premier équipement pour générer son QR code.</span></div>`;
 } else {
-list = `<div class="card" style="padding:0 18px;">` + dashboardCache.items.map(eq => {
+const selection = peutSupprimer();
+const sel = dashboardCache.sel;
+const tousCoches = dashboardCache.items.every(e => sel.includes(e.id));
+list = `<div class="card liste-select">`
++ (selection ? `<label class="tout-selectionner">
+<input type="checkbox" data-action="sel-equip-tous" ${tousCoches ? 'checked' : ''}>
+<span>Tout sélectionner (${dashboardCache.items.length})</span>
+</label>` : '')
++ dashboardCache.items.map(eq => {
 const t = state.types.find(t=>t.id===eq.type_id);
+const coche = sel.includes(eq.id);
 return `
-<div class="list-item" style="cursor:pointer;" data-action="go" data-path="/equip/${eq.id}">
+<div class="ligne-select ${coche ? 'cochee' : ''}">
+${selection ? `<input type="checkbox" class="case-sel" data-action="sel-equip" data-id="${eq.id}" ${coche ? 'checked' : ''}>` : ''}
 <div class="thumb">${esc(initials(eq.nom))}</div>
-<div style="flex:1;min-width:0;">
-<div style="font-weight:650;">${esc(eq.nom)} ${eq.archived?'<span class="badge badge-warn">supprimé</span>':''}</div>
+<div class="ligne-corps" data-action="go" data-path="/equip/${eq.id}">
+<div class="ligne-titre">${esc(eq.nom)} ${eq.archived?'<span class="badge badge-warn">archivé</span>':''}</div>
 <div class="small muted">${esc(t?.nom || 'Type inconnu')}${eq.serial_value ? ' · N/S ' + esc(eq.serial_value) : ''}</div>
 </div>
-<div class="small muted">${fmtDate(eq.created_at)}</div>
+<div class="small muted ligne-date">${fmtDate(eq.created_at)}</div>
+${isAdmin() ? `<button class="icon-btn btn-poubelle" data-action="suppr-equip-un" data-id="${eq.id}" title="Supprimer définitivement">${iconeNav('trash', 17)}</button>` : ''}
 </div>`;
 }).join('') + `</div>`;
 }
+
+const selItems = (dashboardCache.items || []).filter(e => dashboardCache.sel.includes(e.id));
+const barre = (peutSupprimer() && selItems.length) ? `
+<div class="barre-selection">
+<strong>${selItems.length} sélectionné${selItems.length > 1 ? 's' : ''}</strong>
+${selItems.some(e => !e.archived) ? `<button class="btn btn-sm" data-action="equip-archiver-sel">Archiver</button>` : ''}
+${selItems.some(e => e.archived) ? `<button class="btn btn-sm" data-action="equip-restaurer-sel">Restaurer</button>` : ''}
+${isAdmin() ? `<button class="btn btn-sm btn-danger" data-action="equip-supprimer-sel">Supprimer définitivement</button>` : ''}
+<button class="btn btn-sm btn-lien" data-action="equip-desel">Annuler</button>
+</div>` : '';
 
 return `
 <div class="row between wrap" style="margin-bottom:14px;">
@@ -713,20 +748,33 @@ ${state.typesLoaded && state.types.length ? `<button class="btn btn-primary" dat
 
 <div class="card" style="margin-bottom:14px;">
 <div class="row wrap" style="gap:10px;">
-<input type="search" placeholder="Rechercher par nom…" style="flex:2;min-width:160px;" value="${esc(dashboardCache.search)}" data-action="dash-search">
+<input type="search" placeholder="Nom, n° de série ou plaque…" style="flex:2;min-width:180px;" value="${esc(dashboardCache.search)}" data-action="dash-search">
 <select style="flex:1;min-width:140px;" data-action="dash-filter-type">
 <option value="">Tous les types</option>
 ${typeOptions}
 </select>
 <label style="display:flex;align-items:center;gap:6px;text-transform:none;font-weight:500;font-size:13.5px;color:var(--text);margin:0;">
 <input type="checkbox" style="width:auto;" ${dashboardCache.showArchived?'checked':''} data-action="dash-archived">
-Voir les supprimés
+Voir les archivés
 </label>
 </div>
 </div>
 
+${barre}
 ${list}
 `;
+}
+
+async function restaurerSelection(){
+const ids = (dashboardCache.items || []).filter(e => e.archived && dashboardCache.sel.includes(e.id)).map(e => e.id);
+if(!ids.length) return;
+if(!confirm(`Restaurer ${ids.length > 1 ? 'ces ' + ids.length + ' équipements' : 'cet équipement'} ? ${ids.length > 1 ? 'Ils réapparaîtront' : 'Il réapparaîtra'} dans la liste active.`)) return;
+try{
+const { error } = await sb.from('equipements')
+.update({ archived:false, archived_at:null, archived_by:null, archive_reason:null }).in('id', ids);
+if(error) throw error;
+apresActionEquipements();
+}catch(e){ alert('Erreur : ' + e.message); }
 }
 
 function refreshDashboard(){
@@ -923,319 +971,11 @@ return s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9
 }
 
 /* ---------------------------------------------------------------------- */
-/* View: Équipe — gestion des profils (admin uniquement) */
+/* Gestion des membres et invitations : voir js/reglages.js                */
 /* ---------------------------------------------------------------------- */
-
-let equipeCache;
-/* Un seul endroit définit cet état : le dupliquer, c'est oublier un champ
-lors d'une remise à zéro et casser la vue au retour de connexion. */
-function resetEquipeCache(){
-equipeCache = {
-members: null, invites: null, acces: null, loading: false, error: '',
-inviteRole: 'utilisateur', inviteLabel: '', inviteBusy: false, inviteError: '',
-inviteTousTypes: true, inviteTypes: [],
-dernierToken: null,
-};
-}
-resetEquipeCache();
-
-function chargerEquipe(force){
-if(equipeCache.loading) return;
-if(equipeCache.members !== null && !force) return;
-equipeCache.loading = true;
-Promise.all([listMembers(), listInvites(), listAcces()])
-.then(([m, i, a]) => {
-equipeCache.members = m; equipeCache.invites = i; equipeCache.acces = a;
-equipeCache.loading = false; equipeCache.error = ''; render();
-})
-.catch(e => { equipeCache.error = e.message; equipeCache.loading = false; render(); });
-}
-
-function rafraichirEquipe(){ equipeCache.members = null; chargerEquipe(true); }
 
 function viewNonAutorise(){
 return `<div class="alert alert-error">Cette section est réservée à l'administrateur.</div>`;
-}
-
-function viewEquipe(){
-chargerEquipe(false);
-
-if(equipeCache.error) return `<div class="alert alert-error">${esc(equipeCache.error)}</div>`;
-if(equipeCache.members === null) return `<div class="spinner"></div>`;
-
-const moi = state.profile?.id;
-
-const acces = equipeCache.acces || [];
-
-const membres = equipeCache.members.map(m => {
-const estMoi = m.id === moi;
-const estAdmin = m.role === 'admin';
-// Le fondateur de l'organisation est intouchable depuis l'application :
-// c'est ce qui empêche un administrateur de déloger celui qui l'a nommé.
-const estFondateur = !!m.fondateur;
-const verrouille = estFondateur || estMoi;
-
-// Un administrateur voit tout par construction : pas de cloisonnement à régler.
-const blocAcces = estAdmin ? '' : `
-<div class="acces">
-<label class="case">
-<input type="checkbox" data-action="acces-tous" data-id="${m.id}" ${m.acces_tous_types?'checked':''}>
-<span><strong>Tous les types d'équipement</strong></span>
-</label>
-${m.acces_tous_types
-? `<div class="small muted" style="margin-left:24px;">Ce profil voit l'ensemble du parc.</div>`
-: (state.types.length
-? `<div class="acces-liste">
-${state.types.map(t => `
-<label class="case">
-<input type="checkbox" data-action="acces-type"
-data-id="${m.id}" data-type="${t.id}"
-${acces.some(a => a.profile_id === m.id && a.type_id === t.id) ? 'checked' : ''}>
-<span>${esc(t.nom)}</span>
-</label>`).join('')}
-</div>`
-: `<div class="small muted" style="margin-left:24px;">Aucun type d'équipement à attribuer.</div>`)}
-</div>`;
-
-return `
-<div class="member">
-<div class="thumb">${esc(initials(m.full_name))}</div>
-<div class="who">
-<div style="font-weight:650;">
-${esc(m.full_name || 'Sans nom')}
-${estMoi ? '<span class="small muted">(vous)</span>' : ''}
-${estFondateur ? '<span class="badge badge-neutral">fondateur</span>' : ''}
-${!m.active ? '<span class="badge badge-off">suspendu</span>' : ''}
-</div>
-<div class="small muted">Membre depuis le ${fmtDate(m.created_at)}</div>
-</div>
-${verrouille
-? `<span class="badge badge-role">${esc(roleLabel(m.role))}</span>`
-: `<select data-action="member-role" data-id="${m.id}">
-${ROLES_ASSIGNABLES.map(r=>`<option value="${r}" ${r===m.role?'selected':''}>${esc(roleLabel(r))}</option>`).join('')}
-</select>`}
-${verrouille ? '' : `
-<button class="btn btn-sm ${m.active?'btn-danger':''}"
-data-action="member-active" data-id="${m.id}" data-active="${m.active?'0':'1'}">
-${m.active ? 'Suspendre' : 'Réactiver'}
-</button>
-<button class="btn btn-sm btn-danger" data-action="member-supprimer"
-data-id="${m.id}" data-nom="${esc(m.full_name || 'ce profil')}">
-Supprimer
-</button>`}
-${blocAcces}
-</div>`;
-}).join('');
-
-const invitations = (equipeCache.invites || []).map(i => `
-<div class="member">
-<div class="who">
-<div style="font-weight:650;">
-${esc(i.label || 'Invitation')}
-<span class="badge badge-role">${esc(roleLabel(i.role))}</span>
-</div>
-<div class="small muted">
-${i.acces_tous_types
-? 'Tous les types'
-: 'Accès : ' + esc(state.types.filter(t => (i.types_autorises||[]).includes(t.id)).map(t => t.nom).join(', ') || 'aucun type')}
-· valable jusqu'au ${fmtDate(i.expires_at)}
-</div>
-<div class="invite-link">
-<code>${esc(inviteUrl(i.token))}</code>
-<button class="btn btn-sm" data-action="copier-lien" data-token="${esc(i.token)}">Copier</button>
-</div>
-</div>
-<button class="btn btn-sm btn-danger" data-action="annuler-invite" data-id="${i.id}">Annuler</button>
-</div>
-`).join('');
-
-return `
-<div class="row between wrap" style="margin-bottom:14px;">
-<h2>Équipe</h2>
-<span class="badge badge-role">${esc(state.orgName || '')}</span>
-</div>
-
-<div class="card">
-<h3>Inviter quelqu'un</h3>
-<div class="hint" style="margin-bottom:12px;">
-Vous fixez le rôle <strong>et</strong> le périmètre métier avant d'envoyer le lien.
-La personne rejoint votre organisation avec exactement ces droits, sans pouvoir
-les choisir ni les modifier.
-</div>
-${equipeCache.inviteError ? `<div class="alert alert-error">${esc(equipeCache.inviteError)}</div>` : ''}
-
-<div class="grid-2">
-<div class="field">
-<label>Rôle</label>
-<select data-action="invite-role">
-${ROLES_ASSIGNABLES.map(r=>`<option value="${r}" ${r===equipeCache.inviteRole?'selected':''}>${esc(roleLabel(r))}</option>`).join('')}
-</select>
-<div class="hint">${esc(ROLE_RESUME[equipeCache.inviteRole] || '')}</div>
-</div>
-<div class="field">
-<label>Nom de la personne (facultatif)</label>
-<input type="text" placeholder="Ex : Marc Dupont"
-value="${esc(equipeCache.inviteLabel)}" data-action="invite-label">
-</div>
-</div>
-
-${equipeCache.inviteRole === 'admin' ? `
-<div class="alert alert-warn-admin">
-<strong>Ce profil aura tous les pouvoirs sur votre organisation :</strong>
-gérer le parc, inviter et supprimer des profils, et nommer d'autres administrateurs.
-Il verra l'ensemble des métiers. Il ne pourra en revanche jamais toucher à votre
-propre profil, protégé en tant que fondateur.
-</div>
-` : `
-<label>Périmètre métier</label>
-<div class="acces" style="margin-bottom:12px;">
-<label class="case">
-<input type="checkbox" data-action="invite-tous-types" ${equipeCache.inviteTousTypes?'checked':''}>
-<span><strong>Tous les types d'équipement</strong></span>
-</label>
-${equipeCache.inviteTousTypes
-? `<div class="small muted" style="margin-left:24px;">Cette personne verra l'ensemble du parc.</div>`
-: (state.types.length
-? `<div class="acces-liste">
-${state.types.map(t => `
-<label class="case">
-<input type="checkbox" data-action="invite-type" data-type="${t.id}"
-${equipeCache.inviteTypes.includes(t.id) ? 'checked' : ''}>
-<span>${esc(t.nom)}</span>
-</label>`).join('')}
-</div>
-<div class="small muted" style="margin-left:24px;margin-top:6px;">
-${equipeCache.inviteTypes.length
-? 'Ne verra que : ' + esc(state.types.filter(t=>equipeCache.inviteTypes.includes(t.id)).map(t=>t.nom).join(', '))
-: 'Aucun type coché : cette personne ne verrait aucun équipement.'}
-</div>`
-: `<div class="small muted" style="margin-left:24px;">Aucun type d'équipement créé pour l'instant.</div>`)}
-</div>`}
-
-<div class="row wrap">
-<button class="btn btn-primary" data-action="creer-invite" ${equipeCache.inviteBusy?'disabled':''}>
-${equipeCache.inviteBusy ? 'Création…' : 'Générer le lien'}
-</button>
-</div>
-${equipeCache.dernierToken ? `
-<div class="alert alert-success" style="margin:14px 0 0;">
-Lien créé — transmettez-le à la personne concernée.
-<div class="invite-link">
-<code>${esc(inviteUrl(equipeCache.dernierToken))}</code>
-<button class="btn btn-sm" data-action="copier-lien" data-token="${esc(equipeCache.dernierToken)}">Copier</button>
-</div>
-</div>` : ''}
-</div>
-
-<div class="card">
-<h3>Membres (${equipeCache.members.length})</h3>
-${membres || `<div class="empty small">Aucun membre.</div>`}
-</div>
-
-<div class="card">
-<h3>Invitations en attente (${(equipeCache.invites||[]).length})</h3>
-${invitations || `<div class="empty small">Aucune invitation en attente.</div>`}
-</div>
-`;
-}
-
-async function actionCreerInvite(){
-// Un administrateur voit tout par construction : pas de périmètre à restreindre.
-const estAdmin = equipeCache.inviteRole === 'admin';
-if(estAdmin){ equipeCache.inviteTousTypes = true; equipeCache.inviteTypes = []; }
-
-if(estAdmin && !confirm(
-"Créer un lien d'invitation ADMINISTRATEUR ?\n\n" +
-"Cette personne pourra gérer tout le parc, inviter et supprimer des profils, " +
-"et nommer d'autres administrateurs.\n\n" +
-"Elle ne pourra jamais toucher à votre propre profil, protégé en tant que fondateur.")) return;
-
-if(!equipeCache.inviteTousTypes && equipeCache.inviteTypes.length === 0){
-equipeCache.inviteError = "Choisissez au moins un type d'équipement, sinon cette personne n'aurait accès à rien.";
-render(); return;
-}
-equipeCache.inviteError = ''; equipeCache.inviteBusy = true; render();
-try{
-const inv = await createInvite(
-equipeCache.inviteRole,
-equipeCache.inviteLabel.trim(),
-equipeCache.inviteTousTypes,
-equipeCache.inviteTypes
-);
-equipeCache.dernierToken = inv.token;
-equipeCache.inviteLabel = '';
-equipeCache.invites = await listInvites();
-}catch(e){
-equipeCache.inviteError = e.message;
-}finally{
-equipeCache.inviteBusy = false; render();
-}
-}
-
-async function actionAnnulerInvite(id){
-if(!confirm("Annuler cette invitation ? Le lien ne fonctionnera plus.")) return;
-try{
-await cancelInvite(id);
-equipeCache.invites = await listInvites();
-render();
-}catch(e){ alert('Erreur : ' + e.message); }
-}
-
-async function actionRoleMembre(id, role){
-if(role === 'admin' && !confirm(
-"Promouvoir ce profil ADMINISTRATEUR ?\n\n" +
-"Il pourra gérer tout le parc, inviter et supprimer des profils, " +
-"et nommer d'autres administrateurs.\n\n" +
-"Votre propre profil restera protégé en tant que fondateur.")){
-rafraichirEquipe(); return;
-}
-try{
-await setMemberRole(id, role);
-rafraichirEquipe();
-}catch(e){ alert('Erreur : ' + e.message); rafraichirEquipe(); }
-}
-
-async function actionSupprimerMembre(id, nom){
-const msg =
-`Supprimer définitivement le profil de ${nom} ?\n\n` +
-`• Son compte de connexion est effacé de la base\n` +
-`• Il ne pourra plus jamais se connecter\n` +
-`• L'historique des interventions qu'il a enregistrées est CONSERVÉ\n\n` +
-`Cette action est irréversible. Pour un départ temporaire, préférez « Suspendre ».`;
-if(!confirm(msg)) return;
-try{
-const { error } = await sb.rpc('supprimer_profil', { p_profile_id: id });
-if(error) throw error;
-rafraichirEquipe();
-}catch(e){
-alert('Erreur : ' + e.message);
-rafraichirEquipe();
-}
-}
-
-async function actionAccesTous(id, valeur){
-try{
-await setAccesTousTypes(id, valeur);
-rafraichirEquipe();
-}catch(e){ alert('Erreur : ' + e.message); rafraichirEquipe(); }
-}
-
-async function actionAccesType(profileId, typeId, autoriser){
-try{
-await setAccesType(profileId, typeId, autoriser);
-rafraichirEquipe();
-}catch(e){ alert('Erreur : ' + e.message); rafraichirEquipe(); }
-}
-
-async function actionActiverMembre(id, active){
-const msg = active
-? "Réactiver ce profil ? La personne retrouvera l'accès à l'application."
-: "Suspendre ce profil ? La personne perdra immédiatement l'accès à toutes les données, sans rien supprimer.";
-if(!confirm(msg)) return;
-try{
-await setMemberActive(id, active);
-rafraichirEquipe();
-}catch(e){ alert('Erreur : ' + e.message); rafraichirEquipe(); }
 }
 
 /* ---------------------------------------------------------------------- */
@@ -1308,6 +1048,7 @@ ${joinState.busy ? '…' : 'Créer mon compte'}
 </button>
 </form>
 `}
+${piedSupport()}
 </div>
 `;
 }
@@ -1416,13 +1157,15 @@ equipForm.busy = false; equipForm.error = e.message; render();
 
 let equipDetail = { id:null, item:null, interventions:null, loading:false, error:'',
 showIvForm:false, ivBusy:false, ivError:'', ivNotice:'',
-showEditForm:false, editBusy:false, editError:'' };
+showEditForm:false, editBusy:false, editError:'',
+editIvId:null, editIvBusy:false, editIvError:'' };
 
 function viewEquipDetail(id){
 if(equipDetail.id !== id){
 equipDetail = { id, item:null, interventions:null, loading:true, error:'',
 showIvForm:false, ivBusy:false, ivError:'', ivNotice:'',
-showEditForm:false, editBusy:false, editError:'' };
+showEditForm:false, editBusy:false, editError:'',
+editIvId:null, editIvBusy:false, editIvError:'' };
 Promise.all([getEquipement(id), listInterventions(id)])
 .then(([item, ivs]) => {
 equipDetail.item = item; equipDetail.interventions = ivs; equipDetail.loading = false; render();
@@ -1447,12 +1190,19 @@ const val = !brut ? '—' : (c.type === 'date' ? fmtDate(brut) : brut);
 return `<tr><td class="muted">${esc(c.label)}</td><td>${esc(val)}</td></tr>`;
 }).join('');
 
-const ivRows = (equipDetail.interventions||[]).map(iv => `
+const ivRows = (equipDetail.interventions||[]).map(iv => equipDetail.editIvId === iv.id ? `
+<tr class="iv-edition"><td colspan="5">${renderIvForm(iv)}</td></tr>` : `
 <tr>
-<td>${fmtDate(iv.date)}</td>
-<td>${esc(iv.type)}</td>
-<td>${esc(iv.technicien)}</td>
-<td class="muted">${esc(iv.description||'—')}</td>
+<td class="iv-date">${fmtDate(iv.date)}</td>
+<td data-l="Type">${esc(iv.type)}</td>
+<td data-l="Intervenant">${esc(iv.technicien)}</td>
+<td class="muted" data-l="Description">${esc(iv.description||'—')}
+${iv.modifie_le ? `<div class="iv-modif">Modifiée le ${fmtDateTime(iv.modifie_le)}${iv.modifie_par ? ' par ' + esc(iv.modifie_par) : ''}</div>` : ''}
+</td>
+<td class="iv-actions">
+<button class="btn btn-sm" data-action="iv-modifier" data-id="${iv.id}">Modifier</button>
+${isAdmin() ? `<button class="btn btn-sm btn-danger" data-action="iv-supprimer" data-id="${iv.id}">Supprimer</button>` : ''}
+</td>
 </tr>
 `).join('');
 
@@ -1465,13 +1215,14 @@ return `
 <div class="fiche-entete">
 <button class="icon-btn" data-action="go" data-path="/equipements" title="Retour">←</button>
 <div class="titre">
-<h2>${esc(eq.nom)} ${eq.archived?'<span class="badge badge-warn">supprimé</span>':''}</h2>
+<h2>${esc(eq.nom)} ${eq.archived?'<span class="badge badge-warn">archivé</span>':''}</h2>
 <div class="small muted">${esc(type?.nom || '')}${eq.serial_value ? ' · N/S ' + esc(eq.serial_value) : ''}</div>
 </div>
 <div class="actions">
 ${!eq.archived ? `<button class="btn btn-sm" data-action="toggle-edit-equip">${equipDetail.showEditForm ? 'Annuler' : 'Modifier'}</button>` : ''}
-${!eq.archived && peutSupprimer() ? `<button class="btn btn-danger btn-sm" data-action="archive-equip">Supprimer</button>` : ''}
+${!eq.archived && peutSupprimer() ? `<button class="btn btn-sm" data-action="archive-equip">Archiver</button>` : ''}
 ${eq.archived && peutSupprimer() ? `<button class="btn btn-sm" data-action="restore-equip">Restaurer</button>` : ''}
+${isAdmin() ? `<button class="btn btn-danger btn-sm" data-action="suppr-equip-un" data-id="${eq.id}">Supprimer</button>` : ''}
 </div>
 </div>
 
@@ -1523,13 +1274,13 @@ ${infoRows}
 <button class="btn btn-sm" data-action="toggle-iv-form">${equipDetail.showIvForm?'Annuler':'+ Ajouter'}</button>
 </div>
 
-${equipDetail.showIvForm ? renderIvForm() : ''}
+${equipDetail.showIvForm ? renderIvForm(null) : ''}
 ${equipDetail.ivNotice ? `<div class="alert alert-info" style="margin-top:10px;">${esc(equipDetail.ivNotice)}</div>` : ''}
 
 ${equipDetail.interventions && equipDetail.interventions.length ? `
 <div style="overflow-x:auto;">
-<table>
-<thead><tr><th>Date</th><th>Type</th><th>Technicien</th><th>Description</th></tr></thead>
+<table class="table-iv">
+<thead><tr><th>Date</th><th>Type</th><th>Intervenant</th><th>Description</th><th></th></tr></thead>
 <tbody>${ivRows}</tbody>
 </table>
 </div>
@@ -1626,31 +1377,43 @@ if(!canvas || typeof QRious === 'undefined' || !url) return;
 new QRious({ element: canvas, value: url, size: 200, background: 'white', foreground: '#141b1e', level: 'M' });
 }
 
-function renderIvForm(){
-const today = new Date().toISOString().slice(0,10);
+function renderIvForm(iv){
+// iv fourni = modification d'une intervention existante ; sinon, nouvelle saisie.
+// Date du jour en heure LOCALE (toISOString donnerait la date UTC : le lendemain en soirée aux Antilles).
+const d = new Date();
+const today = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+const modif = !!iv;
+const err = modif ? equipDetail.editIvError : equipDetail.ivError;
 return `
-<form class="card" style="background:var(--surface-2);margin:12px 0;" data-action="submit-iv">
-${equipDetail.ivError ? `<div class="alert alert-error">${esc(equipDetail.ivError)}</div>` : ''}
+<form class="card" style="background:var(--surface-2);margin:12px 0;" data-action="${modif ? 'submit-iv-edit' : 'submit-iv'}" ${modif ? `data-id="${iv.id}"` : ''}>
+${modif ? `<div style="font-weight:650;margin-bottom:8px;">Modifier l'intervention</div>` : ''}
+${err ? `<div class="alert alert-error">${esc(err)}</div>` : ''}
 <div class="grid-2">
 <div class="field">
 <label>Date <span class="oblig">obligatoire</span></label>
-<input type="date" name="date" value="${today}" required>
+<input type="date" name="date" value="${modif ? esc(iv.date) : today}" required>
 </div>
 <div class="field">
 <label>Type d'intervention <span class="oblig">obligatoire</span></label>
-<input type="text" name="type" placeholder="Ex : Entretien, Réparation, Contrôle…" required>
+<input type="text" name="type" value="${modif ? esc(iv.type) : ''}" placeholder="Ex : Entretien, Réparation, Contrôle…" required>
 </div>
 </div>
 <div class="field">
 <label>Intervenant <span class="oblig">obligatoire</span></label>
-<input type="text" name="technicien" value="${esc(state.profile?.full_name||'')}" required
+<input type="text" name="technicien" value="${esc(modif ? iv.technicien : (state.profile?.full_name||''))}" required
 placeholder="Nom de la personne intervenue">
 <div class="hint">Nom de la personne qui a réalisé l'intervention. C'est lui qui figurera
 sur le carnet en cas de contrôle — pré-rempli avec le vôtre, modifiable si vous
 saisissez pour un collègue.</div>
 </div>
-<div class="field"><label>Description</label><textarea name="description" placeholder="Détails de l'intervention…"></textarea></div>
-<button class="btn btn-primary" type="submit" ${equipDetail.ivBusy?'disabled':''}>${equipDetail.ivBusy?'Enregistrement…':"Enregistrer l'intervention"}</button>
+<div class="field"><label>Description</label><textarea name="description" placeholder="Détails de l'intervention…">${modif ? esc(iv.description || '') : ''}</textarea></div>
+${modif ? `
+<div class="hint" style="margin-bottom:10px;">La modification est horodatée à votre nom et l'ancienne version est conservée dans le journal.</div>
+<div class="row wrap">
+<button class="btn btn-primary" type="submit" ${equipDetail.editIvBusy?'disabled':''}>${equipDetail.editIvBusy?'Enregistrement…':'Enregistrer les modifications'}</button>
+<button class="btn" type="button" data-action="iv-annuler-modif">Annuler</button>
+</div>` : `
+<button class="btn btn-primary" type="submit" ${equipDetail.ivBusy?'disabled':''}>${equipDetail.ivBusy?'Enregistrement…':"Enregistrer l'intervention"}</button>`}
 </form>
 `;
 }
@@ -1718,37 +1481,50 @@ equipDetail.ivBusy = false; equipDetail.ivError = e.message; render();
 }
 }
 
-/* Un retrait doit toujours pouvoir s'expliquer : la base refuse un equipement
-retire sans motif ni nom d'operateur. On demande donc le motif avant, plutot
-que de laisser la base renvoyer une erreur technique a l'utilisateur. */
-async function archiveEquipement(){
-const qui = (state.profile?.full_name || state.session?.user?.email || '').trim();
-if(!qui){ alert("Votre nom doit être renseigné dans votre profil avant de retirer un équipement."); return; }
+/* Modifier une intervention : ouvert à tous les rôles, mais la date et le nom
+de l'intervenant restent obligatoires (la base le vérifie aussi). La base
+horodate la modification au nom de l'auteur et garde l'ancienne version au
+journal : on peut corriger une saisie, pas effacer une trace. */
+async function submitEditIntervention(form){
+const id = form.dataset.id;
+const fd = new FormData(form);
+const date = (fd.get('date') || '').trim();
+const type = (fd.get('type') || '').trim();
+const technicien = (fd.get('technicien') || '').trim();
+const description = (fd.get('description') || '').trim();
+if(!date){ equipDetail.editIvError = "La date de l'intervention est obligatoire."; render(); return; }
+if(!type){ equipDetail.editIvError = "Le type d'intervention est obligatoire."; render(); return; }
+if(!technicien){ equipDetail.editIvError = "Le nom de l'intervenant est obligatoire."; render(); return; }
+if(!navigator.onLine){ equipDetail.editIvError = "Pas de réseau : la modification d'une intervention nécessite une connexion."; render(); return; }
 
-const motif = (window.prompt(
-"Retirer cet équipement du parc.\n\n" +
-"Motif du retrait (obligatoire) — par exemple : vendu, réformé, hors service, volé, restitué au loueur.\n\n" +
-"La fiche et son historique restent conservés et consultables via « Voir les supprimés ».", '') || '').trim();
-
-if(!motif){
-if(motif === '') alert("Retrait annulé : un motif est obligatoire.");
-return;
-}
-
+equipDetail.editIvError = ''; equipDetail.editIvBusy = true; render();
 try{
-const { error } = await sb.from('equipements').update({
-archived: true,
-archived_at: new Date().toISOString(),
-archived_by: qui,
-archive_reason: motif
-}).eq('id', equipDetail.id);
+const { error } = await sb.from('interventions')
+.update({ date, type, technicien, description: description || null }).eq('id', id);
 if(error) throw error;
-equipDetail.item = await getEquipement(equipDetail.id);
-refreshDashboard();
-render();
+equipDetail.interventions = await listInterventions(equipDetail.id);
+equipDetail.editIvId = null;
+reglages.journal = null;
 }catch(e){
-alert('Erreur : ' + e.message);
+equipDetail.editIvError = e.message;
+}finally{
+equipDetail.editIvBusy = false; render();
 }
+}
+
+async function supprimerIntervention(id){
+const iv = (equipDetail.interventions || []).find(x => x.id === id);
+if(!iv) return;
+if(!confirm(`Supprimer l'intervention « ${iv.type} » du ${fmtDate(iv.date)} ?\n\nElle disparaît du carnet de cet équipement. Une copie est conservée dans le journal.`)) return;
+try{
+const { data, error } = await sb.from('interventions').delete().eq('id', id).select('id');
+if(error) throw error;
+if(!data || !data.length) throw new Error("Suppression refusée : seul un administrateur peut supprimer une intervention.");
+equipDetail.interventions = await listInterventions(equipDetail.id);
+reglages.journal = null;
+accueilCache.chiffres = null;
+render();
+}catch(e){ alert('Erreur : ' + e.message); }
 }
 
 /* Ouvrir ou fermer la consultation libre d'un equipement. Fermee, l'etiquette
@@ -1846,8 +1622,35 @@ else if(action === 'champ-add'){ typeForm.champs.push({label:'', type:'text'}); 
 else if(action === 'champ-remove'){ typeForm.champs.splice(+t.dataset.i, 1); render(); }
 else if(action === 'save-type'){ saveType(); }
 else if(action === 'save-equip'){ saveEquip(); }
-else if(action === 'toggle-iv-form'){ equipDetail.showIvForm = !equipDetail.showIvForm; equipDetail.ivNotice = ''; render(); }
-else if(action === 'archive-equip'){ archiveEquipement(); }
+else if(action === 'toggle-iv-form'){ equipDetail.showIvForm = !equipDetail.showIvForm; equipDetail.editIvId = null; equipDetail.ivNotice = ''; render(); }
+else if(action === 'archive-equip'){ ouvrirModalArchiver([equipDetail.id]); }
+else if(action === 'suppr-equip-un'){ ouvrirModalSupprimerEquip([t.dataset.id]); }
+else if(action === 'equip-archiver-sel'){ ouvrirModalArchiver((dashboardCache.items||[]).filter(e => !e.archived && dashboardCache.sel.includes(e.id)).map(e => e.id)); }
+else if(action === 'equip-supprimer-sel'){ ouvrirModalSupprimerEquip([...dashboardCache.sel]); }
+else if(action === 'equip-restaurer-sel'){ restaurerSelection(); }
+else if(action === 'equip-desel'){ dashboardCache.sel = []; render(); }
+else if(action === 'modal-fermer'){ fermerModal(); }
+else if(action === 'modal-fond'){ if(e.target === t) fermerModal(); }
+else if(action === 'modal-valider'){ validerModal(); }
+else if(action === 'iv-modifier'){ equipDetail.editIvId = t.dataset.id; equipDetail.editIvError = ''; equipDetail.showIvForm = false; render(); }
+else if(action === 'iv-annuler-modif'){ equipDetail.editIvId = null; equipDetail.editIvError = ''; render(); }
+else if(action === 'iv-supprimer'){ supprimerIntervention(t.dataset.id); }
+else if(action === 'nouveau-client'){ ouvrirClientForm(null); }
+else if(action === 'modifier-client'){ const c = (reglages.clients||[]).find(x => x.id === t.dataset.id); if(c) ouvrirClientForm(c); }
+else if(action === 'fermer-client-form'){ reglages.clientForm = null; render(); }
+else if(action === 'clients-statut'){ actionClientsStatut(t.dataset.id ? [t.dataset.id] : [...reglages.selClients], t.dataset.actif === '1'); }
+else if(action === 'clients-supprimer'){ actionClientsSupprimer(t.dataset.id ? [t.dataset.id] : [...reglages.selClients]); }
+else if(action === 'clients-desel'){ reglages.selClients = []; render(); }
+else if(action === 'membres-active'){ actionMembresActive([...reglages.selMembres], t.dataset.active === '1'); }
+else if(action === 'membres-supprimer'){ actionMembresSupprimer([...reglages.selMembres]); }
+else if(action === 'membres-desel'){ reglages.selMembres = []; render(); }
+else if(action === 'journal-rafraichir'){ reglages.journal = null; render(); }
+else if(action === 'support-rafraichir'){ reglages.support = null; render(); }
+else if(action === 'support-statut'){
+setStatutDemande(t.dataset.id, t.dataset.statut)
+.then(() => { reglages.support = null; render(); })
+.catch(err => alert('Erreur : ' + err.message));
+}
 else if(action === 'restore-equip'){ restoreEquipement(); }
 else if(action === 'toggle-edit-equip'){ equipDetail.showEditForm = !equipDetail.showEditForm; equipDetail.editError=''; render(); }
 else if(action === 'print-qr'){ printQr(); }
@@ -1858,8 +1661,6 @@ else if(action === 'toggle-partage'){ actionTogglePartage(); }
 else if(action === 'regen-token'){ actionRegenererLienPublic(); }
 else if(action === 'creer-invite'){ actionCreerInvite(); }
 else if(action === 'annuler-invite'){ actionAnnulerInvite(t.dataset.id); }
-else if(action === 'member-active'){ actionActiverMembre(t.dataset.id, t.dataset.active === '1'); }
-else if(action === 'member-supprimer'){ actionSupprimerMembre(t.dataset.id, t.dataset.nom); }
 else if(action === 'toggle-modeles'){ modeleState.ouvert = !modeleState.ouvert; render(); }
 else if(action === 'appliquer-modele'){ appliquerModele(t.dataset.cle); }
 else if(action === 'copier-lien'){ copierDansPressePapier(inviteUrl(t.dataset.token), t); }
@@ -1893,20 +1694,38 @@ else if(action === 'equip-serial'){ equipForm.serial_value = t.value; verifierSe
 else if(action === 'edit-serial'){ verifierSerie(t.value, t.dataset.exclude || null); }
 else if(action === 'equip-type'){ equipForm.typeId = t.value; render(); }
 else if(action === 'equip-valeur'){ equipForm.valeurs[t.dataset.key] = t.value; }
-else if(action === 'invite-role'){ equipeCache.inviteRole = t.value; render(); }
-else if(action === 'invite-label'){ equipeCache.inviteLabel = t.value; }
+else if(action === 'invite-org'){
+reglages.invite = { orgId:t.value, role:reglages.invite.role, label:reglages.invite.label, tousTypes:true, types:[], busy:false, error:'', dernierToken:null };
+render();
+}
+else if(action === 'invite-role'){ reglages.invite.role = t.value; render(); }
+else if(action === 'invite-label'){ reglages.invite.label = t.value; }
 else if(action === 'invite-tous-types'){
-equipeCache.inviteTousTypes = t.checked;
-if(t.checked) equipeCache.inviteTypes = [];
-equipeCache.inviteError = ''; render();
+reglages.invite.tousTypes = t.checked;
+if(t.checked) reglages.invite.types = [];
+reglages.invite.error = ''; render();
 }
 else if(action === 'invite-type'){
 const id = t.dataset.type;
-equipeCache.inviteTypes = t.checked
-? [...new Set([...equipeCache.inviteTypes, id])]
-: equipeCache.inviteTypes.filter(x => x !== id);
-equipeCache.inviteError = ''; render();
+reglages.invite.types = t.checked
+? [...new Set([...reglages.invite.types, id])]
+: reglages.invite.types.filter(x => x !== id);
+reglages.invite.error = ''; render();
 }
+else if(action === 'sel-equip'){ basculer(dashboardCache, 'sel', t.dataset.id, t.checked); render(); }
+else if(action === 'sel-equip-tous'){ dashboardCache.sel = t.checked ? (dashboardCache.items||[]).map(e => e.id) : []; render(); }
+else if(action === 'sel-client'){ basculer(reglages, 'selClients', t.dataset.id, t.checked); render(); }
+else if(action === 'sel-clients-tous'){ reglages.selClients = t.checked ? (reglages.clients||[]).filter(c => !c.est_mon_organisation).map(c => c.id) : []; render(); }
+else if(action === 'sel-membre'){ basculer(reglages, 'selMembres', t.dataset.id, t.checked); render(); }
+else if(action === 'sel-membres-tous'){
+const ids = (t.dataset.ids || '').split(',').filter(Boolean);
+reglages.selMembres = t.checked ? [...new Set([...reglages.selMembres, ...ids])] : reglages.selMembres.filter(x => !ids.includes(x));
+render();
+}
+else if(action === 'filtre-client-membres'){ reglages.filtreClient = t.value; reglages.selMembres = []; render(); }
+else if(action === 'modal-choix'){ modal.choix = t.value; modal.error = ''; render(); }
+else if(action === 'modal-precision'){ modal.precision = t.value; }
+else if(action === 'client-modele'){ reglages.clientForm.modele = t.value; majClientFormDepuisDom(); render(); }
 else if(action === 'member-role'){ actionRoleMembre(t.dataset.id, t.value); }
 else if(action === 'acces-tous'){ actionAccesTous(t.dataset.id, t.checked); }
 else if(action === 'acces-type'){ actionAccesType(t.dataset.id, t.dataset.type, t.checked); }
@@ -1921,12 +1740,33 @@ if(action === 'submit-auth') handleAuthSubmit(t);
 else if(action === 'submit-iv') submitIntervention(t);
 else if(action === 'submit-join') handleJoinSubmit(t);
 else if(action === 'submit-edit-equip') submitEditEquip(t);
+else if(action === 'submit-iv-edit') submitEditIntervention(t);
+else if(action === 'submit-client') submitClientForm(t);
+else if(action === 'submit-support') submitSupport(t);
 });
 
 document.addEventListener('click', (e) => {
 if(!e.target.closest('.user-menu')) closeMenus();
 });
 function closeMenus(){ document.getElementById('user-dropdown')?.classList.remove('open'); }
+
+/* Ajoute / retire un identifiant d'une liste de sélection. */
+function basculer(obj, cle, id, coche){
+const l = obj[cle] || [];
+obj[cle] = coche ? [...new Set([...l, id])] : l.filter(x => x !== id);
+}
+
+/* Avant un réaffichage du formulaire client, on recopie la saisie en cours
+(sinon changer de modèle métier effacerait ce qui vient d'être tapé). */
+function majClientFormDepuisDom(){
+const form = document.querySelector('form[data-action="submit-client"]');
+if(!form || !reglages.clientForm) return;
+const fd = new FormData(form);
+for(const k of ['nom','adresse','telephone','email','referent','notes']) reglages.clientForm[k] = (fd.get(k) || '').toString();
+}
+
+/* Échap ferme la fenêtre modale. */
+document.addEventListener('keydown', (e) => { if(e.key === 'Escape' && modal && !modal.busy) fermerModal(); });
 
 let debounceTimer;
 function debounce(fn, ms=350){ clearTimeout(debounceTimer); debounceTimer = setTimeout(fn, ms); }
@@ -1941,6 +1781,7 @@ state.accessError = '';
 if(session){
 try{
 await loadProfileAndOrg();
+await chargerStatutSuperAdmin();
 await loadTypes(true);
 retourApresConnexion();
 try{
@@ -1952,9 +1793,11 @@ console.error(e);
 state.accessError = (e && e.message) ? e.message : 'Erreur de chargement du profil.';
 }
 } else {
-state.profile = null; state.orgName = '';
-dashboardCache = { items: null, search:'', typeId:'', showArchived:false, loading:false, error:'' };
-resetEquipeCache();
+state.profile = null; state.orgName = ''; state.superAdmin = false;
+dashboardCache = { items: null, search:'', typeId:'', showArchived:false, loading:false, error:'', sel:[] };
+resetReglages();
+modal = null;
+supportState = { categorie:'question', sujet:'', message:'', email:'', busy:false, error:'', ok:'', mesDemandes:null };
 accueilCache = { chiffres: null, loading: false, error: '' };
 joinState = { token:null, loading:false, preview:null, error:'', busy:false, notice:'' };
 state.typesLoaded = false; state.types = [];

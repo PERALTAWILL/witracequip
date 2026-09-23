@@ -33,6 +33,9 @@ taille_qr_mm: 16, // côté du QR imprimé, en millimètres — étiquette therm
 afficher_identifiant: true, // n° de série / immatriculation sous le QR
 };
 
+/* Adresse du support : pied de page de toutes les pages + formulaire Support. */
+const SUPPORT_EMAIL = 'widiagmq@gmail.com';
+
 const SUPABASE_URL = 'https://oeqgyjyqdwlymlpfkdyn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_w3Lh6JYXepKHspWG5e06FQ_BpXaGQnE';
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
@@ -61,9 +64,9 @@ utilisateur: 'Utilisateur',
 const ROLES_ASSIGNABLES = ['admin', 'responsable', 'utilisateur'];
 
 const ROLE_RESUME = {
-admin: "Tous les droits, y compris gérer l'équipe et inviter d'autres administrateurs.",
-responsable: 'Peut créer, remplir, imprimer et supprimer un équipement.',
-utilisateur: 'Peut créer, remplir et imprimer — mais pas supprimer.',
+admin: "Tous les droits sur son organisation : gérer les membres, supprimer définitivement équipements et interventions.",
+responsable: "Crée, remplit, imprime, modifie les interventions et archive un équipement (avec motif).",
+utilisateur: "Crée, remplit, imprime et modifie les interventions — sans archiver ni supprimer.",
 };
 
 /* Champ mot de passe avec aperçu (le petit œil) */
@@ -253,7 +256,8 @@ function peutSupprimer(){ return ['admin','responsable'].includes(state.profile?
 
 const state = {
 session: null,
-profile: null, // { id, organization_id, full_name, role }
+profile: null, // { id, organization_id, full_name, role, fondateur }
+superAdmin: false, // super-administrateur plateforme (WiDIAG MQ) : gère tous les clients
 orgName: '',
 route: parseHash(),
 types: [],
@@ -271,7 +275,7 @@ function parseHash(){
 const h = location.hash.replace(/^#\/?/, '');
 const parts = h.split('/').filter(Boolean);
 // Sans route explicite, on arrive sur l'accueil, pas sur la liste.
-return { name: parts[0] || 'accueil', param: parts[1] || null };
+return { name: parts[0] || 'accueil', param: parts[1] || null, sub: parts[2] || null };
 }
 
 function nav(path){ location.hash = path; }
@@ -287,6 +291,8 @@ if(state.route.name === 'p' || state.route.name === 'equip') fichePublique.token
 // « fermer » du scanner (retour arrière du téléphone, par exemple), on
 // coupe quand même la caméra — sinon elle continuerait de tourner en fond.
 if(typeof scannerState !== 'undefined' && scannerState.ouvert) fermerScanner();
+// Changer de page ferme toute fenêtre modale restée ouverte.
+if(typeof modal !== 'undefined' && modal && !modal.busy) modal = null;
 render();
 });
 
