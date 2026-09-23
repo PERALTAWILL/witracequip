@@ -522,7 +522,9 @@ else if(r.name === 'equip-new') content = viewEquipNew();
 else if(r.name === 'equip') content = viewEquipDetail(r.param);
 else if(r.name === 'reglages') content = viewReglages(r.param, r.sub);
 else if(r.name === 'equipe') content = viewReglages('membres'); // ancienne adresse
-else if(r.name === 'support') content = sa ? viewReglages('support') : viewSupport();
+else if(r.name === 'support') content = sa ? viewReglages('support', r.param)
+: !peutStats() ? viewSupport()
+: sousMenuSupportClient(r.param === 'stats' ? 'stats' : 'demandes') + (r.param === 'stats' ? viewStats() : viewSupport());
 else if(r.name === 'journal') content = sa ? viewReglages('journal') : viewActivite();
 else content = sa ? viewReglages('clients') : viewDashboard();
 }catch(e){

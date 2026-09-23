@@ -21,6 +21,7 @@ const CATEGORIES_SUPPORT = [
 ];
 
 const LIBELLES_JOURNAL = {
+export_donnees: 'Export Excel du parc',
 suppression_equipement: 'Équipement supprimé',
 archivage_equipement: 'Équipement archivé',
 restauration_equipement: 'Équipement restauré',
@@ -52,7 +53,7 @@ return [
 { cle:'clients', l:'Clients', n: reglages.clients ? reglages.clients.filter(c => !c.est_mon_organisation).length : null,
 aide:"Ouvrez un client pour voir tout son parc et gérer sa fiche, ses membres et ses invitations." },
 { cle:'support', l:'Support', n: aTraiter || null, alerte: aTraiter > 0,
-aide:"Les demandes de vos clients, et les modèles métier proposés quand vous créez un client." },
+aide:"Les demandes de vos clients, les statistiques et l’export Excel d’un parc (démonstration comprise), et les modèles métier proposés quand vous créez un client." },
 journal,
 ];
 }
@@ -149,7 +150,7 @@ let contenu = '';
 if(onglet === 'clients') contenu = sous ? viewClientDetail(sous) : viewClients();
 else if(onglet === 'equipe') contenu = viewMembres() + viewInvitations();
 else if(onglet === 'support') contenu = isSuperAdmin()
-? sousMenuSupport(sous === 'modeles' ? 'modeles' : 'demandes') + (sous === 'modeles' ? viewModelesMetier() : viewSupportAdmin())
+? sousMenuSupport(['modeles','stats'].includes(sous) ? sous : 'demandes') + (sous === 'modeles' ? viewModelesMetier() : sous === 'stats' ? viewStats() : viewSupportAdmin())
 : viewSupportAdmin();
 else if(onglet === 'journal') contenu = viewJournal();
 
@@ -1396,6 +1397,7 @@ const nb = (state.modeles || []).length;
 return `
 <div class="sous-menu" role="tablist">
 <button class="${actif === 'demandes' ? 'active' : ''}" data-action="go" data-path="/reglages/support">${iconeNav('inbox', 16)} Demandes clients ${aTraiter ? `<span class="onglet-compteur alerte">${aTraiter}</span>` : ''}</button>
+<button class="${actif === 'stats' ? 'active' : ''}" data-action="go" data-path="/reglages/support/stats">${iconeNav('chart', 16)} Statistiques &amp; export</button>
 <button class="${actif === 'modeles' ? 'active' : ''}" data-action="go" data-path="/reglages/support/modeles">${iconeNav('tag', 16)} Modèles métier <span class="onglet-compteur">${nb}</span></button>
 </div>`;
 }
@@ -1756,3 +1758,395 @@ ${filtre === 'recentes' && recentes.length > 1 ? `<button class="btn btn-sm" dat
 </div>
 ${corps}`;
 }
+
+/* ====================================================================== */
+/* Statistiques & export Excel (v2.17.4)                                   */
+/* ---------------------------------------------------------------------- */
+/* Fondateur : Support → « Statistiques & export », sur un parc simulé     */
+/* (démonstration commerciale) ou sur le parc réel d'un client.            */
+/* Administrateur et responsable : Support → « Statistiques & export »,    */
+/* sur leur propre parc (les droits par type s'appliquent : la base ne     */
+/* renvoie que ce que la personne a le droit de voir).                     */
+/* Le fichier Excel est fabriqué sur l'appareil, sans bibliothèque externe */
+/* ni envoi de données à un tiers. Les photos ne sont pas exportées.       */
+/* ====================================================================== */
+const STATS_DEMO = 'demo';
+let statsState = { source: null, cle: null, data: null, loading: false, error: '', exportEnCours: false };
+
+function peutStats(){ return isSuperAdmin() || ['admin','responsable'].includes(state.profile?.role); }
+
+function sousMenuSupportClient(actif){
+return `
+<div class="sous-menu" role="tablist">
+<button class="${actif === 'demandes' ? 'active' : ''}" data-action="go" data-path="/support">${iconeNav('inbox', 16)} Mes demandes</button>
+<button class="${actif === 'stats' ? 'active' : ''}" data-action="go" data-path="/support/stats">${iconeNav('chart', 16)} Statistiques &amp; export</button>
+</div>`;
+}
+
+/* ---- Parc simulé (toujours identique : générateur à graine fixe) ---- */
+function statsAleaFixe(graine){
+let a = graine >>> 0;
+return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+}
+function statsIsoJour(d){ return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10); }
+
+function donneesDemo(){
+const alea = statsAleaFixe(972);
+const pick = arr => arr[Math.floor(alea() * arr.length)];
+const types = [
+{ id:'dt1', nom:'Dispositif médical', champs:[{ key:'marque', label:'Marque' }, { key:'service', label:'Service' }] },
+{ id:'dt2', nom:'Véhicule', champs:[{ key:'marque', label:'Marque' }, { key:'km', label:'Kilométrage' }] },
+{ id:'dt3', nom:'Ascenseur', champs:[{ key:'niveaux', label:'Niveaux desservis' }] },
+{ id:'dt4', nom:'Sécurité incendie', champs:[{ key:'emplacement', label:'Emplacement' }] },
+{ id:'dt5', nom:'Climatisation', champs:[{ key:'puissance', label:'Puissance' }] },
+];
+const catalogue = [
+['dt1','Pousse-seringue n° 1','PS-2201',{ marque:'Fresenius', service:'Réanimation' }, 7],
+['dt1','Pousse-seringue n° 2','PS-2202',{ marque:'Fresenius', service:'Réanimation' }, 5],
+['dt1','Pousse-seringue n° 3','PS-2203',{ marque:'B. Braun', service:'Urgences' }, 4],
+['dt1','Moniteur multiparamétrique — box 1','MON-114',{ marque:'Philips', service:'Urgences' }, 9],
+['dt1','Moniteur multiparamétrique — box 2','MON-115',{ marque:'Philips', service:'Urgences' }, 6],
+['dt1','Défibrillateur DAE — hall','DAE-031',{ marque:'Zoll', service:'Accueil' }, 3],
+['dt1','Défibrillateur DAE — 2e étage','DAE-032',{ marque:'Zoll', service:'Chirurgie' }, 2],
+['dt1','Lit médicalisé ch. 204','LIT-204',{ marque:'Hill-Rom', service:'Médecine' }, 4],
+['dt1','Lit médicalisé ch. 211','LIT-211',{ marque:'Hill-Rom', service:'Médecine' }, 6],
+['dt1','Autoclave stérilisation','AUT-07',{ marque:'Getinge', service:'Stérilisation' }, 11],
+['dt2','Ambulance n° 1','FX-418-MQ',{ marque:'Renault Master', km:'148 200' }, 16],
+['dt2','Ambulance n° 2','GA-102-MQ',{ marque:'Renault Master', km:'96 540' }, 12],
+['dt2','Véhicule de liaison','GD-775-MQ',{ marque:'Peugeot 208', km:'41 300' }, 5],
+['dt3','Ascenseur A — patients','ASC-A',{ niveaux:'RDC à R+4' }, 10],
+['dt3','Ascenseur B — visiteurs','ASC-B',{ niveaux:'RDC à R+4' }, 7],
+['dt3','Monte-charge cuisine','MC-01',{ niveaux:'SS à RDC' }, 5],
+['dt4','Centrale de détection incendie','SSI-01',{ emplacement:'PC sécurité' }, 4],
+['dt4','Extincteurs — RDC (lot de 12)','EXT-RDC',{ emplacement:'Rez-de-chaussée' }, 2],
+['dt4','Extincteurs — étages (lot de 20)','EXT-ETG',{ emplacement:'R+1 à R+4' }, 2],
+['dt4','Désenfumage — cage d\'escalier','DES-01',{ emplacement:'Escalier nord' }, 2],
+['dt5','Centrale de traitement d\'air — bloc','CTA-BLOC',{ puissance:'45 kW' }, 9],
+['dt5','Climatiseur salle serveurs','CLIM-SRV',{ puissance:'7 kW' }, 6],
+['dt5','Climatiseurs chambres (lot de 30)','CLIM-CH',{ puissance:'2,5 kW / unité' }, 8],
+];
+const actes = {
+dt1:['Maintenance préventive','Contrôle qualité','Étalonnage','Réparation','Remplacement de pièce'],
+dt2:['Révision','Vidange','Pneumatiques','Contrôle technique','Réparation carrosserie'],
+dt3:['Visite de maintenance','Dépannage','Contrôle réglementaire'],
+dt4:['Vérification annuelle','Contrôle périodique','Remplacement'],
+dt5:['Nettoyage des filtres','Maintenance préventive','Recharge de gaz','Dépannage'],
+};
+const notes = ['RAS, équipement conforme.','Pièce d\'usure remplacée, essais concluants.','Anomalie corrigée, remise en service.','Contrôle effectué, rapport joint en photo.','Réglages effectués selon la notice constructeur.','Dégâts constatés, devis transmis à la direction.'];
+const intervenants = { dt1:['Julien','Karine','Julien'], dt2:['Steeve','Garage partenaire'], dt3:['Prestataire ascenseurs'], dt4:['Prestataire incendie','Karine'], dt5:['Steeve','Julien'] };
+const auj = new Date(); auj.setHours(12, 0, 0, 0);
+const equipements = [], interventions = [];
+catalogue.forEach(([type_id, nom, serie, valeurs, poids], i) => {
+const cree = new Date(auj); cree.setDate(cree.getDate() - 400 - Math.floor(alea() * 200));
+const e = { id:'demo-e' + i, type_id, nom, serial_value:serie, valeurs, archived:false, created_at:cree.toISOString() };
+equipements.push(e);
+const n = Math.max(1, Math.round(poids * (0.8 + alea() * 0.6)));
+for(let k = 0; k < n; k++){
+const d = new Date(auj); d.setDate(d.getDate() - Math.floor(Math.pow(alea(), 0.9) * 360));
+interventions.push({ id:'demo-i' + i + '-' + k, equipement_id:e.id, date:statsIsoJour(d), type:pick(actes[type_id]),
+technicien:pick(intervenants[type_id]), description:pick(notes), photos:Array(Math.floor(alea() * 3)).fill('x') });
+}
+});
+equipements.push({ id:'demo-e99', type_id:'dt1', nom:'Pompe à perfusion ancienne génération', serial_value:'PP-0098', valeurs:{ marque:'Ivac', service:'Médecine' }, archived:true, archive_reason:'Réformée — remplacée par PS-2203', created_at:'2023-03-01T10:00:00Z' });
+return { demo:true, client:'Clinique Les Flamboyants (démonstration)', types, equipements, interventions };
+}
+
+/* ---- Chargement du parc réel ---- */
+async function chargerStats(orgId){
+const { data:types, error:e1 } = await sb.from('equipment_types').select('id, nom, champs').eq('organization_id', orgId);
+if(e1) throw e1;
+const { data:eqs, error:e2 } = await sb.from('equipements')
+.select('id, nom, type_id, serial_value, valeurs, archived, archive_reason, archived_at, created_at').eq('organization_id', orgId);
+if(e2) throw e2;
+const ids = (eqs || []).map(e => e.id), interventions = [];
+for(let i = 0; i < ids.length; i += 150){
+const lot = ids.slice(i, i + 150);
+for(let debut = 0; ; debut += 1000){
+const { data, error } = await sb.from('interventions')
+.select('id, equipement_id, date, type, technicien, description, photos, modifie_le, modifie_par')
+.in('equipement_id', lot).order('date', { ascending:false }).range(debut, debut + 999);
+if(error) throw error;
+interventions.push(...(data || []));
+if(!data || data.length < 1000) break;
+}
+}
+const client = isSuperAdmin() ? nomClientDe(orgId) : (state.orgName || 'Mon établissement');
+return { demo:false, orgId, client, types: types || [], equipements: eqs || [], interventions };
+}
+
+function statsSourceCourante(){
+if(!isSuperAdmin()) return state.profile?.organization_id;
+return statsState.source || STATS_DEMO;
+}
+/* La clé inclut le compte : changer de compte sur l'appareil ne montre jamais les chiffres du précédent. */
+function statsCle(){ return (state.profile?.id || '') + ':' + statsSourceCourante(); }
+
+function assurerStats(){
+const src = statsSourceCourante(), cle = statsCle();
+if(statsState.cle === cle && (statsState.data || statsState.loading || statsState.error)) return;
+statsState = { ...statsState, cle, data: null, error: '', loading: true };
+if(src === STATS_DEMO){ statsState.data = donneesDemo(); statsState.loading = false; return; }
+if(!navigator.onLine){ statsState.loading = false; statsState.error = 'Connexion nécessaire pour calculer les statistiques du parc.'; return; }
+chargerStats(src)
+.then(d => { if(statsState.cle === cle){ statsState.data = d; statsState.loading = false; render(); } })
+.catch(e => { if(statsState.cle === cle){ statsState.loading = false; statsState.error = 'Chargement impossible : ' + (e.message || e); render(); } });
+}
+
+/* ---- Calculs ---- */
+const MOIS_COURTS = ['janv.','févr.','mars','avr.','mai','juin','juil.','août','sept.','oct.','nov.','déc.'];
+function calculerStats(d){
+const typeNom = id => (d.types.find(t => t.id === id) || {}).nom || 'Sans type';
+const parEq = new Map(d.equipements.map(e => [e.id, { e, n:0, derniere:null, photos:0 }]));
+d.interventions.forEach(iv => {
+const x = parEq.get(iv.equipement_id); if(!x) return;
+x.n++; x.photos += (iv.photos || []).length;
+if(!x.derniere || iv.date > x.derniere) x.derniere = iv.date;
+});
+const lignes = [...parEq.values()].map(x => ({ ...x, type: typeNom(x.e.type_id) }))
+.sort((a, b) => b.n - a.n || a.e.nom.localeCompare(b.e.nom, 'fr'));
+const auj = new Date(), mois = [];
+for(let k = 11; k >= 0; k--){ const m = new Date(auj.getFullYear(), auj.getMonth() - k, 1); mois.push({ cle: m.getFullYear() + '-' + String(m.getMonth() + 1).padStart(2, '0'), lib: MOIS_COURTS[m.getMonth()], annee: m.getFullYear(), n: 0 }); }
+d.interventions.forEach(iv => { const m = mois.find(x => x.cle === String(iv.date || '').slice(0, 7)); if(m) m.n++; });
+const parType = new Map();
+lignes.forEach(l => { const t = parType.get(l.type) || { nom: l.type, eq: 0, n: 0 }; if(!l.e.archived) t.eq++; t.n += l.n; parType.set(l.type, t); });
+const il30 = statsIsoJour(new Date(Date.now() - 30 * 86400000));
+const enService = d.equipements.filter(e => !e.archived).length;
+return {
+lignes, mois, types: [...parType.values()].sort((a, b) => b.n - a.n),
+enService, archives: d.equipements.length - enService, total: d.interventions.length,
+recents: d.interventions.filter(iv => (iv.date || '') >= il30).length,
+moyenne: enService ? d.interventions.length / enService : 0,
+};
+}
+
+/* ---- Graphiques (une seule teinte : la couleur du rôle) ---- */
+function statsBarresMois(mois){
+const max = Math.max(1, ...mois.map(m => m.n));
+const pas = max <= 5 ? 1 : max <= 10 ? 2 : max <= 25 ? 5 : max <= 50 ? 10 : Math.ceil(max / 5 / 10) * 10;
+const haut = Math.ceil(max / pas) * pas;
+const etroit = window.innerWidth < 640, W = etroit ? 340 : 600, H = etroit ? 180 : 200, g = etroit ? 26 : 34, b = 26, largeur = (W - g - 6) / mois.length;
+const y = v => 8 + (H - b - 8) * (1 - v / haut);
+let grille = '';
+for(let v = 0; v <= haut; v += pas) grille += `<line x1="${g}" x2="${W - 4}" y1="${y(v)}" y2="${y(v)}" class="st-grille"/><text x="${g - 6}" y="${y(v) + 4}" class="st-axe" text-anchor="end">${v}</text>`;
+const barres = mois.map((m, i) => {
+const x = g + i * largeur + largeur * 0.18, w = largeur * 0.64, h = Math.max(0, y(0) - y(m.n));
+return `<g class="st-barre"><rect x="${g + i * largeur}" y="8" width="${largeur}" height="${H - b - 8}" fill="transparent"/>
+${m.n ? `<path d="M${x},${y(0)} v${-(h - 4)} q0,-4 4,-4 h${w - 8} q4,0 4,4 v${h - 4} z" class="st-fill"/>` : ''}
+<text x="${x + w / 2}" y="${H - 8}" class="st-axe" text-anchor="middle">${etroit ? m.lib.slice(0, 1).toUpperCase() : m.lib}</text>
+<title>${m.lib} ${m.annee} : ${m.n} intervention${m.n > 1 ? 's' : ''}</title></g>`;
+}).join('');
+return `<svg viewBox="0 0 ${W} ${H}" class="st-svg" role="img" aria-label="Interventions par mois sur 12 mois">${grille}${barres}</svg>`;
+}
+
+function statsListeBarres(items, lib, val, sousLib){
+if(!items.length || !items.some(val)) return `<div class="small muted" style="padding:10px 0;">Aucune intervention enregistrée pour l'instant.</div>`;
+const max = Math.max(1, ...items.map(val));
+return `<div class="st-liste">${items.map(it => `
+<div class="st-ligne" title="${esc(lib(it))} : ${val(it)} intervention${val(it) > 1 ? 's' : ''}">
+<div class="st-nom"><span>${esc(lib(it))}</span>${sousLib ? `<small>${esc(sousLib(it))}</small>` : ''}</div>
+<div class="st-piste"><div class="st-jauge" style="width:${Math.max(2, 100 * val(it) / max)}%"></div></div>
+<div class="st-val">${val(it)}</div>
+</div>`).join('')}</div>`;
+}
+
+/* ---- Vue ---- */
+function viewStats(){
+if(!peutStats()) return viewNonAutorise();
+if(isSuperAdmin()) chargerClients(false);
+assurerStats();
+const s = statsState, d = s.data;
+const clients = isSuperAdmin() ? [...(reglages.clients || [])].filter(c => !c.est_mon_organisation).sort((a, b) => a.nom.localeCompare(b.nom, 'fr')) : [];
+const src = statsSourceCourante();
+const entete = `
+<div class="row between wrap st-entete">
+<div>
+<h2 style="margin:0;">Statistiques &amp; export</h2>
+<div class="small muted">${d ? esc(d.client) : ''}</div>
+</div>
+<div class="row wrap" style="gap:8px;">
+${isSuperAdmin() ? `<label class="st-source"><span>Parc</span>
+<select data-action="stats-source">
+<option value="${STATS_DEMO}" ${src === STATS_DEMO ? 'selected' : ''}>Démonstration — parc simulé</option>
+${clients.map(c => `<option value="${c.id}" ${src === c.id ? 'selected' : ''}>${esc(c.nom)}</option>`).join('')}
+</select></label>` : ''}
+<button class="btn btn-primary" data-action="stats-export" ${!d || s.exportEnCours ? 'disabled' : ''}>${iconeNav('download', 16)} ${s.exportEnCours ? 'Préparation…' : 'Exporter en Excel'}</button>
+</div>
+</div>
+${d && d.demo ? `<div class="alert alert-info st-demo">${iconeNav('chart', 16)} <span><b>Données simulées</b> pour la démonstration : un établissement fictif, ses ${d.equipements.length} équipements et ${d.interventions.length} interventions sur 12 mois. L'export Excel fonctionne comme pour un vrai client.</span></div>` : ''}`;
+if(s.loading) return entete + `<div class="center-screen" style="min-height:30vh;"><div class="spinner"></div></div>`;
+if(s.error) return entete + `<div class="alert alert-error">${esc(s.error)}</div><button class="btn" data-action="stats-recharger">Réessayer</button>`;
+if(!d) return entete;
+const c = calculerStats(d);
+if(!d.equipements.length) return entete + `<div class="empty">Aucun équipement dans ce parc pour l'instant.</div>`;
+const fmt1 = v => v.toLocaleString('fr-FR', { maximumFractionDigits: 1 });
+const lienEq = l => d.demo ? esc(l.e.nom) : `<a href="#/equip/${l.e.id}">${esc(l.e.nom)}</a>`;
+return entete + `
+<div class="st-kpis">
+<div class="st-kpi"><div class="v">${c.enService}</div><div class="l">équipements en service${c.archives ? ` <span class="muted">(+${c.archives} archivé${c.archives > 1 ? 's' : ''})</span>` : ''}</div></div>
+<div class="st-kpi"><div class="v">${c.total}</div><div class="l">interventions enregistrées</div></div>
+<div class="st-kpi"><div class="v">${fmt1(c.moyenne)}</div><div class="l">interventions par équipement</div></div>
+<div class="st-kpi"><div class="v">${c.recents}</div><div class="l">ces 30 derniers jours</div></div>
+</div>
+<div class="card"><h3>Interventions par mois</h3>${c.mois.some(m => m.n) ? `<div class="small muted" style="margin-bottom:6px;">12 derniers mois — survolez ou touchez une barre pour le détail.</div>${statsBarresMois(c.mois)}` : `<div class="small muted" style="padding:10px 0;">Aucune intervention sur les 12 derniers mois.</div>`}</div>
+<div class="st-deux">
+<div class="card"><h3>Équipements les plus sollicités</h3>${statsListeBarres(c.lignes.filter(l => l.n).slice(0, 10), l => l.e.nom, l => l.n, l => l.type)}</div>
+<div class="card"><h3>Par type d'équipement</h3>${statsListeBarres(c.types, t => t.nom, t => t.n, t => t.eq + ' équipement' + (t.eq > 1 ? 's' : ''))}</div>
+</div>
+<div class="card">
+<h3>Tous les équipements <span class="muted small">(${c.lignes.length})</span></h3>
+<div class="st-table-wrap"><table class="st-table">
+<thead><tr><th>Équipement</th><th>Type</th><th class="num">Interventions</th><th>Dernière</th></tr></thead>
+<tbody>${c.lignes.map(l => `<tr class="${l.e.archived ? 'st-archive' : ''}"><td>${lienEq(l)}${l.e.serial_value ? `<div class="small muted">${esc(l.e.serial_value)}</div>` : ''}<div class="small muted st-type-mob">${esc(l.type)}</div>${l.e.archived ? ' <span class="badge badge-off">archivé</span>' : ''}</td><td>${esc(l.type)}</td><td class="num"><b>${l.n}</b></td><td>${l.derniere ? fmtDate(l.derniere) : '—'}</td></tr>`).join('')}</tbody>
+</table></div>
+<div class="small muted" style="margin-top:8px;">L'export Excel contient 3 onglets : Synthèse, Équipements (avec le nombre d'interventions de chacun) et Interventions (tout l'historique). Les photos restent dans l'application.</div>
+</div>`;
+}
+
+/* ---- Fichier Excel (.xlsx) fait maison : XML + ZIP sans compression ---- */
+const XL_CRC = (() => { const t = new Uint32Array(256); for(let n = 0; n < 256; n++){ let c = n; for(let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+function xlCrc(u8){ let c = 0xFFFFFFFF; for(let i = 0; i < u8.length; i++) c = XL_CRC[(c ^ u8[i]) & 0xFF] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; }
+function xlZip(fichiers){
+const enc = new TextEncoder(), parts = [], central = []; let offset = 0;
+const d = new Date(), dosTime = (d.getHours() << 11) | (d.getMinutes() << 5) | (d.getSeconds() >> 1), dosDate = ((d.getFullYear() - 1980) << 9) | ((d.getMonth() + 1) << 5) | d.getDate();
+for(const [nom, contenu] of fichiers){
+const n = enc.encode(nom), data = enc.encode(contenu), crc = xlCrc(data);
+const h = new DataView(new ArrayBuffer(30));
+h.setUint32(0, 0x04034b50, true); h.setUint16(4, 20, true); h.setUint16(6, 0x0800, true); h.setUint16(8, 0, true);
+h.setUint16(10, dosTime, true); h.setUint16(12, dosDate, true); h.setUint32(14, crc, true); h.setUint32(18, data.length, true); h.setUint32(22, data.length, true);
+h.setUint16(26, n.length, true); h.setUint16(28, 0, true);
+parts.push(new Uint8Array(h.buffer), n, data);
+const c = new DataView(new ArrayBuffer(46));
+c.setUint32(0, 0x02014b50, true); c.setUint16(4, 20, true); c.setUint16(6, 20, true); c.setUint16(8, 0x0800, true); c.setUint16(10, 0, true);
+c.setUint16(12, dosTime, true); c.setUint16(14, dosDate, true); c.setUint32(16, crc, true); c.setUint32(20, data.length, true); c.setUint32(24, data.length, true);
+c.setUint16(28, n.length, true); c.setUint32(42, offset, true);
+central.push(new Uint8Array(c.buffer), n);
+offset += 30 + n.length + data.length;
+}
+const tailleCentral = central.reduce((s, p) => s + p.length, 0);
+const fin = new DataView(new ArrayBuffer(22));
+fin.setUint32(0, 0x06054b50, true); fin.setUint16(8, fichiers.length, true); fin.setUint16(10, fichiers.length, true);
+fin.setUint32(12, tailleCentral, true); fin.setUint32(16, offset, true);
+return new Blob([...parts, ...central, new Uint8Array(fin.buffer)], { type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+}
+function xlEsc(v){ return String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, ''); }
+function xlCol(i){ let s = ''; i++; while(i){ const m = (i - 1) % 26; s = String.fromCharCode(65 + m) + s; i = Math.floor((i - 1) / 26); } return s; }
+function xlJour(iso){ const [y, m, d] = String(iso).slice(0, 10).split('-').map(Number); return (Date.UTC(y, m - 1, d) - Date.UTC(1899, 11, 30)) / 86400000; }
+/* Styles : 0 normal · 1 en-tête · 2 date · 3 titre · 4 sous-titre · 5 gras · 6 texte long */
+function xlFeuille(f){
+const lignes = f.lignes.map((ligne, r) => {
+if(!ligne) return '';
+const cells = ligne.map((v, c) => {
+if(v === null || v === undefined || v === '') return '';
+const ref = xlCol(c) + (r + 1);
+const cell = typeof v === 'object' ? v : { v };
+const st = cell.s ? ` s="${cell.s}"` : '';
+if(cell.date) return `<c r="${ref}" s="2"><v>${xlJour(cell.date)}</v></c>`;
+if(typeof cell.v === 'number') return `<c r="${ref}"${st}><v>${cell.v}</v></c>`;
+return `<c r="${ref}"${st} t="inlineStr"><is><t xml:space="preserve">${xlEsc(cell.v)}</t></is></c>`;
+}).join('');
+return `<row r="${r + 1}"${f.hauteurs && f.hauteurs[r] ? ` ht="${f.hauteurs[r]}" customHeight="1"` : ''}>${cells}</row>`;
+}).join('');
+const gel = f.gel ? `<sheetViews><sheetView workbookViewId="0"><pane ySplit="${f.gel}" topLeftCell="A${f.gel + 1}" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>` : '<sheetViews><sheetView workbookViewId="0"/></sheetViews>';
+const cols = `<cols>${f.largeurs.map((w, i) => `<col min="${i + 1}" max="${i + 1}" width="${w}" customWidth="1"/>`).join('')}</cols>`;
+const filtre = f.filtre ? `<autoFilter ref="${f.filtre}"/>` : '';
+return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">${gel}${cols}<sheetData>${lignes}</sheetData>${filtre}<pageSetup orientation="landscape" fitToWidth="1" fitToHeight="0"/></worksheet>`;
+}
+function xlClasseur(feuilles){
+const styles = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+<numFmts count="1"><numFmt numFmtId="164" formatCode="dd/mm/yyyy"/></numFmts>
+<fonts count="5"><font><sz val="10"/><name val="Arial"/></font><font><b/><sz val="10"/><color rgb="FFFFFFFF"/><name val="Arial"/></font><font><b/><sz val="15"/><color rgb="FF0B4A42"/><name val="Arial"/></font><font><sz val="9"/><color rgb="FF5B686D"/><name val="Arial"/></font><font><b/><sz val="10"/><name val="Arial"/></font></fonts>
+<fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FF0F766E"/><bgColor indexed="64"/></patternFill></fill></fills>
+<borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>
+<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
+<cellXfs count="7"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>
+<xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1" applyAlignment="1"><alignment vertical="center" wrapText="1"/></xf>
+<xf numFmtId="164" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1" applyAlignment="1"><alignment horizontal="left"/></xf>
+<xf numFmtId="0" fontId="2" fillId="0" borderId="0" xfId="0" applyFont="1"/>
+<xf numFmtId="0" fontId="3" fillId="0" borderId="0" xfId="0" applyFont="1"/>
+<xf numFmtId="0" fontId="4" fillId="0" borderId="0" xfId="0" applyFont="1"/>
+<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0" applyAlignment="1"><alignment vertical="top" wrapText="1"/></xf></cellXfs>
+<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>`;
+const fichiers = [
+['[Content_Types].xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>${feuilles.map((f, i) => `<Override PartName="/xl/worksheets/sheet${i + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join('')}</Types>`],
+['_rels/.rels', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`],
+['xl/workbook.xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>${feuilles.map((f, i) => `<sheet name="${xlEsc(f.nom)}" sheetId="${i + 1}" r:id="rId${i + 1}"/>`).join('')}</sheets>${feuilles.some(f => f.filtre) ? '<definedNames>' : ''}${feuilles.map((f, i) => f.filtre ? `<definedName name="_xlnm._FilterDatabase" localSheetId="${i}" hidden="1">'${xlEsc(f.nom)}'!${f.filtre.split(':').map(p => p.replace(/([A-Z]+)(\d+)/, '$$$1$$$2')).join(':')}</definedName>` : '').join('')}${feuilles.some(f => f.filtre) ? '</definedNames>' : ''}</workbook>`],
+['xl/_rels/workbook.xml.rels', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${feuilles.map((f, i) => `<Relationship Id="rId${i + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${i + 1}.xml"/>`).join('')}<Relationship Id="rId${feuilles.length + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`],
+['xl/styles.xml', styles],
+...feuilles.map((f, i) => [`xl/worksheets/sheet${i + 1}.xml`, xlFeuille(f)]),
+];
+return xlZip(fichiers);
+}
+
+function construireExport(d){
+const c = calculerStats(d);
+const eqParId = new Map(d.equipements.map(e => [e.id, e]));
+const typeDe = id => d.types.find(t => t.id === id) || { nom:'Sans type', champs:[] };
+const caracteristiques = e => {
+const t = typeDe(e.type_id), v = e.valeurs || {};
+return (t.champs || []).filter(ch => v[ch.key] !== undefined && v[ch.key] !== null && v[ch.key] !== '').map(ch => `${ch.label} : ${v[ch.key]}`).join(' · ');
+};
+const aujourd = statsIsoJour(new Date()), auteur = state.profile?.full_name || '';
+const H = v => ({ v, s:1 });
+const synthese = [
+[{ v:'WiTracEQUIP — ' + d.client, s:3 }],
+[{ v:`Export du ${fmtDate(aujourd)}${auteur ? ' par ' + auteur : ''}${d.demo ? ' — données simulées pour la démonstration' : ''}`, s:4 }],
+null,
+[H('Indicateur'), H('Valeur')],
+['Équipements en service', c.enService],
+['Équipements archivés', c.archives],
+['Interventions enregistrées', c.total],
+['Interventions par équipement (moyenne)', Math.round(c.moyenne * 10) / 10],
+['Interventions ces 30 derniers jours', c.recents],
+null,
+[H("Type d'équipement"), H('Équipements en service'), H('Interventions')],
+...c.types.map(t => [t.nom, t.eq, t.n]),
+null,
+[H('Mois'), H('Interventions')],
+...c.mois.map(m => [`${m.lib} ${m.annee}`, m.n]),
+null,
+[H('Top 10 — équipements les plus sollicités'), H('Type'), H('Interventions')],
+...c.lignes.filter(l => l.n).slice(0, 10).map(l => [l.e.nom, l.type, l.n]),
+];
+const lignesEq = [
+[H('Équipement'), H('Type'), H('N° de série / immatriculation'), H('Statut'), H("Nombre d'interventions"), H('Dernière intervention'), H('Photos'), H('Caractéristiques'), H('Créé le'), H("Motif d'archivage")],
+...c.lignes.map(l => [l.e.nom, l.type, l.e.serial_value || '', l.e.archived ? 'Archivé' : 'En service', l.n, l.derniere ? { date:l.derniere } : '', l.photos, { v:caracteristiques(l.e), s:6 }, l.e.created_at ? { date:l.e.created_at } : '', l.e.archive_reason || '']),
+];
+const ivs = [...d.interventions].sort((a, b) => String(b.date).localeCompare(String(a.date)));
+const lignesIv = [
+[H('Date'), H('Équipement'), H("Type d'équipement"), H('N° de série / immatriculation'), H('Intervention'), H('Intervenant'), H('Description'), H('Photos'), H('Modifiée le'), H('Modifiée par')],
+...ivs.map(iv => { const e = eqParId.get(iv.equipement_id) || {}; return [iv.date ? { date:iv.date } : '', e.nom || '', typeDe(e.type_id).nom, e.serial_value || '', iv.type || '', iv.technicien || '', { v:iv.description || '', s:6 }, (iv.photos || []).length, iv.modifie_le ? { date:iv.modifie_le } : '', iv.modifie_par || '']; }),
+];
+return xlClasseur([
+{ nom:'Synthèse', lignes:synthese, largeurs:[46, 24, 16], hauteurs:{ 0:22, 3:18 } },
+{ nom:'Équipements', lignes:lignesEq, largeurs:[38, 22, 24, 12, 14, 16, 9, 50, 12, 30], gel:1, filtre:`A1:J${lignesEq.length}`, hauteurs:{ 0:30 } },
+{ nom:'Interventions', lignes:lignesIv, largeurs:[12, 36, 22, 24, 26, 20, 60, 9, 12, 18], gel:1, filtre:`A1:J${lignesIv.length}`, hauteurs:{ 0:30 } },
+]);
+}
+
+async function actionExporterStats(){
+const d = statsState.data;
+if(!d || statsState.exportEnCours) return;
+statsState.exportEnCours = true; render();
+try{
+const blob = construireExport(d);
+const nomFichier = ('WiTracEQUIP_' + d.client.replace(/\(démonstration\)/, 'demo') + '_' + statsIsoJour(new Date()))
+.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^A-Za-z0-9_-]+/g, '_').replace(/_+/g, '_') + '.xlsx';
+const url = URL.createObjectURL(blob);
+const a = document.createElement('a'); a.href = url; a.download = nomFichier; document.body.appendChild(a); a.click(); a.remove();
+setTimeout(() => URL.revokeObjectURL(url), 60000);
+if(!d.demo) sb.rpc('noter_export', { p_org: d.orgId, p_nb_equipements: d.equipements.length, p_nb_interventions: d.interventions.length }).then(() => { reglages.journal = null; }, () => {});
+toast('Fichier Excel prêt : ' + nomFichier);
+}catch(e){ toast('Export impossible : ' + (e.message || e), 'erreur'); }
+finally{ statsState.exportEnCours = false; render(); }
+}
+
+document.addEventListener('click', (e) => {
+const t = e.target.closest('[data-action]');
+if(!t) return;
+if(t.dataset.action === 'stats-export') actionExporterStats();
+else if(t.dataset.action === 'stats-recharger'){ statsState.cle = null; render(); }
+});
+document.addEventListener('change', (e) => {
+const t = e.target;
+if(t && t.dataset && t.dataset.action === 'stats-source'){ statsState.source = t.value; statsState.cle = null; render(); }
+});
