@@ -950,3 +950,24 @@ padding-bottom:4px; border-bottom:1px solid var(--border);}
 .journal-ligne .journal-corps{padding-right:36px;}
 .choix-client{display:flex; align-items:center; gap:8px; margin:0; text-transform:none; letter-spacing:normal; font-size:12.5px; color:var(--text-dim); font-weight:600;}
 .choix-client select{width:auto; min-width:160px; padding:6px 8px;}
+
+/* ===== v2.16.6 : photos des interventions ===== */
+.iv-apercus{display:flex; flex-wrap:wrap; gap:8px; margin-bottom:8px;}
+.iv-apercu{position:relative; width:72px; height:72px; border-radius:10px; overflow:hidden; background:var(--surface-2); border:1px solid var(--border);}
+.iv-apercu img{width:100%; height:100%; object-fit:cover; display:block;}
+.iv-apercu-x{position:absolute; top:3px; right:3px; width:24px; height:24px; border-radius:50%; border:0; background:rgba(0,0,0,.65); color:#fff; font-size:16px; line-height:24px; padding:0; cursor:pointer;}
+.iv-photo-btn{display:inline-flex; align-items:center; gap:6px; cursor:pointer;}
+.iv-photo-btn.disabled{opacity:.5; pointer-events:none;}
+.iv-vignettes{display:flex; flex-wrap:wrap; gap:6px; margin-top:8px;}
+.iv-vignette{width:52px; height:52px; padding:0; border-radius:8px; overflow:hidden; border:1px solid var(--border); background:var(--surface-2); cursor:zoom-in; display:inline-block;}
+.iv-vignette img{width:100%; height:100%; object-fit:cover; display:block;}
+.iv-vignette.attente{cursor:default; animation:pulse 1.2s ease-in-out infinite;}
+.visionneuse{position:fixed; inset:0; z-index:220; background:rgba(8,10,12,.97); display:flex; flex-direction:column; color:#fff;}
+.visionneuse-haut{display:flex; align-items:center; justify-content:space-between; gap:10px; padding:10px 14px; padding-top:max(10px, env(safe-area-inset-top));}
+.visionneuse-btn{background:rgba(255,255,255,.12); border:0; color:#fff; width:40px; height:40px; border-radius:50%; font-size:24px; cursor:pointer;}
+.visionneuse-image{flex:1; min-height:0; display:flex; align-items:center; justify-content:center; position:relative; padding:0 8px;}
+.visionneuse-image img{max-width:100%; max-height:100%; object-fit:contain; border-radius:6px;}
+.visionneuse-nav{position:absolute; top:50%; transform:translateY(-50%); background:rgba(255,255,255,.14); border:0; color:#fff; width:44px; height:44px; border-radius:50%; font-size:28px; line-height:40px; cursor:pointer;}
+.visionneuse-nav.g{left:10px;} .visionneuse-nav.d{right:10px;}
+.visionneuse-bas{display:flex; justify-content:center; gap:10px; padding:12px; padding-bottom:max(12px, env(safe-area-inset-bottom));}
+@keyframes pulse{0%,100%{opacity:.5}50%{opacity:1}}
