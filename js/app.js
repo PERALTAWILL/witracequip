@@ -7,7 +7,10 @@ let dernierePage = null;
 
 function render(){
 const focus = capturerFocus();
+// Un rafraîchissement en arrière-plan ne doit pas refermer le menu ouvert.
+const menuOuvert = !!document.getElementById('user-dropdown')?.classList.contains('open');
 peindre();
+if(menuOuvert) document.getElementById('user-dropdown')?.classList.add('open');
 const page = location.hash + '|' + !!state.session;
 const main = document.querySelector('#app main');
 if(main && page !== dernierePage){
@@ -376,6 +379,7 @@ return [
 { path:'/', icone:'home', label:'Accueil', actif: r.name === 'accueil' },
 { path:'/equipements', icone:'box', label:'Équipements', court:'Équip.', actif: equipementsActif },
 ...(peutGererTypes() ? [{ path:'/types', icone:'tag', label:"Types d'équipement", court:'Types', actif: r.name === 'types' }] : []),
+{ path:'/journal', icone:'journal', label:'Journal', actif: r.name === 'journal', badge: nbActiviteNonLue() || '' },
 ...(peutReglages() ? [{ path:'/reglages', icone:'gear', label:'Réglages', actif: r.name === 'reglages' || r.name === 'equipe' }] : []),
 { path:'/support', icone:'help', label:'Support', actif: r.name === 'support' },
 ];
@@ -519,6 +523,7 @@ else if(r.name === 'equip') content = viewEquipDetail(r.param);
 else if(r.name === 'reglages') content = viewReglages(r.param, r.sub);
 else if(r.name === 'equipe') content = viewReglages('membres'); // ancienne adresse
 else if(r.name === 'support') content = sa ? viewReglages('support') : viewSupport();
+else if(r.name === 'journal') content = sa ? viewReglages('journal') : viewActivite();
 else content = sa ? viewReglages('clients') : viewDashboard();
 }catch(e){
 content = `<div class="alert alert-error">Erreur d'affichage : ${esc(e.message||e)}</div>`;
@@ -1534,7 +1539,7 @@ if(error) throw error;
 equipForm = { typeId:'', orgId:'', nom:'', serial_value:'', valeurs:{}, busy:false, error:'' };
 reglages.parcs = {};
 refreshDashboard();
-toast('Équipement créé — son QR code est prêt');
+toast('Équipement créé — son QR code est prêt'); chargerActivite(true);
 nav('/equip/' + data.id);
 }catch(e){
 if(estErreurReseau(e)){
@@ -2045,6 +2050,7 @@ const MAX_OCTETS_PHOTO = 5 * 1024 * 1024;
 
 async function rechargerInterventions(){
 equipDetail.interventions = await listInterventions(equipDetail.id);
+chargerActivite(true);
 chargerUrlsPhotos();
 }
 
@@ -2351,6 +2357,10 @@ else if(action === 'membres-desel'){ reglages.selMembres = []; render(); }
 else if(action === 'journal-rafraichir'){ reglages.journal = null; render(); }
 else if(action === 'journal-suppr'){ actionSupprimerJournal(t.dataset.id); }
 else if(action === 'journal-vider'){ actionViderJournal(); }
+else if(action === 'activite-rafraichir'){ activite.error = ''; chargerActivite(true); }
+else if(action === 'activite-filtre'){ activite.filtre = t.dataset.filtre; render(); }
+else if(action === 'activite-archiver'){ basculerArchiveActivite(t.dataset.cle, t.dataset.archiver === '1'); }
+else if(action === 'activite-tout-archiver'){ archiverToutActivite(); }
 else if(action === 'support-rafraichir'){ reglages.support = null; render(); }
 else if(action === 'support-statut'){
 setStatutDemande(t.dataset.id, t.dataset.statut)
@@ -2607,7 +2617,7 @@ nav('/');
 }
 
 setInterval(verifierSession, 60000);
-document.addEventListener('visibilitychange', () => { if(document.visibilityState === 'visible') verifierSession(); });
+document.addEventListener('visibilitychange', () => { if(document.visibilityState === 'visible'){ verifierSession(); if(state.profile && !state.superAdmin) chargerActivite(true); } });
 window.addEventListener('online', () => setTimeout(verifierSession, 1500));
 
 async function appliquerSession(session){
@@ -2629,6 +2639,7 @@ state.horsLigne = false;
 sauverInstantane({ profile: state.profile, orgName: state.orgName, superAdmin: state.superAdmin, types: state.types, modeles: state.modeles });
 if(state.profile?.mdp_a_changer) setTimeout(imposerNouveauMotDePasse, 400);
 setTimeout(verifierSession, 2000);
+if(!state.superAdmin) setTimeout(() => chargerActivite(true), 1200);
 retourApresConnexion();
 // Préchargement discret : la liste des équipements est prête avant qu'on l'ouvre.
 if(dashboardCache.items === null) setTimeout(() => { if(state.session && dashboardCache.items === null) chargerEquipements(); }, 300);
@@ -2654,6 +2665,7 @@ state.accessError = (e && e.message) ? e.message : 'Erreur de chargement du prof
 }
 } else {
 state.profile = null; state.orgName = ''; state.superAdmin = false;
+activite = { items:null, loading:false, error:'', filtre:'recentes' };
 dashboardCache = dashboardInitial(dashboardCache.requete + 1); // invalide toute réponse encore en route
 resetReglages();
 modal = null;

@@ -45,7 +45,7 @@ function nomModele(cle){ return (modelesMetiers().find(m => m.cle === cle) || {}
    d'un client se gèrent DANS sa fiche : plus d'onglet Membres ni Invitations
    séparés pour le super-admin (même contenu, deux chemins = on s'y perd). */
 function ongletsReglages(){
-const journal = { cle:'journal', l:'Journal', aide:"Historique des suppressions, archivages et modifications : qui, quand et pourquoi." };
+const journal = { cle:'journal', l: isSuperAdmin() ? 'Journal' : 'Historique complet', aide:"Historique complet des suppressions, archivages et modifications : qui, quand et pourquoi. Conservé sans limite de durée." };
 if(isSuperAdmin()){
 const aTraiter = (reglages.support || []).filter(d => d.statut !== 'traite').length;
 return [
@@ -1367,6 +1367,7 @@ if(surLaFiche) nav(routeParc(equipDetail.item?.organization_id));
 /* Après archivage / suppression : on vide la sélection et on recharge. */
 function apresActionEquipements(){
 modal = null;
+chargerActivite(true);
 reglages.parcs = {};
 dashboardCache.sel = [];
 if(equipDetail.id){ equipDetail.id = null; }   // force le rechargement de la fiche ouverte
@@ -1630,4 +1631,122 @@ if(n) chargerClients(true);
 toast('Métier supprimé');
 render();
 }catch(err){ toast('Erreur : ' + err.message, 'erreur'); }
+}
+
+/* ---------------------------------------------------------------------- */
+/* Journal d'activité (tous les utilisateurs, sql/21)                      */
+/* ---------------------------------------------------------------------- */
+/* Ce qui s'est passé sur le parc ces 7 derniers jours. Chacun archive ses
+notifications et peut les revoir ; tout disparaît au bout d'une semaine.
+Le journal complet (traçabilité) reste dans Réglages → Historique complet. */
+
+let activite = { items:null, loading:false, error:'', filtre:'recentes' };
+
+const GENRES_ACTIVITE = {
+intervention:              { l:'Intervention ajoutée',   ico:'wrench', c:'bleu' },
+equipement_cree:           { l:'Équipement créé',        ico:'plus',   c:'vert' },
+archivage_equipement:      { l:'Équipement archivé',     ico:'archive',c:'or' },
+restauration_equipement:   { l:'Équipement restauré',    ico:'undo',   c:'vert' },
+suppression_equipement:    { l:'Équipement supprimé',    ico:'trash',  c:'rouge' },
+modification_intervention: { l:'Intervention modifiée',  ico:'pencil', c:'bleu' },
+suppression_intervention:  { l:'Intervention supprimée', ico:'trash',  c:'rouge' },
+};
+
+function nbActiviteNonLue(){ return (activite.items || []).filter(a => !a.archivee).length; }
+
+function chargerActivite(force){
+if(isSuperAdmin() || activite.loading) return;
+if(activite.items !== null && !force) return;
+if(activite.error && !force) return;
+activite.loading = true;
+sb.rpc('fil_activite')
+.then(({ data, error }) => {
+if(error) throw error;
+activite.items = data || []; activite.error = '';
+})
+.catch(e => { activite.error = estErreurReseau(e) ? 'Journal indisponible sans réseau : il se mettra à jour au retour de la connexion.' : e.message; })
+.finally(() => { activite.loading = false; render(); });
+}
+
+async function basculerArchiveActivite(cle, archiver){
+const a = (activite.items || []).find(x => x.cle === cle);
+if(!a) return;
+a.archivee = archiver; render(); // effet immédiat, la base suit
+try{
+const q = archiver
+? sb.from('activite_archivee').upsert({ profile_id: state.profile.id, cle })
+: sb.from('activite_archivee').delete().eq('profile_id', state.profile.id).eq('cle', cle);
+const { error } = await q;
+if(error) throw error;
+}catch(e){ a.archivee = !archiver; render(); toast('Erreur : ' + e.message, 'erreur'); }
+}
+
+async function archiverToutActivite(){
+const cles = (activite.items || []).filter(a => !a.archivee).map(a => a.cle);
+if(!cles.length) return;
+(activite.items || []).forEach(a => { if(cles.includes(a.cle)) a.archivee = true; });
+render();
+try{
+const { error } = await sb.from('activite_archivee').upsert(cles.map(cle => ({ profile_id: state.profile.id, cle })));
+if(error) throw error;
+toast(cles.length > 1 ? cles.length + ' notifications archivées' : 'Notification archivée');
+}catch(e){ toast('Erreur : ' + e.message, 'erreur'); chargerActivite(true); }
+}
+
+function libelleJour(d){
+const j = new Date(d); const auj = new Date();
+const hier = new Date(); hier.setDate(auj.getDate() - 1);
+if(j.toDateString() === auj.toDateString()) return "Aujourd'hui";
+if(j.toDateString() === hier.toDateString()) return 'Hier';
+return j.toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long' });
+}
+
+function viewActivite(){
+chargerActivite(false);
+const recentes = (activite.items || []).filter(a => !a.archivee);
+const archivees = (activite.items || []).filter(a => a.archivee);
+const filtre = activite.filtre === 'archivees' ? 'archivees' : 'recentes';
+const liste = filtre === 'archivees' ? archivees : recentes;
+
+let corps;
+if(activite.error) corps = `<div class="alert alert-info">${esc(activite.error)}</div><button class="btn btn-sm" data-action="activite-rafraichir">Réessayer</button>`;
+else if(activite.items === null) corps = squeletteListe(4);
+else if(!liste.length) corps = `<div class="card empty"><div class="empty-icone">${iconeNav(filtre === 'archivees' ? 'archive' : 'journal', 30)}</div>
+<strong>${filtre === 'archivees' ? 'Aucune notification archivée' : 'Vous êtes à jour'}</strong><br>
+<span class="small">${filtre === 'archivees' ? 'Les notifications que vous archivez restent consultables ici pendant une semaine.' : "Aucune nouvelle activité sur votre parc ces 7 derniers jours."}</span></div>`;
+else {
+let jour = '';
+corps = '<div class="card activite-liste">' + liste.map(a => {
+const g = GENRES_ACTIVITE[a.genre] || { l:a.genre, ico:'journal', c:'bleu' };
+const entete = libelleJour(a.le) !== jour ? `<div class="activite-jour">${esc(jour = libelleJour(a.le))}</div>` : '';
+return `${entete}
+<div class="activite-ligne">
+<div class="activite-ico ${g.c}">${iconeNav(g.ico, 16)}</div>
+<div class="activite-corps">
+<div class="activite-type">${esc(g.l)} <span class="muted">· ${new Date(a.le).toLocaleTimeString('fr-FR', { hour:'2-digit', minute:'2-digit' })}</span></div>
+<div class="activite-titre">${esc(a.titre || '')}</div>
+${a.detail ? `<div class="small muted activite-detail">${esc(a.detail)}</div>` : ''}
+<div class="activite-actions">
+${a.par ? `<span class="small muted">par ${esc(a.par)}</span>` : ''}
+${a.equipement_id ? `<button class="btn-lien-petit" data-action="go" data-path="/equip/${a.equipement_id}">Voir la fiche</button>` : ''}
+</div>
+</div>
+<button class="icon-btn activite-archiver" data-action="activite-archiver" data-cle="${esc(a.cle)}" data-archiver="${a.archivee ? '0' : '1'}"
+title="${a.archivee ? 'Remettre dans les récentes' : 'Archiver'}" aria-label="${a.archivee ? 'Remettre dans les récentes' : 'Archiver'}">${iconeNav(a.archivee ? 'undo' : 'archive', 17)}</button>
+</div>`;
+}).join('') + '</div>';
+}
+
+return `
+<div class="row between wrap" style="margin-bottom:6px;"><h2>Journal</h2>
+<button class="btn btn-sm" data-action="activite-rafraichir">Actualiser</button></div>
+<div class="reglages-aide">Ce qui s'est passé sur votre parc ces 7 derniers jours. Archivez une notification pour la retirer, retrouvez-la dans « Archivées ». Chaque notification s'efface automatiquement au bout d'une semaine.</div>
+<div class="row between wrap" style="margin-bottom:12px;gap:10px;">
+<div class="segment">
+<button class="${filtre === 'recentes' ? 'active' : ''}" data-action="activite-filtre" data-filtre="recentes">Récentes <span class="onglet-compteur ${recentes.length ? 'alerte' : ''}">${recentes.length}</span></button>
+<button class="${filtre === 'archivees' ? 'active' : ''}" data-action="activite-filtre" data-filtre="archivees">Archivées <span class="onglet-compteur">${archivees.length}</span></button>
+</div>
+${filtre === 'recentes' && recentes.length > 1 ? `<button class="btn btn-sm" data-action="activite-tout-archiver">${iconeNav('archive', 15)} Tout archiver</button>` : ''}
+</div>
+${corps}`;
 }
