@@ -971,3 +971,11 @@ padding-bottom:4px; border-bottom:1px solid var(--border);}
 .visionneuse-nav.g{left:10px;} .visionneuse-nav.d{right:10px;}
 .visionneuse-bas{display:flex; justify-content:center; gap:10px; padding:12px; padding-bottom:max(12px, env(safe-area-inset-bottom));}
 @keyframes pulse{0%,100%{opacity:.5}50%{opacity:1}}
+
+/* ===== v2.16.7 : hors-ligne (équipements en attente) ===== */
+.badge-attente{display:inline-block; margin-left:6px; padding:2px 8px; border-radius:999px; font-size:11.5px; font-weight:650; background:#fff4d6; color:#8a5a00; border:1px solid #f1d58a; vertical-align:middle;}
+.bandeau-hl{display:flex; gap:8px; align-items:flex-start; margin-bottom:14px;}
+.bandeau-hl svg{flex:none; margin-top:2px;}
+.ligne-select.en-attente .thumb{background:#fff4d6; color:#8a5a00;}
+.iv-attente-liste{display:flex; flex-direction:column; gap:8px; margin:12px 0;}
+.iv-attente{padding:10px 12px; border:1px dashed #f1d58a; background:#fffbef; border-radius:10px;}
