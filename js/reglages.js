@@ -923,6 +923,7 @@ detail = `<div class="muted">${j.donnees.interventions.length} intervention(s) e
 return `
 <div class="journal-ligne">
 <div class="journal-date">${fmtDateTime(j.le)}</div>
+${isSuperAdmin() ? `<button class="icon-btn btn-poubelle journal-suppr" data-action="journal-suppr" data-id="${j.id}" title="Supprimer cette ligne">${iconeNav('trash', 16)}</button>` : ''}
 <div class="journal-corps">
 <div><strong>${esc(LIBELLES_JOURNAL[j.action] || j.action)}</strong> — ${esc(j.libelle || '')}</div>
 <div class="small muted">
@@ -938,7 +939,10 @@ return `
 <div class="card">
 <div class="row between wrap">
 <h3>Journal des suppressions et modifications</h3>
+<div class="row wrap" style="gap:6px;">
 <button class="btn btn-sm" data-action="journal-rafraichir">Actualiser</button>
+${isSuperAdmin() && reglages.journal.length ? `<button class="btn btn-sm btn-danger" data-action="journal-vider">Vider le journal</button>` : ''}
+</div>
 </div>
 <div class="hint" style="margin-bottom:8px;">Chaque suppression, archivage ou modification d'intervention est tracé ici : qui, quand, pourquoi.</div>
 ${lignes || `<div class="empty small">Rien à signaler pour l'instant.</div>`}
@@ -1120,6 +1124,30 @@ ${d.statut !== 'traite'
 </div>
 </div>`).join('') : `<div class="empty small">${filtre === 'traitees' ? 'Aucune demande traitée pour l\'instant.' : 'Rien à traiter 🎉'}</div>`}
 </div>`;
+}
+
+async function actionSupprimerJournal(id){
+const j = (reglages.journal || []).find(x => x.id === id);
+if(!j) return;
+if(!await confirmer(`Supprimer cette ligne du journal ?\n\n${LIBELLES_JOURNAL[j.action] || j.action} — ${j.libelle || ''}`, { danger:true, ok:'Supprimer' })) return;
+try{
+await supprimerJournal([id]);
+reglages.journal = reglages.journal.filter(x => x.id !== id);
+toast('Ligne supprimée');
+render();
+}catch(e){ toast('Erreur : ' + e.message, 'erreur'); }
+}
+
+async function actionViderJournal(){
+const n = (reglages.journal || []).length;
+if(!n) return;
+if(!await confirmer(`Vider tout le journal ?\n\nLes ${n} ligne${n > 1 ? 's' : ''} de traçabilité (suppressions, archivages, modifications) de tous vos clients seront effacées définitivement.`, { danger:true, ok:'Vider le journal' })) return;
+try{
+await supprimerJournal(null);
+reglages.journal = [];
+toast('Journal vidé');
+render();
+}catch(e){ toast('Erreur : ' + e.message, 'erreur'); }
 }
 
 async function actionSupprimerDemande(id){

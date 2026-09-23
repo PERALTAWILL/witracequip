@@ -1859,6 +1859,8 @@ else if(action === 'membres-active'){ actionMembresActive([...reglages.selMembre
 else if(action === 'membres-supprimer'){ actionMembresSupprimer([...reglages.selMembres]); }
 else if(action === 'membres-desel'){ reglages.selMembres = []; render(); }
 else if(action === 'journal-rafraichir'){ reglages.journal = null; render(); }
+else if(action === 'journal-suppr'){ actionSupprimerJournal(t.dataset.id); }
+else if(action === 'journal-vider'){ actionViderJournal(); }
 else if(action === 'support-rafraichir'){ reglages.support = null; render(); }
 else if(action === 'support-statut'){
 setStatutDemande(t.dataset.id, t.dataset.statut)
