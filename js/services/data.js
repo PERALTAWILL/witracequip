@@ -65,6 +65,48 @@ if(error) throw error;
 return data || [];
 }
 
+/* --- Photos jointes aux interventions -------------------------------
+Bucket privé « interventions ». Chemin : org/équipement/intervention/fichier.
+Le premier dossier (l'organisation) cloisonne l'accès côté base. */
+const BUCKET_PHOTOS = 'interventions';
+
+function idAleatoire(){
+if(window.crypto && crypto.randomUUID) return crypto.randomUUID();
+return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+const r = Math.random() * 16 | 0; return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+});
+}
+
+async function televerserPhotos(orgId, equipId, ivId, blobs){
+const chemins = [];
+for(const b of blobs){
+const ext = b.type === 'image/png' ? 'png' : (b.type === 'image/webp' ? 'webp' : 'jpg');
+const chemin = `${orgId}/${equipId}/${ivId}/${idAleatoire()}.${ext}`;
+const { error } = await sb.storage.from(BUCKET_PHOTOS).upload(chemin, b, { contentType: b.type || 'image/jpeg', upsert:false });
+if(error){
+if(chemins.length) sb.storage.from(BUCKET_PHOTOS).remove(chemins).catch(()=>{});
+throw error;
+}
+chemins.push(chemin);
+}
+return chemins;
+}
+
+async function urlsPhotos(chemins){
+if(!chemins.length) return {};
+const { data, error } = await sb.storage.from(BUCKET_PHOTOS).createSignedUrls(chemins, 3600);
+if(error) throw error;
+const m = {};
+(data || []).forEach(x => { if(x.signedUrl) m[x.path] = x.signedUrl; });
+return m;
+}
+
+async function supprimerFichiersPhotos(chemins){
+if(!chemins || !chemins.length) return;
+const { error } = await sb.storage.from(BUCKET_PHOTOS).remove(chemins);
+if(error) throw error;
+}
+
 /* --- Gestion des profils (admin uniquement) ------------------------- */
 
 async function listMembers(){
