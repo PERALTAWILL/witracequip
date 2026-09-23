@@ -25,16 +25,21 @@ if(state.typesLoaded && !force) return state.types;
 // Filtre explicite sur l'organisation : le super-admin plateforme peut lire les
 // types de TOUS ses clients (pour régler leurs invitations), mais son propre
 // parc ne doit afficher que les siens.
-const { data, error } = await sb.from('equipment_types').select('id, nom, champs, created_at')
-.eq('organization_id', state.profile.organization_id).order('nom');
+// Le super-admin (WiDIAG MQ) n'a pas de parc propre : il charge les types de
+// TOUS ses clients (chaque type porte son organization_id) pour ouvrir,
+// créer et modifier les équipements de chacun.
+let q = sb.from('equipment_types').select('id, nom, champs, created_at, organization_id').order('nom');
+if(!state.superAdmin) q = q.eq('organization_id', state.profile.organization_id);
+const { data, error } = await q;
 if(error) throw error;
 state.types = data || [];
 state.typesLoaded = true;
 return state.types;
 }
 
-async function listEquipements({ search, typeId, showArchived }){
-let q = sb.from('equipements').select('id, nom, serial_value, valeurs, archived, type_id, created_at').order('created_at', {ascending:false});
+async function listEquipements({ search, typeId, showArchived, orgId }){
+let q = sb.from('equipements').select('id, nom, serial_value, valeurs, archived, type_id, organization_id, created_at').order('created_at', {ascending:false});
+if(orgId) q = q.eq('organization_id', orgId);
 if(!showArchived) q = q.eq('archived', false);
 if(typeId) q = q.eq('type_id', typeId);
 // Recherche par nom OU par n° de série / immatriculation.
