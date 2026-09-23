@@ -249,6 +249,7 @@ ta.value = texte; document.body.appendChild(ta); ta.select();
 try{ document.execCommand('copy'); }catch(_){}
 document.body.removeChild(ta);
 }
+toast('Lien copié dans le presse-papiers');
 if(btn){
 const avant = btn.textContent;
 btn.textContent = 'Copié !';
