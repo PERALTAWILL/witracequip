@@ -314,7 +314,7 @@ let content = '';
 try{
 if(r.name === 'accueil') content = viewAccueil();
 else if(r.name === 'dashboard' || r.name === 'equipements') content = viewDashboard();
-else if(r.name === 'types') content = viewTypes();
+else if(r.name === 'types') content = peutGererTypes() ? viewTypes() : viewDashboard();
 else if(r.name === 'equip-new') content = viewEquipNew();
 else if(r.name === 'equip') content = viewEquipDetail(r.param);
 else if(r.name === 'reglages') content = viewReglages(r.param, r.sub);
@@ -341,7 +341,7 @@ return `
 <nav class="sidebar-nav">
 <div class="sidebar-link ${r.name==='accueil'?'active':''}" data-action="go" data-path="/">${iconeNav('home')}<span>Accueil</span></div>
 <div class="sidebar-link ${equipementsActif?'active':''}" data-action="go" data-path="/equipements">${iconeNav('box')}<span>Équipements</span></div>
-<div class="sidebar-link ${r.name==='types'?'active':''}" data-action="go" data-path="/types">${iconeNav('tag')}<span>Types d'équipement</span></div>
+${peutGererTypes() ? `<div class="sidebar-link ${r.name==='types'?'active':''}" data-action="go" data-path="/types">${iconeNav('tag')}<span>Types d'équipement</span></div>` : ''}
 ${peutReglages() ? `<div class="sidebar-link ${reglagesActif?'active':''}" data-action="go" data-path="/reglages">${iconeNav('gear')}<span>Réglages</span></div>` : ''}
 <div class="sidebar-link ${r.name==='support'?'active':''}" data-action="go" data-path="/support">${iconeNav('help')}<span>Support</span></div>
 </nav>
@@ -382,7 +382,7 @@ ${renderModal()}
 <nav class="bottom-nav">
 <div class="bottom-nav-item ${r.name==='accueil'?'active':''}" data-action="go" data-path="/">${iconeNav('home',20)}<span>Accueil</span></div>
 <div class="bottom-nav-item ${equipementsActif?'active':''}" data-action="go" data-path="/equipements">${iconeNav('box',20)}<span>Équip.</span></div>
-<div class="bottom-nav-item ${r.name==='types'?'active':''}" data-action="go" data-path="/types">${iconeNav('tag',20)}<span>Types</span></div>
+${peutGererTypes() ? `<div class="bottom-nav-item ${r.name==='types'?'active':''}" data-action="go" data-path="/types">${iconeNav('tag',20)}<span>Types</span></div>` : ''}
 ${peutReglages() ? `<div class="bottom-nav-item ${reglagesActif?'active':''}" data-action="go" data-path="/reglages">${iconeNav('gear',20)}<span>Réglages</span></div>` : ''}
 <div class="bottom-nav-item ${r.name==='support'?'active':''}" data-action="go" data-path="/support">${iconeNav('help',20)}<span>Support</span></div>
 </nav>
@@ -555,7 +555,7 @@ ${accueilCache.error
 
 ${parcVide ? `
 <div class="alert alert-info" style="margin-top:14px;">
-Votre parc est encore vide. ${isAdmin()
+Votre parc est encore vide. ${peutGererTypes()
 ? `Commencez par créer un type d'équipement — ou partez d'un <strong>modèle métier</strong> pour tout créer d'un coup.`
 : `Votre administrateur doit d'abord créer les types d'équipement.`}
 </div>` : ''}
@@ -780,7 +780,7 @@ return `
 <div class="row between wrap" style="margin-bottom:14px;">
 <h2>Équipements</h2>
 ${state.typesLoaded && state.types.length ? `<button class="btn btn-primary" data-action="go" data-path="/equip-new">+ Nouvel équipement</button>`
-: `<button class="btn btn-primary" data-action="go" data-path="/types">Créer un type d'équipement d'abord</button>`}
+: (peutGererTypes() ? `<button class="btn btn-primary" data-action="go" data-path="/types">Créer un type d'équipement d'abord</button>` : '')}
 </div>
 
 <div class="card" style="margin-bottom:14px;">
@@ -878,6 +878,17 @@ champs:(type.champs||[]).map(c => ({ key:c.key, label:c.label, type:c.type })),
 busy:false, error:'' }
 : { open:true, id:null, nom:'', champs:[], busy:false, error:'' };
 render();
+// Le formulaire s'affiche en haut de page : on y remonte, sinon il faudrait
+// défiler à la main depuis le bas de la liste.
+remonterEnHaut();
+}
+
+function remonterEnHaut(){
+requestAnimationFrame(() => {
+window.scrollTo({ top: 0, behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+const m = document.querySelector('.shell-main');
+if(m && m.scrollTop) m.scrollTo({ top: 0, behavior: 'smooth' });
+});
 }
 
 function viewTypes(){
@@ -888,21 +899,21 @@ const rows = state.types.map(t => `
 <div style="font-weight:650;">${esc(t.nom)}</div>
 <div class="small muted">${(t.champs||[]).length} champ(s) personnalisé(s)${(t.champs||[]).length ? ' · ' + (t.champs||[]).map(c=>esc(c.label)).join(', ') : ''}</div>
 </div>
-${isAdmin() ? `<button class="btn btn-sm" data-action="edit-type" data-id="${t.id}">Modifier</button>` : ''}
+${peutGererTypes() ? `<button class="btn btn-sm" data-action="edit-type" data-id="${t.id}">Modifier</button>` : ''}
 </div>
 `).join('');
 
 return `
 <div class="row between wrap" style="margin-bottom:14px;">
 <h2>Types d'équipement</h2>
-${isAdmin()
+${peutGererTypes()
 ? `<button class="btn btn-primary" data-action="toggle-type-form">${typeForm.open?'Annuler':'+ Nouveau type'}</button>`
 : ''}
 </div>
 
-${typeForm.open && isAdmin() ? renderTypeForm() : ''}
+${typeForm.open && peutGererTypes() ? renderTypeForm() : ''}
 
-${(isAdmin() && !typeForm.open) ? `
+${(peutGererTypes() && !typeForm.open) ? `
 <div class="card" style="margin-bottom:14px;">
 <div class="row between wrap" style="gap:10px;">
 <div style="flex:1;min-width:200px;">
@@ -932,7 +943,7 @@ ${modeleState.busy ? 'Création…' : `Ajouter ces ${m.types.length} types`}
 </div>` : ''}
 
 <div class="card" style="padding:0 18px;">
-${state.types.length ? rows : `<div class="empty"><div class="empty-icone">${iconeNav('tag', 30)}</div>Aucun type d'équipement.<br><span class="small">${isAdmin() ? 'Créez-en un (ex. « Véhicule », « Dispositif médical », « Équipement industriel »…) pour commencer à ajouter des équipements.' : 'Aucun type ne vous a été attribué. Contactez votre administrateur.'}</span></div>`}
+${state.types.length ? rows : `<div class="empty"><div class="empty-icone">${iconeNav('tag', 30)}</div>Aucun type d'équipement.<br><span class="small">${peutGererTypes() ? 'Créez-en un (ex. « Véhicule », « Dispositif médical », « Équipement industriel »…) pour commencer à ajouter des équipements.' : 'Aucun type ne vous a été attribué. Contactez votre administrateur.'}</span></div>`}
 </div>
 `;
 }
@@ -1695,9 +1706,17 @@ else if(action === 'journal-rafraichir'){ reglages.journal = null; render(); }
 else if(action === 'support-rafraichir'){ reglages.support = null; render(); }
 else if(action === 'support-statut'){
 setStatutDemande(t.dataset.id, t.dataset.statut)
-.then(() => { reglages.support = null; render(); })
+.then(() => {
+const d = (reglages.support || []).find(x => x.id === t.dataset.id);
+if(d) d.statut = t.dataset.statut;
+toast(t.dataset.statut === 'traite' ? 'Demande classée dans « Traitées »' : (t.dataset.statut === 'nouveau' ? 'Demande remise à traiter' : 'Demande marquée en cours'));
+render();
+})
 .catch(err => toast('Erreur : ' + err.message, 'erreur'));
 }
+else if(action === 'support-supprimer'){ actionSupprimerDemande(t.dataset.id); }
+else if(action === 'support-filtre'){ reglages.supportFiltre = t.dataset.filtre; render(); }
+else if(action === 'toggle-invite-client'){ reglages.inviteOuvert = !reglages.inviteOuvert; render(); }
 else if(action === 'restore-equip'){ restoreEquipement(); }
 else if(action === 'toggle-edit-equip'){ equipDetail.showEditForm = !equipDetail.showEditForm; equipDetail.editError=''; render(); }
 else if(action === 'print-qr'){ printQr(); }

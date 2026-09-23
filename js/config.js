@@ -253,6 +253,9 @@ types: [
 function roleLabel(r){ return ROLE_LABELS[r] || r || '—'; }
 function isAdmin(){ return state.profile?.role === 'admin'; }
 function peutSupprimer(){ return ['admin','responsable'].includes(state.profile?.role); }
+// Créer / modifier les types d'équipement et leurs champs : administrateur et responsable.
+// L'utilisateur simple s'en sert sans les voir (vérifié aussi par la base, sql/10).
+function peutGererTypes(){ return ['admin','responsable'].includes(state.profile?.role); }
 
 const state = {
 session: null,

@@ -1,5 +1,6 @@
 /* ---------------------------------------------------------------------- */
-/* Réglages — Clients · Membres · Invitations · Support · Journal          */
+/* Réglages — super-admin : Clients · Support · Journal                    */
+/*            admin client : Mon équipe · Journal                          */
 /* ---------------------------------------------------------------------- */
 /* Le super-administrateur plateforme (WiDIAG MQ) gère ici tous ses clients :
    fiche entreprise, code client, modèle métier, puis les membres de chaque
@@ -35,14 +36,31 @@ function isSuperAdmin(){ return state.superAdmin === true; }
 function peutReglages(){ return isAdmin() || isSuperAdmin(); }
 function nomModele(cle){ return (MODELES_METIERS.find(m => m.cle === cle) || {}).nom || ''; }
 
+/* Peu d'onglets, chacun avec une seule mission. Les membres et les invitations
+   d'un client se gèrent DANS sa fiche : plus d'onglet Membres ni Invitations
+   séparés pour le super-admin (même contenu, deux chemins = on s'y perd). */
 function ongletsReglages(){
-const o = [];
-if(isSuperAdmin()) o.push({ cle:'clients', l:'Clients' });
-o.push({ cle:'membres', l:'Membres' });
-o.push({ cle:'invitations', l:'Invitations' });
-if(isSuperAdmin()) o.push({ cle:'support', l:'Support' });
-o.push({ cle:'journal', l:'Journal' });
-return o;
+const journal = { cle:'journal', l:'Journal', aide:"Historique des suppressions, archivages et modifications : qui, quand et pourquoi." };
+if(isSuperAdmin()){
+const aTraiter = (reglages.support || []).filter(d => d.statut !== 'traite').length;
+return [
+{ cle:'clients', l:'Clients', n: reglages.clients ? reglages.clients.length : null,
+aide:"Ouvrez un client pour tout gérer au même endroit : sa fiche, son modèle métier, ses membres et ses invitations." },
+{ cle:'support', l:'Support', n: aTraiter || null, alerte: aTraiter > 0,
+aide:"Les demandes envoyées par vos clients. Une fois traitées, elles passent dans « Traitées »." },
+journal,
+];
+}
+return [
+{ cle:'equipe', l:'Mon équipe', aide:"Les membres de votre organisation, leurs rôles et ce qu'ils peuvent voir." },
+journal,
+];
+}
+
+/* Anciennes adresses (#/reglages/membres, /invitations) → le bon onglet. */
+function ongletReglagesValide(onglet){
+if(['membres','invitations','equipe'].includes(onglet)) return isSuperAdmin() ? 'clients' : 'equipe';
+return onglet;
 }
 
 /* Pied de page présent sur toutes les pages. */
@@ -65,7 +83,8 @@ selMembres:[], filtreClient:'',
 invites:null,
 invite:{ orgId:'', role:'utilisateur', label:'', tousTypes:true, types:[], busy:false, error:'', dernierToken:null },
 journal:null, journalError:'',
-support:null, supportError:'',
+support:null, supportError:'', supportFiltre:'ouvertes',
+inviteOuvert:false,
 };
 }
 resetReglages();
@@ -107,13 +126,15 @@ if(isSuperAdmin()) chargerClients(true);
 
 function viewReglages(onglet, sous){
 if(!peutReglages()) return viewNonAutorise();
+if(isSuperAdmin()){ chargerSupport(false); chargerClients(false); } // compteurs des onglets
+onglet = ongletReglagesValide(onglet);
 const onglets = ongletsReglages();
 if(!onglets.some(o => o.cle === onglet)) onglet = onglets[0].cle;
+const courant = onglets.find(o => o.cle === onglet);
 
 let contenu = '';
 if(onglet === 'clients') contenu = sous ? viewClientDetail(sous) : viewClients();
-else if(onglet === 'membres') contenu = viewMembres();
-else if(onglet === 'invitations') contenu = viewInvitations();
+else if(onglet === 'equipe') contenu = viewMembres() + viewInvitations();
 else if(onglet === 'support') contenu = viewSupportAdmin();
 else if(onglet === 'journal') contenu = viewJournal();
 
@@ -123,8 +144,9 @@ return `
 ${isSuperAdmin() ? '<span class="badge badge-role">Super-administrateur</span>' : `<span class="badge badge-role">${esc(state.orgName || '')}</span>`}
 </div>
 <div class="reglages-onglets">
-${onglets.map(o => `<button class="reglages-onglet ${o.cle === onglet ? 'active' : ''}" data-action="go" data-path="/reglages/${o.cle}">${o.l}</button>`).join('')}
+${onglets.map(o => `<button class="reglages-onglet ${o.cle === onglet ? 'active' : ''}" data-action="go" data-path="/reglages/${o.cle}">${o.l}${o.n ? ` <span class="onglet-compteur ${o.alerte ? 'alerte' : ''}">${o.n}</span>` : ''}</button>`).join('')}
 </div>
+${!sous && courant?.aide ? `<div class="reglages-aide">${esc(courant.aide)}</div>` : ''}
 ${contenu}
 `;
 }
@@ -135,6 +157,7 @@ ${contenu}
 
 function viewClients(){
 chargerClients(false);
+chargerMembres(false); // pour compter les invitations en attente de chaque client
 if(reglages.clientsError) return `<div class="alert alert-error">${esc(reglages.clientsError)}</div>`;
 if(reglages.clients === null) return squeletteListe(4);
 
@@ -151,7 +174,7 @@ ${c.est_mon_organisation
 <div class="ligne-corps" data-action="go" data-path="/reglages/clients/${c.id}">
 <div class="ligne-titre">
 ${esc(c.nom)}
-<span class="code-client">${esc(c.code_client)}</span>
+<span class="code-client">N° ${esc(c.code_client)}</span>
 ${c.est_mon_organisation ? '<span class="badge badge-neutral">votre organisation</span>' : ''}
 ${!c.active ? '<span class="badge badge-off">suspendu</span>' : ''}
 </div>
@@ -164,6 +187,8 @@ ${c.telephone ? ' · ' + esc(c.telephone) : ''}
 <div class="ligne-chiffres small muted">
 <span class="compteur" title="Membres">${iconeNav('users', 14)} ${c.nb_membres}</span>
 <span class="compteur" title="Équipements actifs">${iconeNav('box', 14)} ${c.nb_equipements}</span>
+${(() => { const n = (reglages.invites || []).filter(i => i.organization_id === c.id).length;
+return n ? `<span class="badge badge-warn" title="Invitation${n > 1 ? 's' : ''} en attente">${n} invit.</span>` : ''; })()}
 </div>
 </div>`).join('');
 
@@ -234,7 +259,7 @@ ${MODELES_METIERS.map(m => `<option value="${m.cle}" ${m.cle === f.modele ? 'sel
 </div>
 <div class="field"><label>Notes internes</label>
 <textarea name="notes" placeholder="Conditions, contrat, remarques…">${esc(f.notes)}</textarea></div>
-${!modif ? `<div class="hint" style="margin-bottom:10px;">Un <strong>code client</strong> unique (ex : CLI-7K3M9Q) est attribué automatiquement à l'enregistrement.</div>` : ''}
+${!modif ? `<div class="hint" style="margin-bottom:10px;">Un <strong>numéro client</strong> unique à 6 chiffres est attribué automatiquement à l'enregistrement.</div>` : ''}
 <div class="row wrap">
 <button class="btn btn-primary" type="submit" ${f.busy ? 'disabled' : ''}>${f.busy ? 'Enregistrement…' : (modif ? 'Enregistrer' : 'Créer le client')}</button>
 <button class="btn" type="button" data-action="fermer-client-form">Annuler</button>
@@ -259,7 +284,7 @@ toast('Fiche client enregistrée');
 const res = await creerClient(f);
 reglages.clientForm = null;
 await chargerClientsMaintenant();
-toast(`Client créé — code ${res.code_client}`);
+toast(`Client créé — n° ${res.code_client}`);
 nav('/reglages/clients/' + res.id);
 return;
 }
@@ -295,7 +320,7 @@ return `
 <button class="icon-btn" data-action="go" data-path="/reglages/clients" title="Retour">←</button>
 <div class="titre">
 <h2>${esc(c.nom)} ${!c.active ? '<span class="badge badge-off">suspendu</span>' : ''}</h2>
-<div class="small muted">Code client <span class="code-client">${esc(c.code_client)}</span> · créé le ${fmtDate(c.created_at)}</div>
+<div class="small muted">N° client <span class="code-client">${esc(c.code_client)}</span> · créé le ${fmtDate(c.created_at)}</div>
 </div>
 <div class="actions">
 ${!enEdition ? `<button class="btn btn-sm" data-action="modifier-client" data-id="${c.id}">Modifier</button>` : ''}
@@ -326,13 +351,15 @@ ${c.notes ? `<tr><td class="muted">Notes</td><td>${esc(c.notes)}</td></tr>` : ''
 </div>`}
 
 <div class="card">
-<h3>Ajouter un membre</h3>
-<div class="hint" style="margin-bottom:10px;">Générez un lien d'invitation : la personne rejoint <strong>${esc(c.nom)}</strong> avec le rôle choisi.</div>
-${renderInviteForm(false)}
-</div>
-
-<div class="card">
+<div class="row between wrap">
 <h3>Membres (${membres.length})</h3>
+<button class="btn btn-sm ${reglages.inviteOuvert ? '' : 'btn-primary'}" data-action="toggle-invite-client">${reglages.inviteOuvert ? 'Fermer' : '+ Inviter un membre'}</button>
+</div>
+${reglages.inviteOuvert ? `
+<div class="bloc-invite">
+<div class="hint" style="margin-bottom:10px;">Générez un lien d'invitation : la personne rejoint <strong>${esc(c.nom)}</strong> avec le rôle et les accès choisis.</div>
+${renderInviteForm(false)}
+</div>` : ''}
 ${reglages.membres === null ? '<div class="spinner"></div>' : renderListeMembres(membres, false)}
 </div>
 
@@ -362,7 +389,7 @@ rafraichirReglages();
 async function actionClientsSupprimer(ids){
 const clients = (reglages.clients || []).filter(c => ids.includes(c.id));
 if(!clients.length) return;
-const noms = clients.map(c => `• ${c.nom} (${c.code_client})`).join('\n');
+const noms = clients.map(c => `• ${c.nom} (n° ${c.code_client})`).join('\n');
 const saisie = await demander(
 `SUPPRESSION DÉFINITIVE de ${clients.length > 1 ? clients.length + ' clients' : 'ce client'} :\n\n${noms}\n\n` +
 `Seront effacés : tous ses comptes, tous ses équipements et tout leur historique d'interventions. ` +
@@ -407,7 +434,7 @@ ${isSuperAdmin() ? `
 <label style="margin:0;">Client</label>
 <select data-action="filtre-client-membres" style="flex:1;min-width:180px;">
 <option value="">Tous les clients</option>
-${clientsOptions.map(c => `<option value="${c.id}" ${c.id === filtre ? 'selected' : ''}>${esc(c.nom)} — ${esc(c.code_client)}</option>`).join('')}
+${clientsOptions.map(c => `<option value="${c.id}" ${c.id === filtre ? 'selected' : ''}>${esc(c.nom)} — n° ${esc(c.code_client)}</option>`).join('')}
 </select>
 </div>
 </div>` : ''}
@@ -564,7 +591,7 @@ if(reglages.membres === null) return squeletteListe(4);
 const invites = reglages.invites || [];
 return `
 <div class="card">
-<h3>Inviter quelqu'un</h3>
+<h3>Ajouter quelqu'un</h3>
 ${peutInviter() ? `
 <div class="hint" style="margin-bottom:12px;">
 Vous fixez le client, le rôle <strong>et</strong> le périmètre avant d'envoyer le lien.
@@ -597,7 +624,7 @@ ${choixClient ? `
 <label>Client</label>
 <select data-action="invite-org">
 <option value="">— Choisir un client —</option>
-${clients.filter(c => c.active).map(c => `<option value="${c.id}" ${c.id === inv.orgId ? 'selected' : ''}>${esc(c.nom)} — ${esc(c.code_client)}</option>`).join('')}
+${clients.filter(c => c.active).map(c => `<option value="${c.id}" ${c.id === inv.orgId ? 'selected' : ''}>${esc(c.nom)} — n° ${esc(c.code_client)}</option>`).join('')}
 </select>
 </div>` : ''}
 <div class="grid-2">
@@ -891,25 +918,39 @@ s.mesDemandes = null;
 render();
 }
 
-/* Onglet Support des réglages (super-admin) : toutes les demandes reçues. */
-function viewSupportAdmin(){
-if(reglages.support === null && !reglages.supportLoading){
+/* Onglet Support des réglages (super-admin).
+   « À traiter » ne montre que ce qui attend une action ; une demande marquée
+   traitée passe dans « Traitées » (archivées, toujours consultables), et peut
+   être supprimée définitivement. */
+function chargerSupport(force){
+if(reglages.supportLoading || (reglages.support !== null && !force)) return;
 reglages.supportLoading = true;
 listDemandesSupport()
 .then(d => { reglages.support = d; reglages.supportError = ''; })
 .catch(e => { reglages.supportError = e.message; })
 .finally(() => { reglages.supportLoading = false; render(); });
 }
+
+function viewSupportAdmin(){
+chargerSupport(false);
 if(reglages.supportError) return `<div class="alert alert-error">${esc(reglages.supportError)}</div>`;
 if(reglages.support === null) return squeletteListe(3);
 
+const ouvertes = reglages.support.filter(d => d.statut !== 'traite');
+const traitees = reglages.support.filter(d => d.statut === 'traite');
+const filtre = reglages.supportFiltre === 'traitees' ? 'traitees' : 'ouvertes';
+const liste = filtre === 'traitees' ? traitees : ouvertes;
+
 return `
-<div class="card">
-<div class="row between wrap">
-<h3>Demandes reçues (${reglages.support.length})</h3>
+<div class="row between wrap" style="margin-bottom:12px;gap:10px;">
+<div class="segment">
+<button class="${filtre === 'ouvertes' ? 'active' : ''}" data-action="support-filtre" data-filtre="ouvertes">À traiter <span class="onglet-compteur ${ouvertes.length ? 'alerte' : ''}">${ouvertes.length}</span></button>
+<button class="${filtre === 'traitees' ? 'active' : ''}" data-action="support-filtre" data-filtre="traitees">Traitées <span class="onglet-compteur">${traitees.length}</span></button>
+</div>
 <button class="btn btn-sm" data-action="support-rafraichir">Actualiser</button>
 </div>
-${reglages.support.length ? reglages.support.map(d => `
+<div class="card">
+${liste.length ? liste.map(d => `
 <div class="journal-ligne">
 <div class="journal-date">${fmtDateTime(d.created_at)}</div>
 <div class="journal-corps">
@@ -917,17 +958,33 @@ ${reglages.support.length ? reglages.support.map(d => `
 <div class="small muted">
 ${esc((CATEGORIES_SUPPORT.find(c => c.v === d.categorie) || {}).l || d.categorie)}
 · ${esc(d.auteur_nom || '')}${d.auteur_email ? ` (<a href="mailto:${esc(d.auteur_email)}">${esc(d.auteur_email)}</a>)` : ''}
-${d.organisation_nom ? ' · ' + esc(d.organisation_nom) : ''}${d.code_client ? ' ' + esc(d.code_client) : ''}
+${d.organisation_nom ? ' · ' + esc(d.organisation_nom) : ''}${d.code_client ? ' (n° ' + esc(d.code_client) + ')' : ''}
+${d.traite_le && d.statut === 'traite' ? ' · traitée le ' + fmtDate(d.traite_le) : ''}
 </div>
 <div class="support-message">${esc(d.message)}</div>
 <div class="row wrap" style="gap:6px;margin-top:6px;">
-${d.statut !== 'en_cours' ? `<button class="btn btn-sm" data-action="support-statut" data-id="${d.id}" data-statut="en_cours">En cours</button>` : ''}
-${d.statut !== 'traite' ? `<button class="btn btn-sm" data-action="support-statut" data-id="${d.id}" data-statut="traite">Marquer traité</button>` : ''}
 ${d.auteur_email ? `<a class="btn btn-sm" href="mailto:${esc(d.auteur_email)}?subject=${encodeURIComponent('Re: ' + d.sujet)}">Répondre</a>` : ''}
+${d.statut === 'nouveau' ? `<button class="btn btn-sm" data-action="support-statut" data-id="${d.id}" data-statut="en_cours">En cours</button>` : ''}
+${d.statut !== 'traite'
+? `<button class="btn btn-sm btn-primary" data-action="support-statut" data-id="${d.id}" data-statut="traite">Traitée → archiver</button>`
+: `<button class="btn btn-sm" data-action="support-statut" data-id="${d.id}" data-statut="nouveau">Remettre à traiter</button>`}
+<button class="btn btn-sm btn-danger" data-action="support-supprimer" data-id="${d.id}">Supprimer</button>
 </div>
 </div>
-</div>`).join('') : `<div class="empty small">Aucune demande pour l'instant.</div>`}
+</div>`).join('') : `<div class="empty small">${filtre === 'traitees' ? 'Aucune demande traitée pour l\'instant.' : 'Rien à traiter 🎉'}</div>`}
 </div>`;
+}
+
+async function actionSupprimerDemande(id){
+const d = (reglages.support || []).find(x => x.id === id);
+if(!d) return;
+if(!await confirmer(`Supprimer définitivement cette demande ?\n\n« ${d.sujet} » — ${d.auteur_nom || ''}\n\nPour la garder sans l'avoir sous les yeux, utilisez plutôt « Traitée → archiver ».`, { danger:true, ok:'Supprimer' })) return;
+try{
+await supprimerDemandeSupport(id);
+reglages.support = reglages.support.filter(x => x.id !== id);
+toast('Demande supprimée');
+render();
+}catch(e){ toast('Erreur : ' + e.message, 'erreur'); }
 }
 
 /* ---------------------------------------------------------------------- */
