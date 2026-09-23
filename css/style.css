@@ -521,3 +521,136 @@ flex:1; padding:5px 2px; min-width:0;
 .bottom-nav-item.active{color:var(--primary);}
 main{padding-bottom:78px;}
 }
+
+/* =========================================================================
+   v2.13 — Réglages, sélection multiple, modale, journal, support
+   ========================================================================= */
+
+/* ---- Onglets des réglages ---- */
+.reglages-onglets{
+display:flex; gap:4px; margin:0 0 16px; padding:4px; overflow-x:auto;
+background:var(--surface-2); border:1px solid var(--border); border-radius:10px;
+scrollbar-width:none;
+}
+.reglages-onglets::-webkit-scrollbar{display:none;}
+.reglages-onglet{
+flex:1 0 auto; padding:8px 14px; border:none; border-radius:7px; background:none;
+font-weight:650; font-size:13.5px; color:var(--text-dim); cursor:pointer; white-space:nowrap;
+}
+.reglages-onglet:hover{color:var(--text);}
+.reglages-onglet.active{background:var(--surface); color:var(--primary); box-shadow:var(--shadow);}
+.titre-carte{font-size:12.5px; text-transform:uppercase; letter-spacing:.02em; color:var(--text-dim);}
+
+/* ---- Listes avec cases à cocher ---- */
+.liste-select{padding:4px 18px;}
+.tout-selectionner{
+display:flex; align-items:center; gap:10px; margin:0; padding:12px 0 10px;
+border-bottom:1px solid var(--border); cursor:pointer;
+text-transform:none; letter-spacing:normal; font-size:13px; font-weight:600; color:var(--text-dim);
+}
+.tout-selectionner input, .case-sel{width:18px; height:18px; margin:0; flex-shrink:0; accent-color:var(--primary); cursor:pointer;}
+.case-vide{width:18px; flex-shrink:0;}
+.ligne-select{display:flex; align-items:center; gap:12px; padding:12px 0; border-bottom:1px solid var(--border);}
+.ligne-select:last-child{border-bottom:none;}
+.ligne-select .thumb{
+width:38px; height:38px; border-radius:8px; background:var(--surface-2); flex-shrink:0;
+display:flex; align-items:center; justify-content:center; font-weight:700; color:var(--primary);
+border:1px solid var(--border);
+}
+.ligne-corps{flex:1; min-width:0; cursor:pointer;}
+.ligne-titre{font-weight:650; display:flex; align-items:center; gap:6px; flex-wrap:wrap;}
+.ligne-chiffres{display:flex; gap:10px; flex-shrink:0;}
+.ligne-date{flex-shrink:0;}
+.cochee{background:color-mix(in srgb, var(--primary) 6%, transparent);
+margin:0 -18px; padding-left:18px; padding-right:18px;}
+.member.cochee{margin:0; padding-left:8px; padding-right:8px; border-radius:8px;}
+.btn-poubelle{color:var(--text-dim); border-radius:7px; padding:6px; display:flex;}
+.btn-poubelle:hover{color:var(--danger); background:var(--danger-bg);}
+@media(max-width:520px){
+.ligne-date, .ligne-chiffres{display:none;}
+}
+
+.code-client{
+font-family:ui-monospace, SFMono-Regular, Menlo, monospace; font-size:11.5px; font-weight:700;
+color:var(--primary); background:var(--surface-2); border:1px solid var(--border);
+padding:1px 7px; border-radius:6px; letter-spacing:.03em;
+}
+
+/* ---- Barre d'actions groupées ---- */
+.barre-selection{
+display:flex; align-items:center; gap:8px; flex-wrap:wrap;
+position:sticky; top:62px; z-index:15;
+background:var(--surface); border:1px solid var(--primary); border-radius:var(--radius);
+padding:10px 14px; margin-bottom:12px; box-shadow:var(--shadow);
+}
+.barre-selection strong{margin-right:auto; font-size:13.5px;}
+.btn-lien{border-color:transparent; background:none; color:var(--text-dim);}
+.btn-danger-plein{background:var(--danger); border-color:var(--danger); color:#fff;}
+.btn-danger-plein:hover{background:var(--danger); filter:brightness(.92);}
+.badge-ok{background:var(--success-bg); color:var(--success);}
+
+/* ---- Fenêtre modale ---- */
+.modal-fond{
+position:fixed; inset:0; z-index:100; background:rgba(10,15,17,.5);
+display:flex; align-items:center; justify-content:center; padding:16px;
+}
+.modal{
+background:var(--surface); border:1px solid var(--border); border-radius:14px;
+width:100%; max-width:480px; max-height:calc(100vh - 32px); overflow-y:auto;
+padding:20px; box-shadow:0 10px 40px rgba(0,0,0,.25);
+}
+.modal h3{font-size:17px; margin-bottom:6px;}
+.motifs{display:flex; flex-wrap:wrap; gap:6px;}
+.motif{
+display:flex; align-items:center; gap:6px; margin:0; cursor:pointer;
+padding:7px 12px; border:1px solid var(--border); border-radius:999px;
+text-transform:none; letter-spacing:normal; font-size:13.5px; font-weight:600; color:var(--text);
+}
+.motif input{position:absolute; opacity:0; pointer-events:none;}
+.motif.actif{border-color:var(--primary); background:color-mix(in srgb, var(--primary) 12%, transparent); color:var(--primary);}
+
+/* ---- Interventions : actions et trace de modification ---- */
+.table-iv td.iv-actions{white-space:nowrap; text-align:right;}
+.table-iv td.iv-actions .btn{margin-left:4px;}
+.iv-modif{font-size:11.5px; color:var(--text-dim); font-style:italic; margin-top:3px;}
+.iv-edition td{padding:0;}
+@media(max-width:620px){
+.table-iv thead{display:none;}
+.table-iv, .table-iv tbody, .table-iv tr, .table-iv td{display:block; width:100%;}
+.table-iv tr{padding:10px 0; border-bottom:1px solid var(--border);}
+.table-iv tr:last-child{border-bottom:none;}
+.table-iv td{border:none; padding:2px 0;}
+.table-iv td[data-l]::before{content:attr(data-l) " : "; color:var(--text-dim); font-weight:600;}
+.table-iv td.iv-date{font-weight:700; font-size:15px; padding-bottom:4px;}
+.table-iv td.iv-actions{text-align:left; padding-top:8px;}
+.table-iv td.iv-actions .btn{margin:0 6px 0 0;}
+}
+
+/* ---- Journal / demandes de support ---- */
+.journal-ligne{display:flex; gap:14px; padding:12px 0; border-bottom:1px solid var(--border);}
+.journal-ligne:last-child{border-bottom:none;}
+.journal-date{font-size:12px; color:var(--text-dim); width:118px; flex-shrink:0;}
+.journal-corps{flex:1; min-width:0; font-size:13.5px;}
+.journal-corps details{margin-top:4px;}
+.journal-corps summary{cursor:pointer; color:var(--primary);}
+.support-message{white-space:pre-wrap; background:var(--surface-2); border-radius:8px; padding:8px 10px; margin-top:6px; font-size:13.5px;}
+@media(max-width:520px){
+.journal-ligne{flex-direction:column; gap:2px;}
+.journal-date{width:auto;}
+}
+
+/* ---- Pied de page support (toutes les pages) ---- */
+.pied-support{
+text-align:center; font-size:12.5px; color:var(--text-dim);
+margin:28px auto 0; padding:14px 10px 0; border-top:1px solid var(--border); max-width:620px;
+}
+.pied-support a{font-weight:650;}
+.auth-wrap .pied-support, .pub-page .pied-support{margin-top:22px;}
+.member .thumb{
+width:38px; height:38px; border-radius:8px; background:var(--surface-2); flex-shrink:0;
+display:flex; align-items:center; justify-content:center; font-weight:700; color:var(--primary);
+border:1px solid var(--border);
+}
+/* Deux cartes côte à côte : pas de décalage vertical, et de l'air avant la suite. */
+.grid-2 > .card + .card{margin-top:0;}
+.grid-2 + .card{margin-top:14px;}
