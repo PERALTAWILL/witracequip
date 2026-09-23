@@ -38,7 +38,7 @@ return state.types;
 }
 
 async function listEquipements({ search, typeId, showArchived, orgId }){
-let q = sb.from('equipements').select('id, nom, serial_value, valeurs, archived, type_id, organization_id, created_at').order('created_at', {ascending:false});
+let q = sb.from('equipements').select('id, nom, serial_value, valeurs, archived, type_id, organization_id, created_at, public_token, partage_public').order('created_at', {ascending:false});
 if(orgId) q = q.eq('organization_id', orgId);
 if(!showArchived) q = q.eq('archived', false);
 if(typeId) q = q.eq('type_id', typeId);
