@@ -205,7 +205,7 @@ await offlineMarquerEchec(item.id, e.message || 'Erreur inconnue');
 offlineSyncEnCours = false;
 state.enAttenteCount = await offlineCompterEnAttente();
 if(equipEnvoye){
-toast('Équipements créés hors-ligne : envoyés');
+toast('Équipements créés hors-ligne : envoyés'); if(typeof chargerActivite === 'function') chargerActivite(true);
 reglages.parcs = {};
 refreshDashboard();
 }
