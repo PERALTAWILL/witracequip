@@ -1023,6 +1023,7 @@ padding-bottom:4px; border-bottom:1px solid var(--border);}
 .dlg-oeil:hover{background:var(--surface-2);}
 .dlg-erreur{margin-top:12px; padding:9px 12px; border-radius:10px; background:var(--danger-bg); color:var(--danger); font-size:13.5px; font-weight:600;}
 .btn-mdp{display:inline-flex; align-items:center; gap:6px; white-space:nowrap;}
+.btn-deco{color:#b3261e; border-color:#e8b4ae;}
 
 /* ===== v2.17.1 : un compte = un appareil ===== */
 .appareil-ligne{display:flex; align-items:center; gap:5px; flex-wrap:wrap; margin:2px 0; color:var(--text);}
