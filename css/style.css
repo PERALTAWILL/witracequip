@@ -801,3 +801,147 @@ font-size:14px; color:var(--text-dim); vertical-align:middle;
 .btn-crayon:hover{color:var(--primary); background:var(--surface-2);}
 .renommage{display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin-bottom:4px;}
 .renommage input{flex:1; min-width:160px; padding:6px 10px;}
+
+/* =========================================================================
+   v2.16 — Couleur par rôle, espace fondateur, parc client
+   ========================================================================= */
+/* ---- Thème par rôle (posé sur <body data-role="…">) ---- */
+body[data-role="utilisateur"]{
+--primary:#1d4ed8; --primary-dim:#1e3a8a; --primary-contrast:#fff;
+--sidebar-bg:linear-gradient(180deg,#123a8a 0%,#0c2461 100%);
+--bg-glow:radial-gradient(1400px 900px at 92% -12%, rgba(29,78,216,.08), transparent 60%);
+}
+body[data-role="responsable"]{
+--primary:#15803d; --primary-dim:#14532d; --primary-contrast:#fff;
+--sidebar-bg:linear-gradient(180deg,#14532d 0%,#0b3a1f 100%);
+--bg-glow:radial-gradient(1400px 900px at 92% -12%, rgba(21,128,61,.08), transparent 60%);
+}
+body[data-role="admin"]{
+--primary:#6d28d9; --primary-dim:#4c1d95; --primary-contrast:#fff;
+--sidebar-bg:linear-gradient(180deg,#3b0f7a 0%,#24094d 100%);
+--bg-glow:radial-gradient(1400px 900px at 92% -12%, rgba(109,40,217,.08), transparent 60%);
+}
+/* Fondateur : bleu nuit profond et or — l'élégance d'un bureau de direction. */
+body[data-role="fondateur"]{
+--primary:#9a7208; --primary-dim:#6b4f06; --primary-contrast:#fff;
+--or:#d4af37; --or-clair:#f3dc8f; --nuit:#0b1026; --nuit-2:#18214a;
+--sidebar-bg:linear-gradient(180deg,#0b1026 0%,#141c40 55%,#1d1a2e 100%);
+--sidebar-active:linear-gradient(90deg, rgba(212,175,55,.26), rgba(212,175,55,.06));
+--accent:#d4af37;
+--bg:#f6f4ee;
+--bg-glow:
+radial-gradient(1400px 900px at 92% -12%, rgba(212,175,55,.10), transparent 60%),
+radial-gradient(1100px 850px at -12% 108%, rgba(24,33,74,.06), transparent 55%);
+}
+@media (prefers-color-scheme: dark){
+body[data-role="utilisateur"]{--primary:#60a5fa; --primary-dim:#3b82f6; --primary-contrast:#0b1a33; --sidebar-bg:linear-gradient(180deg,#0f2150,#0a1735);}
+body[data-role="responsable"]{--primary:#4ade80; --primary-dim:#22c55e; --primary-contrast:#052e16; --sidebar-bg:linear-gradient(180deg,#0e3a20,#082614);}
+body[data-role="admin"]{--primary:#a78bfa; --primary-dim:#8b5cf6; --primary-contrast:#1e0b3d; --sidebar-bg:linear-gradient(180deg,#2a0c57,#180734);}
+body[data-role="fondateur"]{--primary:#e6c35c; --primary-dim:#d4a72c; --primary-contrast:#1a1405; --bg:#0c0f1c;
+--sidebar-bg:linear-gradient(180deg,#070a18 0%,#10173a 60%,#17142a 100%);}
+}
+body[data-role="fondateur"] .sidebar-link.active{color:var(--or-clair); box-shadow:inset 3px 0 0 var(--or);}
+body[data-role="fondateur"] .sidebar-link.active svg{color:var(--or);}
+body[data-role="fondateur"] .sidebar-brand .name{background:linear-gradient(90deg,#fff,var(--or-clair)); -webkit-background-clip:text; background-clip:text; color:transparent;}
+body[data-role="fondateur"] .avatar{background:linear-gradient(135deg,#f3dc8f,#c9a227 60%,#9a7208); color:#1a1405; border:none; box-shadow:0 0 0 2px rgba(212,175,55,.35);}
+body[data-role="fondateur"] .btn-primary{background:linear-gradient(135deg,#b8900f,#8a6508); border-color:#8a6508;}
+body[data-role="fondateur"] .org-pill{border-color:rgba(212,175,55,.5); color:#8a6508; background:rgba(212,175,55,.08);}
+@media (prefers-color-scheme: dark){
+body[data-role="fondateur"] .btn-primary{background:linear-gradient(135deg,#e6c35c,#c9a227); color:#1a1405; border-color:#c9a227;}
+body[data-role="fondateur"] .org-pill{color:var(--or-clair);}
+}
+
+/* Badges et vignettes de rôle */
+.badge-role.role-utilisateur, .thumb.role-utilisateur{background:#dbeafe; color:#1d4ed8; border-color:#bfdbfe;}
+.badge-role.role-responsable, .thumb.role-responsable{background:#dcfce7; color:#15803d; border-color:#bbf7d0;}
+.badge-role.role-admin, .thumb.role-admin{background:#ede9fe; color:#6d28d9; border-color:#ddd6fe;}
+.badge-role.role-fondateur, .thumb.role-fondateur{background:linear-gradient(135deg,#1b2350,#0b1026); color:#f3dc8f; border-color:#c9a227;}
+@media (prefers-color-scheme: dark){
+.badge-role.role-utilisateur, .thumb.role-utilisateur{background:#172554; color:#93c5fd; border-color:#1e3a8a;}
+.badge-role.role-responsable, .thumb.role-responsable{background:#052e16; color:#86efac; border-color:#14532d;}
+.badge-role.role-admin, .thumb.role-admin{background:#2e1065; color:#c4b5fd; border-color:#4c1d95;}
+}
+
+/* ---- Menu utilisateur ---- */
+.user-nom{font-size:13px; font-weight:650; max-width:160px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+@media(max-width:640px){ .user-nom{display:none;} }
+.dropdown{min-width:240px;}
+.dropdown-entete{padding:10px 10px 12px; border-bottom:1px solid var(--border); margin-bottom:6px;}
+.dropdown-nom{font-weight:700; font-size:14.5px;}
+.dropdown button{display:flex; align-items:center; gap:8px;}
+.dropdown .dropdown-sortie{color:var(--danger);}
+.nav-badge{
+margin-left:auto; min-width:20px; padding:1px 6px; border-radius:999px; text-align:center;
+font-size:11px; font-weight:800; background:var(--danger); color:#fff; line-height:1.5;
+}
+.bottom-nav-item{position:relative;}
+.bottom-nav-item .nav-badge{position:absolute; top:2px; left:calc(50% + 6px); margin:0; padding:0 5px; font-size:10px;}
+.sidebar-fondateur{
+display:flex; align-items:center; gap:10px; margin:0 4px; padding:12px; border-radius:12px;
+background:linear-gradient(135deg, rgba(212,175,55,.16), rgba(212,175,55,.04));
+border:1px solid rgba(212,175,55,.35); color:var(--or-clair, #f3dc8f);
+}
+.sidebar-fondateur strong{display:block; font-size:12.5px; color:#fff;}
+.sidebar-fondateur span{display:block; font-size:11px; opacity:.8;}
+
+/* ---- Accueil du fondateur ---- */
+.hero-fondateur{
+position:relative; overflow:hidden; border-radius:16px; padding:22px 22px 18px; margin-bottom:18px; color:#fff;
+background:
+radial-gradient(600px 240px at 100% 0%, rgba(212,175,55,.28), transparent 70%),
+linear-gradient(125deg,#0b1026 0%,#18214a 60%,#2a2413 100%);
+box-shadow:0 10px 30px rgba(11,16,38,.25);
+}
+.hero-fondateur::after{content:""; position:absolute; inset:0; border-radius:16px; border:1px solid rgba(212,175,55,.35); pointer-events:none;}
+.hero-fondateur-haut{display:flex; justify-content:space-between; align-items:flex-start; gap:12px;}
+.hero-date{font-size:12px; letter-spacing:.08em; text-transform:uppercase; color:#f3dc8f; opacity:.9;}
+.hero-titre{font-size:26px; font-weight:780; letter-spacing:-.02em; margin:2px 0;}
+.hero-sous{display:flex; align-items:center; gap:6px; font-size:13px; color:#f3dc8f;}
+.hero-logo{width:46px; height:46px; opacity:.95;}
+.kpis{display:grid; grid-template-columns:repeat(4, 1fr); gap:10px; margin-top:18px;}
+.kpi{
+background:rgba(255,255,255,.07); border:1px solid rgba(255,255,255,.12); border-radius:12px;
+padding:12px 14px; cursor:pointer; transition:background .15s, transform .15s;
+}
+.kpi:hover{background:rgba(255,255,255,.12); transform:translateY(-1px);}
+.kpi-val{font-size:26px; font-weight:800; letter-spacing:-.02em; line-height:1.1;
+background:linear-gradient(90deg,#fff,#f3dc8f); -webkit-background-clip:text; background-clip:text; color:transparent;}
+.kpi-lib{font-size:12px; opacity:.8; margin-top:2px;}
+.kpi-alerte{border-color:rgba(248,113,113,.6); background:rgba(248,113,113,.14);}
+.kpi-alerte .kpi-val{background:none; color:#fecaca;}
+@media(max-width:640px){ .kpis{grid-template-columns:repeat(2, 1fr);} .hero-titre{font-size:22px;} }
+.accueil-deux{display:grid; grid-template-columns:1fr 1fr; gap:14px; align-items:start;}
+.accueil-deux > *{min-width:0;}
+@media(max-width:900px){ .accueil-deux{grid-template-columns:1fr;} }
+.echeance-pastille{
+flex-shrink:0; min-width:52px; text-align:center; font-size:12px; font-weight:800; padding:6px 4px; border-radius:9px;
+background:var(--surface-2); color:var(--text-dim); border:1px solid var(--border);
+}
+.echeance-pastille.proche{background:var(--warn-bg); color:var(--warn); border-color:transparent;}
+.echeance-pastille.retard{background:var(--danger-bg); color:var(--danger); border-color:transparent; text-transform:uppercase; font-size:10.5px;}
+
+/* ---- Clients : liste pour 50 clients et plus ---- */
+.barre-clients{display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-bottom:10px;}
+.barre-clients select{width:auto; min-width:150px;}
+.recherche-client{
+flex:1; min-width:220px; display:flex; align-items:center; gap:8px; padding:0 12px;
+background:var(--surface); border:1px solid var(--border); border-radius:10px; color:var(--text-dim);
+}
+.recherche-client input{border:none; background:none; padding:10px 0; box-shadow:none; outline:none; flex:1; min-width:0;}
+.recherche-client:focus-within{border-color:var(--primary); box-shadow:0 0 0 3px color-mix(in srgb, var(--primary) 15%, transparent);}
+.avatar-client{
+width:38px; height:38px; border-radius:10px; flex-shrink:0; display:flex; align-items:center; justify-content:center;
+font-weight:800; font-size:13px; color:#fff;
+background:linear-gradient(135deg, hsl(var(--teinte) 55% 45%), hsl(calc(var(--teinte) + 30) 60% 32%));
+}
+.chiffre-client{font-size:12.5px; color:var(--text-dim); white-space:nowrap;}
+.chiffre-client strong{color:var(--text); font-size:14px;}
+.ligne-client .ligne-chiffres{gap:14px;}
+.chevron{color:var(--text-dim); font-size:20px; line-height:1; flex-shrink:0; padding-left:2px;}
+.ligne-select.cliquable:hover{background:color-mix(in srgb, var(--primary) 4%, transparent);}
+
+/* ---- Parc d'un client ---- */
+.carte-parc{border-top:3px solid var(--primary);}
+.parc-groupe{margin-top:12px;}
+.parc-groupe-titre{font-size:12px; font-weight:750; letter-spacing:.05em; text-transform:uppercase; color:var(--text-dim);
+padding-bottom:4px; border-bottom:1px solid var(--border);}
