@@ -41,6 +41,8 @@ if(state.accessError){
 app.innerHTML = renderAccesSuspendu();
 return;
 }
+if(state.session && posteState.mode === 'attente'){ app.innerHTML = renderAttenteOrdinateur(); dessinerQrOrdinateur(); return; }
+if(state.session && posteState.mode === 'pause'){ app.innerHTML = renderPauseMobile(); return; }
 if(!state.session){
 // Lien d'invitation : accessible sans être connecté.
 if(state.route.name === 'join' && state.route.param){
@@ -154,6 +156,8 @@ function lireInstantane(){
 try{ return JSON.parse(localStorage.getItem(cleInstantane()) || 'null') || {}; }catch(e){ return {}; }
 }
 function sauverInstantane(ajout){
+// Ordinateur ouvert pour 45 min : aucune copie des données n'y reste.
+if(typeAppareil() === 'ordinateur' && !state.superAdmin) return;
 try{ localStorage.setItem(cleInstantane(), JSON.stringify({ ...lireInstantane(), ...ajout })); }catch(e){}
 }
 function effacerInstantanes(){
@@ -575,12 +579,13 @@ ${state.enAttenteCount > 0 ? `<span class="badge-attente" title="${state.enAtten
 </div>
 <button data-action="renommer-moi">${iconeNav('pencil', 15)} Modifier mon nom</button>
 <button data-action="changer-mdp">${iconeNav('key', 15)} Modifier mon mot de passe</button>
+${!sa && posteState.mode === 'mobile' ? `<button data-action="ouvrir-sur-ordi">${iconeNav('monitor', 15)} Ouvrir sur un ordinateur</button>` : ''}
 ${sa ? '' : `<button data-action="go" data-path="/support">${iconeNav('help', 15)} Support & réclamations</button>`}
 <button data-action="logout" class="dropdown-sortie">Se déconnecter</button>
 </div>
 </div>
 </div>
-<main>${content}${piedSupport()}</main>
+<main>${renderBandeauOrdi()}${content}${piedSupport()}</main>
 </div>
 ${renderModal()}
 
@@ -973,6 +978,8 @@ scannerState.raf = requestAnimationFrame(boucle);
 // (même écran que si l'étiquette avait été scannée avec l'appareil photo).
 function traiterResultatScan(texte){
 const brut = (texte || '').trim();
+// QR affiché par un ordinateur qui demande l'accès (sql/23).
+if(/^WTE-ORDI:[0-9a-f]{20,}$/i.test(brut)){ fermerScanner(); autoriserOrdinateurDepuisScan(brut.slice(9)); return; }
 const idx = brut.indexOf('#');
 const chemin = idx !== -1 ? brut.slice(idx + 1) : (/^\/(p|equip)\//.test(brut) ? brut : '');
 
@@ -2391,6 +2398,10 @@ else if(action === 'restore-equip'){ restoreEquipement(); }
 else if(action === 'toggle-edit-equip'){ equipDetail.showEditForm = !equipDetail.showEditForm; equipDetail.editError=''; render(); }
 else if(action === 'print-qr'){ printQr(); }
 else if(action === 'ouvrir-scanner'){ ouvrirScanner(); }
+else if(action === 'ouvrir-sur-ordi'){ actionOuvrirSurOrdinateur(); }
+else if(action === 'poste-nouveau-code'){ nouveauCodeOrdinateur(); }
+else if(action === 'reprendre-mobile'){ actionReprendreMobile(); }
+else if(action === 'rendre-main-telephone'){ actionRendreMainTelephone(); }
 else if(action === 'fermer-scanner'){ fermerScanner(); }
 else if(action === 'connexion-depuis-scan'){ connexionDepuisScan(); }
 else if(action === 'toggle-partage'){ actionTogglePartage(); }
@@ -2583,15 +2594,23 @@ const appli = matchMedia('(display-mode: standalone)').matches || navigator.stan
 return `${os} · ${nav}${appli}`;
 }
 /* 'ok' | 'refuse' | null (pas de réponse : réseau) */
+/* Téléphone/tablette ou ordinateur : sert seulement à exiger que la première
+connexion (la « clé » du compte) se fasse sur un téléphone. La sécurité, elle,
+repose sur la base (sql/23), pas sur ce test. */
+function typeAppareil(){
+const ua = navigator.userAgent || '';
+const mobile = /Android|iPhone|iPad|iPod|Mobile/i.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
+return mobile ? 'mobile' : 'ordinateur';
+}
 async function lierAppareil(){
 try{
-const { data, error } = await sb.rpc('lier_appareil', { p_appareil: idAppareil(), p_info: infoAppareil() });
+const { data, error } = await sb.rpc('lier_appareil', { p_appareil: idAppareil(), p_info: infoAppareil(), p_type: typeAppareil() });
 if(error) return null;
 return data;
 }catch(e){ return null; }
 }
-async function refuserAppareil(){
-state.authError = MSG_APPAREIL_REFUSE;
+async function refuserAppareil(message){
+state.authError = message || MSG_APPAREIL_REFUSE;
 deconnexionVolontaire = true;
 effacerInstantanes();
 try{ await sb.auth.signOut({ scope:'local' }); }catch(e){}
@@ -2604,7 +2623,13 @@ if(verifSessionEnCours || !state.session || !state.profile || state.superAdmin |
 verifSessionEnCours = true;
 try{
 const { data, error } = await sb.rpc('ma_session_active');
-if(!error && data === false) await deconnexionForcee();
+if(!error && data === false){
+const etat = await lireEtatPoste();
+if(etat && etat.poste === 'mobile' && etat.ordinateur_expire_le){ passerEnPause(etat); }
+else if(etat && etat.poste === 'ordinateur'){ await finOrdinateur("La session sur l'ordinateur est terminée. Pour continuer, scannez à nouveau avec votre téléphone."); }
+else if(etat && !etat.poste && posteState.mode === 'ordinateur'){ await finOrdinateur("Le téléphone a repris la main : la session sur l'ordinateur est fermée."); }
+else await deconnexionForcee();
+}
 }catch(e){ /* réseau : on réessaiera */ }
 finally{ verifSessionEnCours = false; }
 }
@@ -2619,8 +2644,207 @@ nav('/');
 }
 
 setInterval(verifierSession, 60000);
+// Sur l'ordinateur, contrôle plus serré : la reprise par le téléphone se voit vite.
+setInterval(() => { if(posteState.mode === 'ordinateur') verifierSession(); }, 15000);
 document.addEventListener('visibilitychange', () => { if(document.visibilityState === 'visible'){ verifierSession(); if(state.profile && !state.superAdmin) chargerActivite(true); } });
 window.addEventListener('online', () => setTimeout(verifierSession, 1500));
+
+
+/* ---------------------------------------------------------------------- */
+/* Ordinateur autorisé par le téléphone (v2.17.5, sql/23)                  */
+/* ---------------------------------------------------------------------- */
+/* Le téléphone lié au compte est la clé. Un ordinateur affiche un QR code ;
+le téléphone le scanne → l'ordinateur est ouvert 45 minutes et le téléphone
+passe en pause (ordinateur OU téléphone, jamais les deux). Le téléphone peut
+reprendre la main à tout moment. Tout est vérifié par la base. */
+const MSG_PREMIERE_MOBILE = "Première connexion : utilisez votre téléphone. C'est lui qui ouvrira ensuite l'ordinateur, en scannant un QR code.";
+function posteStateInitial(){ return { mode:null, code:null, codeLe:0, erreur:'', message:'', expire:null, info:'', decalage:0, busy:false, averti:false }; }
+let posteState = posteStateInitial();
+let posteTimers = [];
+function arreterPoste(){ posteTimers.forEach(t => clearInterval(t)); posteTimers = []; }
+
+async function lireEtatPoste(){
+try{ const { data, error } = await sb.rpc('etat_poste'); return error ? null : data; }catch(e){ return null; }
+}
+function heureCourte(iso){
+try{ return new Date(iso).toLocaleTimeString('fr-FR', { hour:'2-digit', minute:'2-digit' }); }catch(e){ return ''; }
+}
+
+/* --- Côté ordinateur : attente du scan --- */
+function entrerAttenteOrdinateur(message){
+arreterPoste();
+posteState = { ...posteStateInitial(), mode:'attente', message: message || '' };
+state.loading = false;
+nouveauCodeOrdinateur();
+posteTimers.push(setInterval(surveillerAttente, 3000));
+render();
+}
+async function nouveauCodeOrdinateur(){
+posteState.busy = true; posteState.erreur = '';
+try{
+const { data, error } = await sb.rpc('demander_acces_ordinateur', { p_appareil: idAppareil(), p_info: infoAppareil() });
+if(error) throw error;
+posteState.code = data; posteState.codeLe = Date.now();
+}catch(e){ posteState.code = null; posteState.erreur = (e && e.message) || String(e); }
+posteState.busy = false;
+render();
+}
+async function surveillerAttente(){
+if(posteState.mode !== 'attente' || !state.session) return;
+if(!posteState.busy && (!posteState.code || Date.now() - posteState.codeLe > 4.5 * 60000)){ if(posteState.code) nouveauCodeOrdinateur(); return; }
+const etat = await lireEtatPoste();
+if(posteState.mode === 'attente' && etat && etat.valide && etat.poste === 'ordinateur'){
+arreterPoste();
+posteState = { ...posteStateInitial(), mode:'ordinateur' };
+state.loading = true; render();
+appliquerSession(state.session);
+}
+}
+function renderAttenteOrdinateur(){
+const p = posteState;
+return `
+<div class="auth-wrap poste-ecran">
+<div class="auth-logo">
+<img class="logo brand-logo" src="${LOGO_DATA_URL}" alt="WiTracEQUIP">
+<h1 style="font-size:20px;">Ouvrir sur cet ordinateur</h1>
+<div class="small muted">Un compte = une personne : l'ordinateur s'ouvre avec votre téléphone.</div>
+</div>
+${p.message ? `<div class="alert alert-info">${esc(p.message)}</div>` : ''}
+<div class="card poste-carte">
+<div class="poste-qr">${p.erreur ? `<div class="alert alert-error" style="margin:0;">${esc(p.erreur)}</div>`
+: p.code ? `<canvas id="qr-ordi" width="220" height="220" aria-label="QR code à scanner avec votre téléphone"></canvas>` : `<div class="spinner"></div>`}</div>
+<ol class="poste-etapes">
+<li>Sur <b>votre téléphone</b>, ouvrez WiTracEQUIP.</li>
+<li>Touchez <b>« Scanner un QR code »</b> et visez ce code.</li>
+<li>Confirmez : cet ordinateur s'ouvre pour <b>45 minutes</b>.</li>
+</ol>
+<div class="small muted">Pendant ce temps, votre téléphone est en pause ; il peut reprendre la main à tout moment. Le code se renouvelle tout seul.</div>
+<div class="row wrap" style="gap:8px;margin-top:14px;">
+<button class="btn" data-action="poste-nouveau-code" ${p.busy ? 'disabled' : ''}>Nouveau code</button>
+<button class="btn" data-action="logout">Se déconnecter</button>
+</div>
+</div>
+</div>`;
+}
+function dessinerQrOrdinateur(){
+const c = document.getElementById('qr-ordi');
+if(c && posteState.code && typeof QRious !== 'undefined') new QRious({ element:c, value:'WTE-ORDI:' + posteState.code, size:220, background:'white', foreground:'#141b1e', level:'M' });
+}
+
+/* --- Côté ordinateur : session ouverte (45 min) --- */
+async function demarrerMinuteurOrdinateur(){
+const etat = await lireEtatPoste();
+if(etat && etat.ordinateur_expire_le){
+posteState.expire = etat.ordinateur_expire_le;
+posteState.decalage = etat.maintenant ? new Date(etat.maintenant).getTime() - Date.now() : 0;
+}
+arreterPoste();
+posteTimers.push(setInterval(tickOrdinateur, 1000));
+tickOrdinateur();
+}
+function resteOrdinateur(){ return posteState.expire ? new Date(posteState.expire).getTime() - (Date.now() + (posteState.decalage || 0)) : null; }
+function texteBandeauOrdi(){
+const r = resteOrdinateur();
+if(r === null) return 'Session ordinateur';
+const min = Math.max(0, Math.ceil(r / 60000));
+return r <= 120000
+? `La session sur cet ordinateur se ferme dans ${min} min : enregistrez votre saisie.`
+: `Ordinateur ouvert jusqu'à ${heureCourte(posteState.expire)} (encore ${min} min)`;
+}
+function renderBandeauOrdi(){
+if(posteState.mode !== 'ordinateur') return '';
+const r = resteOrdinateur();
+return `<div id="bandeau-ordi" class="bandeau-ordi ${r !== null && r <= 120000 ? 'alerte' : ''}">
+${iconeNav('clock', 15)} <span id="bandeau-ordi-texte">${esc(texteBandeauOrdi())}</span>
+<button class="btn-lien-petit" data-action="rendre-main-telephone">Rendre la main au téléphone</button>
+</div>`;
+}
+function tickOrdinateur(){
+if(posteState.mode !== 'ordinateur' || !posteState.expire) return;
+const r = resteOrdinateur();
+const el = document.getElementById('bandeau-ordi');
+if(el){ el.classList.toggle('alerte', r <= 120000); const t = document.getElementById('bandeau-ordi-texte'); if(t) t.textContent = texteBandeauOrdi(); }
+if(r <= 120000 && !posteState.averti){
+posteState.averti = true;
+confirmer("La session sur cet ordinateur se ferme dans 2 minutes.\n\nEnregistrez votre saisie en cours. Pour continuer ensuite, scannez à nouveau le QR code avec votre téléphone.", { info:true, ok:'Compris' });
+}
+if(r <= 0) finOrdinateur("Les 45 minutes sur l'ordinateur sont écoulées. Pour continuer, scannez à nouveau avec votre téléphone.");
+}
+async function finOrdinateur(message){
+if(posteState.mode === 'attente') return;
+arreterPoste();
+posteState.mode = 'attente';
+try{ await sb.rpc('fermer_ordinateur'); }catch(e){}
+if(dialogueOuvert) dialogueOuvert.fermer(null);
+effacerInstantanes();
+dashboardCache = dashboardInitial(dashboardCache.requete + 1);
+entrerAttenteOrdinateur(message);
+}
+async function actionRendreMainTelephone(){
+if(!await confirmer("Fermer la session sur cet ordinateur ?\n\nVotre téléphone redevient actif immédiatement. Pensez à enregistrer une saisie en cours.", { ok:'Fermer la session', danger:false })) return;
+await finOrdinateur("Session fermée : votre téléphone est de nouveau actif.");
+}
+
+/* --- Côté téléphone : autoriser, pause, reprise --- */
+async function autoriserOrdinateurDepuisScan(code){
+if(!await confirmer("Ouvrir votre compte sur cet ordinateur ?\n\nL'ordinateur pourra être utilisé pendant 45 minutes. Pendant ce temps, ce téléphone est en pause ; vous pourrez reprendre la main à tout moment.", { ok:"Autoriser l'ordinateur", danger:false })) return;
+try{
+const { error } = await sb.rpc('autoriser_ordinateur', { p_code: code });
+if(error) throw error;
+passerEnPause(await lireEtatPoste());
+}catch(e){ toast((e && e.message) || String(e), 'erreur'); }
+}
+function passerEnPause(etat){
+arreterPoste();
+posteState = { ...posteStateInitial(), mode:'pause', expire: etat && etat.ordinateur_expire_le || null, info: etat && etat.ordinateur_info || '' };
+if(dialogueOuvert) dialogueOuvert.fermer(null);
+if(scannerState.ouvert) fermerScanner();
+state.loading = false;
+posteTimers.push(setInterval(async () => {
+if(posteState.mode !== 'pause' || !navigator.onLine) return;
+const e = await lireEtatPoste();
+if(posteState.mode !== 'pause' || !e) return;
+if(e.valide) reprendreApresPause();
+else if(e.ordinateur_expire_le !== posteState.expire){ posteState.expire = e.ordinateur_expire_le; render(); }
+}, 20000));
+render();
+}
+function reprendreApresPause(){
+arreterPoste();
+posteState = posteStateInitial();
+state.loading = true; render();
+appliquerSession(state.session);
+}
+async function actionReprendreMobile(){
+if(!await confirmer("Reprendre sur ce téléphone ?\n\nLa session ouverte sur l'ordinateur sera fermée immédiatement.", { ok:'Reprendre ici', danger:false })) return;
+try{
+const { error } = await sb.rpc('reprendre_mobile');
+if(error) throw error;
+reprendreApresPause();
+}catch(e){ toast('Erreur : ' + ((e && e.message) || e), 'erreur'); }
+}
+function renderPauseMobile(){
+const p = posteState;
+return `
+<div class="auth-wrap poste-ecran">
+<div class="auth-logo">
+<img class="logo brand-logo" src="${LOGO_DATA_URL}" alt="WiTracEQUIP">
+<h1 style="font-size:20px;">Compte ouvert sur un ordinateur</h1>
+</div>
+<div class="card poste-carte">
+<div class="poste-pause-ico">${iconeNav('smartphone', 34)}</div>
+<p style="margin:0 0 6px;">Votre compte est utilisé sur <b>${esc(p.info || 'un ordinateur')}</b>${p.expire ? ` jusqu'à <b>${esc(heureCourte(p.expire))}</b>` : ''}.</p>
+<p class="small muted" style="margin:0 0 14px;">Ce téléphone est en pause : un compte ne s'utilise que sur un appareil à la fois. Il redevient actif tout seul à la fin de la session ordinateur.</p>
+<button class="btn btn-primary btn-block" data-action="reprendre-mobile">Reprendre sur ce téléphone</button>
+<button class="btn btn-block" style="margin-top:8px;" data-action="logout">Se déconnecter</button>
+</div>
+</div>`;
+}
+async function actionOuvrirSurOrdinateur(){
+closeMenus();
+if(!await confirmer("Ouvrir votre compte sur un ordinateur\n\n1. Sur l'ordinateur, ouvrez WiTracEQUIP et connectez-vous avec votre e-mail et votre mot de passe.\n2. Un QR code s'affiche : scannez-le avec ce téléphone.\n\nL'ordinateur est alors ouvert 45 minutes et ce téléphone passe en pause.", { ok:'Scanner le QR code', danger:false })) return;
+ouvrirScanner();
+}
 
 async function appliquerSession(session){
 if(session !== state.session) return; // une autre session est arrivée entre-temps
@@ -2631,6 +2855,11 @@ if(navigator.onLine){
 const lien = await lierAppareil();
 if(session !== state.session) return;
 if(lien === 'refuse'){ await refuserAppareil(); return; }
+if(lien === 'premiere_mobile'){ await refuserAppareil(MSG_PREMIERE_MOBILE); return; }
+if(lien === 'autorisation_requise'){ entrerAttenteOrdinateur(); return; }
+if(lien === 'mobile_bloque'){ passerEnPause(await lireEtatPoste()); return; }
+posteState = { ...posteStateInitial(), mode: lien === 'ordinateur_ok' ? 'ordinateur' : 'mobile' };
+if(lien === 'ordinateur_ok') demarrerMinuteurOrdinateur();
 }
 try{
 await loadProfileAndOrg();
@@ -2652,7 +2881,7 @@ if(navigator.onLine) synchroniserInterventionsEnAttente();
 }catch(e){
 console.error(e);
 const inst = lireInstantane();
-if(estErreurReseau(e) && inst.profile && inst.profile.id === session.user.id){
+if(estErreurReseau(e) && inst.profile && inst.profile.id === session.user.id && (typeAppareil() === 'mobile' || inst.superAdmin)){
 // Pas de réseau : on démarre sur le dernier état connu.
 state.profile = inst.profile; state.orgName = inst.orgName || ''; state.superAdmin = !!inst.superAdmin;
 state.types = inst.types || []; state.typesLoaded = true; state.horsLigne = true;
@@ -2667,6 +2896,7 @@ state.accessError = (e && e.message) ? e.message : 'Erreur de chargement du prof
 }
 } else {
 state.profile = null; state.orgName = ''; state.superAdmin = false;
+arreterPoste(); posteState = posteStateInitial();
 activite = { items:null, loading:false, error:'', filtre:'recentes' };
 dashboardCache = dashboardInitial(dashboardCache.requete + 1); // invalide toute réponse encore en route
 resetReglages();

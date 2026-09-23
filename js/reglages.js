@@ -22,6 +22,7 @@ const CATEGORIES_SUPPORT = [
 
 const LIBELLES_JOURNAL = {
 export_donnees: 'Export Excel du parc',
+autorisation_ordinateur: 'Ordinateur ouvert (45 min)',
 suppression_equipement: 'Équipement supprimé',
 archivage_equipement: 'Équipement archivé',
 restauration_equipement: 'Équipement restauré',
@@ -666,7 +667,7 @@ ${m.fondateur ? '<span class="badge badge-neutral">fondateur</span>' : ''}
 ${!m.active ? '<span class="badge badge-off">suspendu</span>' : ''}
 </div>`}
 ${isSuperAdmin() && !estMoi ? `<div class="small appareil-ligne">${iconeNav('smartphone', 13)} ${m.appareil_lie_le
-? `Appareil autorisé : <strong>${esc(m.appareil_info || 'un appareil')}</strong> depuis le ${fmtDate(m.appareil_lie_le)}`
+? `Appareil autorisé : <strong>${esc(m.appareil_info || 'un appareil')}</strong> depuis le ${fmtDate(m.appareil_lie_le)}${m.ordi_expire_le && new Date(m.ordi_expire_le) > new Date() ? ` · <span class="ordi-actif">${iconeNav('monitor', 13)} ordinateur ouvert jusqu'à ${esc(new Date(m.ordi_expire_le).toLocaleTimeString('fr-FR', { hour:'2-digit', minute:'2-digit' }))}${m.ordi_info ? ' (' + esc(m.ordi_info) + ')' : ''}</span>` : ''}`
 : `<span class="muted">Aucun appareil lié : le premier utilisé sera retenu</span>`}</div>` : ''}
 <div class="small muted">
 ${email ? esc(email) + ' · ' : ''}membre depuis le ${fmtDate(m.created_at)}
