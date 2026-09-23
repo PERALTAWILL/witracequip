@@ -46,7 +46,13 @@ if ('serviceWorker' in navigator) {
     window.location.reload();
   });
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('sw.js').catch((e) => {
+    navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then((reg) => {
+      // En revenant sur l'appli (téléphone), on vérifie s'il existe une
+      // nouvelle version : plus besoin de la fermer complètement.
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') reg.update().catch(() => {});
+      });
+    }).catch((e) => {
       console.error('[SW] Échec d\'enregistrement :', e);
     });
   });

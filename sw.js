@@ -26,7 +26,7 @@
 
 /* Changer ce numéro à chaque déploiement : c'est ce qui déclenche le
    remplacement de l'ancien cache par le nouveau chez tous les utilisateurs. */
-const VERSION = 'wte-v2.16.1';
+const VERSION = 'wte-v2.16.2';
 
 const CACHE_SHELL = `${VERSION}-shell`;
 const CACHE_EXTERNE = `${VERSION}-externe`;
@@ -72,7 +72,11 @@ const HOTES_CDN = [
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_SHELL)
-      .then((cache) => cache.addAll(FICHIERS_SHELL))
+      // cache: 'reload' : on redemande chaque fichier au serveur. Sans cela le
+      // navigateur peut resservir l'ANCIEN app.js depuis son cache HTTP
+      // (GitHub Pages le garde 10 min) et la nouvelle version embarquerait
+      // l'ancien code — c'est ce qui laissait « À prévoir » à l'écran.
+      .then((cache) => cache.addAll(FICHIERS_SHELL.map((u) => new Request(u, { cache: 'reload' }))))
       .catch((e) => {
         console.error('[SW] Mise en cache initiale incomplète :', e);
       })
