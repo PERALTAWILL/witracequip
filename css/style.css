@@ -1023,3 +1023,8 @@ padding-bottom:4px; border-bottom:1px solid var(--border);}
 .dlg-oeil:hover{background:var(--surface-2);}
 .dlg-erreur{margin-top:12px; padding:9px 12px; border-radius:10px; background:var(--danger-bg); color:var(--danger); font-size:13.5px; font-weight:600;}
 .btn-mdp{display:inline-flex; align-items:center; gap:6px; white-space:nowrap;}
+
+/* ===== v2.17.1 : un compte = un appareil ===== */
+.appareil-ligne{display:flex; align-items:center; gap:5px; flex-wrap:wrap; margin:2px 0; color:var(--text);}
+.appareil-ligne svg{color:var(--text-dim);}
+.btn-lien-petit{border:none; background:none; padding:0 2px; color:var(--primary); font-weight:650; font-size:12.5px; text-decoration:underline; cursor:pointer;}
