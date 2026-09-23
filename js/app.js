@@ -20,6 +20,7 @@ restaurerFocus(focus);
 
 function peindre(){
 const app = document.getElementById('app');
+document.body.dataset.role = state.route.name === 'p' ? '' : roleTheme();
 if(state.loading){
 app.innerHTML = `<div class="center-screen demarrage"><img src="${LOGO_DATA_URL}" alt=""><div class="spinner"></div></div>`;
 return;
@@ -308,25 +309,87 @@ ${piedSupport()}
 `;
 }
 
+/* ---------------------------------------------------------------------- */
+/* Rôles : thème de couleur et menus                                       */
+/* ---------------------------------------------------------------------- */
+/* Chaque rôle a sa couleur : utilisateur bleu, responsable vert, administrateur
+   violet, fondateur nuit & or. On sait d'un coup d'œil avec quel profil on est. */
+function roleTheme(){
+if(!state.session || !state.profile) return '';
+if(isSuperAdmin() || state.profile.fondateur) return 'fondateur';
+return state.profile.role || '';
+}
+function libelleRoleTheme(){
+if(isSuperAdmin()) return 'Fondateur · WiDIAG MQ';
+if(state.profile?.fondateur) return 'Fondateur';
+return roleLabel(state.profile?.role);
+}
+
+/* Le super-admin travaille client par client : Accueil · Clients · Support · Journal. */
+function entreesNav(r){
+if(isSuperAdmin()){
+const aTraiter = (reglages.support || []).filter(d => d.statut !== 'traite').length;
+const sousPage = r.name === 'reglages' ? (r.param || 'clients') : '';
+return [
+{ path:'/', icone:'home', label:'Accueil', actif: r.name === 'accueil' },
+{ path:'/reglages/clients', icone:'briefcase', label:'Clients',
+actif: sousPage === 'clients' || ['equip','equip-new','types','equipements','dashboard'].includes(r.name) },
+{ path:'/reglages/support', icone:'inbox', label:'Support', actif: sousPage === 'support' || r.name === 'support', badge: aTraiter || '' },
+{ path:'/reglages/journal', icone:'journal', label:'Journal', actif: sousPage === 'journal' },
+];
+}
+const equipementsActif = ['dashboard','equipements','equip','equip-new'].includes(r.name);
+return [
+{ path:'/', icone:'home', label:'Accueil', actif: r.name === 'accueil' },
+{ path:'/equipements', icone:'box', label:'Équipements', court:'Équip.', actif: equipementsActif },
+...(peutGererTypes() ? [{ path:'/types', icone:'tag', label:"Types d'équipement", court:'Types', actif: r.name === 'types' }] : []),
+...(peutReglages() ? [{ path:'/reglages', icone:'gear', label:'Réglages', actif: r.name === 'reglages' || r.name === 'equipe' }] : []),
+{ path:'/support', icone:'help', label:'Support', actif: r.name === 'support' },
+];
+}
+
+/* Super-admin : le parc d'un équipement, c'est la fiche de son client. */
+function routeParc(orgId){ return isSuperAdmin() && orgId ? '/reglages/clients/' + orgId : '/equipements'; }
+function nomClientDe(orgId){ return ((reglages.clients || []).find(c => c.id === orgId) || {}).nom || ''; }
+function typesPour(orgId){ return isSuperAdmin() ? state.types.filter(t => t.organization_id === orgId) : state.types; }
+function orgTypesCible(){ return isSuperAdmin() ? state.route.param : state.profile.organization_id; }
+
+async function renommerMoi(){
+closeMenus();
+const nom = await demander("Modifier mon nom\n\nPrénom et nom, tels qu'ils apparaîtront dans l'application et sur vos prochaines interventions.",
+{ ok:'Enregistrer', placeholder:'Prénom Nom', valeur: state.profile?.full_name || '' });
+if(nom === null) return;
+const propre = nom.trim().replace(/\s+/g, ' ');
+if(propre.length < 2){ toast('Indiquez au moins le prénom et le nom.', 'erreur'); return; }
+try{
+await renommerMembre(state.profile.id, propre);
+state.profile.full_name = propre;
+const m = (reglages.membres || []).find(x => x.id === state.profile.id);
+if(m) m.full_name = propre;
+toast('Nom mis à jour');
+render();
+}catch(e){ toast('Erreur : ' + e.message, 'erreur'); }
+}
+
 function renderShell(){
 const r = state.route;
 let content = '';
+const sa = isSuperAdmin();
 try{
-if(r.name === 'accueil') content = viewAccueil();
-else if(r.name === 'dashboard' || r.name === 'equipements') content = viewDashboard();
-else if(r.name === 'types') content = peutGererTypes() ? viewTypes() : viewDashboard();
+if(r.name === 'accueil') content = sa ? viewAccueilFondateur() : viewAccueil();
+// Le super-admin n'a pas de parc propre : le parc se consulte client par client.
+else if(r.name === 'dashboard' || r.name === 'equipements') content = sa ? viewReglages('clients') : viewDashboard();
+else if(r.name === 'types') content = !peutGererTypes() ? viewDashboard() : (sa && !r.param ? viewReglages('clients') : viewTypes());
 else if(r.name === 'equip-new') content = viewEquipNew();
 else if(r.name === 'equip') content = viewEquipDetail(r.param);
 else if(r.name === 'reglages') content = viewReglages(r.param, r.sub);
 else if(r.name === 'equipe') content = viewReglages('membres'); // ancienne adresse
-else if(r.name === 'support') content = viewSupport();
-else content = viewDashboard();
+else if(r.name === 'support') content = sa ? viewReglages('support') : viewSupport();
+else content = sa ? viewReglages('clients') : viewDashboard();
 }catch(e){
 content = `<div class="alert alert-error">Erreur d'affichage : ${esc(e.message||e)}</div>`;
 }
 
-const equipementsActif = (r.name==='dashboard'||r.name==='equipements'||r.name==='equip'||r.name==='equip-new');
-const reglagesActif = (r.name==='reglages'||r.name==='equipe');
 
 return `
 <div class="shell">
@@ -339,13 +402,10 @@ return `
 </div>
 </div>
 <nav class="sidebar-nav">
-<div class="sidebar-link ${r.name==='accueil'?'active':''}" data-action="go" data-path="/">${iconeNav('home')}<span>Accueil</span></div>
-<div class="sidebar-link ${equipementsActif?'active':''}" data-action="go" data-path="/equipements">${iconeNav('box')}<span>Équipements</span></div>
-${peutGererTypes() ? `<div class="sidebar-link ${r.name==='types'?'active':''}" data-action="go" data-path="/types">${iconeNav('tag')}<span>Types d'équipement</span></div>` : ''}
-${peutReglages() ? `<div class="sidebar-link ${reglagesActif?'active':''}" data-action="go" data-path="/reglages">${iconeNav('gear')}<span>Réglages</span></div>` : ''}
-<div class="sidebar-link ${r.name==='support'?'active':''}" data-action="go" data-path="/support">${iconeNav('help')}<span>Support</span></div>
+${entreesNav(r).map(n => `<div class="sidebar-link ${n.actif?'active':''}" data-action="go" data-path="${n.path}">${iconeNav(n.icone)}<span>${n.label}</span>${n.badge ? `<span class="nav-badge">${n.badge}</span>` : ''}</div>`).join('')}
 </nav>
 <div class="sidebar-spacer"></div>
+${sa ? `<div class="sidebar-fondateur">${iconeNav('crown', 16)}<div><strong>Espace fondateur</strong><span>${esc(state.orgName || 'WiDIAG MQ')}</span></div></div>` : ''}
 ${state.enAttenteCount > 0 ? `<div class="sidebar-sync" title="${state.enAttenteCount} intervention${state.enAttenteCount>1?'s':''} en attente d'envoi (sans réseau)">${iconeNav('clock',15)}<span>${state.enAttenteCount} en attente</span></div>` : ''}
 </aside>
 
@@ -363,15 +423,18 @@ ${state.enAttenteCount > 0 ? `<span class="badge-attente" title="${state.enAtten
 <div class="org-pill">${esc(state.orgName || '…')}</div>
 <div class="user-menu">
 <button class="user-btn" data-action="toggle-menu">
-<span class="avatar">${initials(state.profile?.full_name || state.session.user.email)}</span>
+<span class="avatar">${esc(initials(state.profile?.full_name || state.session.user.email))}</span>
+<span class="user-nom">${esc((state.profile?.full_name || '').trim() || state.session.user.email)}</span>
 </button>
 <div class="dropdown" id="user-dropdown">
-<div class="small muted" style="padding:8px 10px;">
-${esc(state.session.user.email)}
-<div style="margin-top:4px;"><span class="badge badge-role">${esc(roleLabel(state.profile?.role))}</span>${isSuperAdmin() ? ' <span class="badge badge-neutral">super-admin</span>' : ''}</div>
+<div class="dropdown-entete">
+<div class="dropdown-nom">${esc(state.profile?.full_name || 'Sans nom')}</div>
+<div class="small muted">${esc(state.session.user.email)}</div>
+<div style="margin-top:6px;"><span class="badge badge-role role-${roleTheme()}">${esc(libelleRoleTheme())}</span></div>
 </div>
-<button data-action="go" data-path="/support">Support & réclamations</button>
-<button data-action="logout">Se déconnecter</button>
+<button data-action="renommer-moi">${iconeNav('pencil', 15)} Modifier mon nom</button>
+${sa ? '' : `<button data-action="go" data-path="/support">${iconeNav('help', 15)} Support & réclamations</button>`}
+<button data-action="logout" class="dropdown-sortie">Se déconnecter</button>
 </div>
 </div>
 </div>
@@ -380,11 +443,7 @@ ${esc(state.session.user.email)}
 ${renderModal()}
 
 <nav class="bottom-nav">
-<div class="bottom-nav-item ${r.name==='accueil'?'active':''}" data-action="go" data-path="/">${iconeNav('home',20)}<span>Accueil</span></div>
-<div class="bottom-nav-item ${equipementsActif?'active':''}" data-action="go" data-path="/equipements">${iconeNav('box',20)}<span>Équip.</span></div>
-${peutGererTypes() ? `<div class="bottom-nav-item ${r.name==='types'?'active':''}" data-action="go" data-path="/types">${iconeNav('tag',20)}<span>Types</span></div>` : ''}
-${peutReglages() ? `<div class="bottom-nav-item ${reglagesActif?'active':''}" data-action="go" data-path="/reglages">${iconeNav('gear',20)}<span>Réglages</span></div>` : ''}
-<div class="bottom-nav-item ${r.name==='support'?'active':''}" data-action="go" data-path="/support">${iconeNav('help',20)}<span>Support</span></div>
+${entreesNav(r).map(n => `<div class="bottom-nav-item ${n.actif?'active':''}" data-action="go" data-path="${n.path}">${iconeNav(n.icone,20)}<span>${n.court || n.label}</span>${n.badge ? `<span class="nav-badge">${n.badge}</span>` : ''}</div>`).join('')}
 </nav>
 </div>
 `;
@@ -484,6 +543,137 @@ derniere: interventions.length ? interventions[0].date : null,
 };
 }
 
+/* ---------------------------------------------------------------------- */
+/* Accueil du fondateur (super-admin) : tableau de bord de l'activité      */
+/* ---------------------------------------------------------------------- */
+/* Pas de parc propre : on montre ce qui fait la journée d'un prestataire —
+   ses clients, ce qui arrive à échéance chez eux, les demandes à traiter. */
+let fondateurCache = { donnees:null, loading:false, error:'' };
+
+/* Champs date qui annoncent une échéance : « Prochain(e) … », « Péremption … ». */
+function estChampEcheance(c){
+return c.type === 'date' && /^(prochain|prochaine|peremption)/.test(c.key || '');
+}
+
+async function chargerTableauFondateur(){
+const debutMois = new Date(); debutMois.setDate(1);
+const iso = `${debutMois.getFullYear()}-${String(debutMois.getMonth() + 1).padStart(2, '0')}-01`;
+const [eq, iv] = await Promise.all([
+sb.from('equipements').select('id, nom, organization_id, type_id, valeurs').eq('archived', false),
+sb.from('interventions').select('id').gte('date', iso),
+]);
+if(eq.error) throw eq.error;
+if(iv.error) throw iv.error;
+const aujourdHui = new Date(); aujourdHui.setHours(0, 0, 0, 0);
+const limite = new Date(aujourdHui); limite.setDate(limite.getDate() + 45);
+const echeances = [];
+for(const e of eq.data || []){
+const type = state.types.find(t => t.id === e.type_id);
+for(const c of (type?.champs || []).filter(estChampEcheance)){
+const v = e.valeurs?.[c.key];
+const m = typeof v === 'string' && v.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+if(!m) continue;
+const d = new Date(+m[1], +m[2] - 1, +m[3]);
+if(d <= limite) echeances.push({ equip:e, libelle:c.label, date:v, jours: Math.round((d - aujourdHui) / 86400000) });
+}
+}
+echeances.sort((a, b) => a.jours - b.jours);
+return { interventionsMois: (iv.data || []).length, echeances };
+}
+
+function viewAccueilFondateur(){
+chargerClients(false);
+chargerSupport(false);
+if(fondateurCache.donnees === null && !fondateurCache.loading && state.typesLoaded){
+fondateurCache.loading = true;
+chargerTableauFondateur()
+.then(d => { fondateurCache.donnees = d; fondateurCache.error = ''; })
+.catch(e => { fondateurCache.error = e.message; })
+.finally(() => { fondateurCache.loading = false; render(); });
+}
+const prenom = (state.profile?.full_name || '').trim().split(/\s+/)[0] || '';
+const clients = (reglages.clients || []).filter(c => !c.est_mon_organisation);
+const parc = clients.reduce((n, c) => n + (c.nb_equipements || 0), 0);
+const aTraiter = (reglages.support || []).filter(d => d.statut !== 'traite').length;
+const d = fondateurCache.donnees;
+const heure = new Date().getHours();
+const salut = heure < 5 || heure >= 18 ? 'Bonsoir' : 'Bonjour';
+const dateJour = new Date().toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long' });
+const chiffre = (v) => v === null || v === undefined ? '<span class="sq sq-ligne" style="width:40px;display:inline-block;"></span>' : v;
+
+if(scannerState.ouvert) setTimeout(() => attacherScanner(), 0);
+
+const echeances = d ? d.echeances.slice(0, 8) : null;
+const nbRetard = d ? d.echeances.filter(x => x.jours < 0).length : 0;
+
+return `
+<div class="hero-fondateur">
+<div class="hero-fondateur-haut">
+<div>
+<div class="hero-date">${esc(dateJour)}</div>
+<div class="hero-titre">${salut}${prenom ? ', ' + esc(prenom) : ''}</div>
+<div class="hero-sous">${iconeNav('crown', 14)} Fondateur · ${esc(state.orgName || 'WiDIAG MQ')}</div>
+</div>
+<img src="${LOGO_DATA_URL}" alt="" class="hero-logo">
+</div>
+<div class="kpis">
+<div class="kpi" data-action="go" data-path="/reglages/clients"><div class="kpi-val">${chiffre(reglages.clients ? clients.length : null)}</div><div class="kpi-lib">Clients</div></div>
+<div class="kpi" data-action="go" data-path="/reglages/clients"><div class="kpi-val">${chiffre(reglages.clients ? parc : null)}</div><div class="kpi-lib">Équipements suivis</div></div>
+<div class="kpi"><div class="kpi-val">${chiffre(d ? d.interventionsMois : null)}</div><div class="kpi-lib">Interventions ce mois</div></div>
+<div class="kpi ${aTraiter ? 'kpi-alerte' : ''}" data-action="go" data-path="/reglages/support"><div class="kpi-val">${chiffre(reglages.support ? aTraiter : null)}</div><div class="kpi-lib">Demandes à traiter</div></div>
+</div>
+</div>
+
+<div class="accueil-deux">
+<div class="card">
+<div class="row between wrap"><h3 style="margin:0;">À prévoir chez vos clients</h3>
+${nbRetard ? `<span class="badge badge-off">${nbRetard} en retard</span>` : ''}</div>
+<div class="hint" style="margin:2px 0 8px;">Échéances des 45 prochains jours : contrôles, révisions, péremptions.</div>
+${fondateurCache.error ? `<div class="alert alert-error">${esc(fondateurCache.error)}</div>`
+: echeances === null ? squeletteListe(4).replace('card liste-select', 'liste-select')
+: echeances.length ? echeances.map(x => `
+<div class="ligne-select cliquable" data-action="go" data-path="/equip/${x.equip.id}">
+<div class="echeance-pastille ${x.jours < 0 ? 'retard' : x.jours <= 15 ? 'proche' : ''}">${x.jours < 0 ? 'retard' : x.jours === 0 ? "auj." : x.jours + ' j'}</div>
+<div class="ligne-corps">
+<div class="ligne-titre">${esc(x.equip.nom)}</div>
+<div class="small muted">${esc(nomClientDe(x.equip.organization_id))} · ${esc(x.libelle)} : ${fmtDate(x.date)}</div>
+</div>
+<span class="chevron">›</span>
+</div>`).join('') + (d.echeances.length > 8 ? `<div class="small muted" style="padding-top:8px;">+ ${d.echeances.length - 8} autre(s) échéance(s)</div>` : '')
+: `<div class="empty small">Rien d'urgent : aucune échéance dans les 45 jours. 👌</div>`}
+</div>
+
+<div class="card">
+<div class="row between wrap"><h3 style="margin:0;">Vos clients</h3>
+<button class="btn btn-sm" data-action="go" data-path="/reglages/clients">Tous les clients</button></div>
+<div style="margin-top:8px;">
+${reglages.clients === null ? squeletteListe(4).replace('card liste-select', 'liste-select')
+: clients.length ? [...clients].sort((a, b) => (b.created_at || '').localeCompare(a.created_at || '')).slice(0, 6).map(c => `
+<div class="ligne-select cliquable" data-action="go" data-path="/reglages/clients/${c.id}">
+<div class="avatar-client" style="--teinte:${teinteClient(c.nom)};">${esc(initials(c.nom))}</div>
+<div class="ligne-corps">
+<div class="ligne-titre">${esc(c.nom)}</div>
+<div class="small muted">N° ${esc(c.code_client)} · ${c.nb_equipements} équipement${c.nb_equipements > 1 ? 's' : ''}</div>
+</div>
+<span class="chevron">›</span>
+</div>`).join('')
+: `<div class="empty small">Aucun client. <a href="#/reglages/clients">Créer le premier</a></div>`}
+</div>
+</div>
+</div>
+
+<div class="scanner-carte">
+<div class="scanner-carte-icone">${iconeNav('scan', 26)}</div>
+<div class="scanner-carte-texte">
+<div class="scanner-carte-titre">Sur le terrain</div>
+<p>Scannez l'étiquette d'un équipement chez n'importe lequel de vos clients : sa fiche s'ouvre directement.</p>
+</div>
+<button class="btn btn-primary" data-action="ouvrir-scanner">Scanner un QR code</button>
+</div>
+${scannerState.ouvert ? renderScannerOverlay() : ''}
+`;
+}
+
 function viewAccueil(){
 if(accueilCache.chiffres === null && !accueilCache.loading){
 accueilCache.loading = true;
@@ -560,7 +750,12 @@ Votre parc est encore vide. ${peutGererTypes()
 : `Votre administrateur doit d'abord créer les types d'équipement.`}
 </div>` : ''}
 
-${scannerState.ouvert ? `
+${scannerState.ouvert ? renderScannerOverlay() : ''}
+`;
+}
+
+function renderScannerOverlay(){
+return `
 <div class="scanner-overlay">
 <video id="scanner-video" playsinline muted autoplay></video>
 <canvas id="scanner-canvas"></canvas>
@@ -568,9 +763,7 @@ ${scannerState.ouvert ? `
 <button class="scanner-fermer" data-action="fermer-scanner" title="Fermer">✕</button>
 <div class="scanner-consigne">Cadrez le QR code de l'équipement</div>
 ${scannerState.erreur ? `<div class="scanner-erreur">${esc(scannerState.erreur)}</div>` : ''}
-</div>
-` : ''}
-`;
+</div>`;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -818,6 +1011,7 @@ toast(ids.length > 1 ? ids.length + ' équipements restaurés' : 'Équipement re
 function refreshDashboard(){
 dashboardCache.error = '';
 accueilCache.chiffres = null; // les compteurs d'accueil se recalculent
+fondateurCache.donnees = null;
 if(dashboardCache.items === null){ render(); return; }
 if(dashboardCache.loading) dashboardCache.perime = true; else chargerEquipements();
 render();
@@ -835,7 +1029,7 @@ const modele = MODELES_METIERS.find(m => m.cle === cle);
 if(!modele) return;
 
 // On ne recrée pas ce qui existe déjà : le modèle complète, il n'écrase jamais.
-const existants = new Set(state.types.map(t => (t.nom||'').trim().toLowerCase()));
+const existants = new Set(typesPour(orgTypesCible()).map(t => (t.nom||'').trim().toLowerCase()));
 const aCreer = modele.types.filter(t => !existants.has(t.nom.trim().toLowerCase()));
 
 if(!aCreer.length){
@@ -853,7 +1047,7 @@ if(!await confirmer(
 modeleState.busy = true; render();
 try{
 const lignes = aCreer.map(t => ({
-organization_id: state.profile.organization_id,
+organization_id: orgTypesCible(),
 nom: t.nom,
 champs: t.champs.map(c => ({ key: slugify(c.label), label: c.label, type: c.type })),
 }));
@@ -892,7 +1086,9 @@ if(m && m.scrollTop) m.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 function viewTypes(){
-const rows = state.types.map(t => `
+const cible = orgTypesCible();
+const typesVisibles = typesPour(cible);
+const rows = typesVisibles.map(t => `
 <div class="list-item">
 <div class="thumb">${iconeNav('tag', 18)}</div>
 <div style="flex:1;min-width:0;">
@@ -905,7 +1101,7 @@ ${peutGererTypes() ? `<button class="btn btn-sm" data-action="edit-type" data-id
 
 return `
 <div class="row between wrap" style="margin-bottom:14px;">
-<h2>Types d'équipement</h2>
+${isSuperAdmin() ? `<div class="row" style="gap:10px;"><button class="icon-btn" data-action="go" data-path="/reglages/clients/${cible}" title="Retour">←</button><div><h2>Types d'équipement</h2><div class="small muted">chez <strong>${esc(nomClientDe(cible))}</strong></div></div></div>` : `<h2>Types d'équipement</h2>`}
 ${peutGererTypes()
 ? `<button class="btn btn-primary" data-action="toggle-type-form">${typeForm.open?'Annuler':'+ Nouveau type'}</button>`
 : ''}
@@ -943,7 +1139,7 @@ ${modeleState.busy ? 'Création…' : `Ajouter ces ${m.types.length} types`}
 </div>` : ''}
 
 <div class="card" style="padding:0 18px;">
-${state.types.length ? rows : `<div class="empty"><div class="empty-icone">${iconeNav('tag', 30)}</div>Aucun type d'équipement.<br><span class="small">${peutGererTypes() ? 'Créez-en un (ex. « Véhicule », « Dispositif médical », « Équipement industriel »…) pour commencer à ajouter des équipements.' : 'Aucun type ne vous a été attribué. Contactez votre administrateur.'}</span></div>`}
+${typesVisibles.length ? rows : `<div class="empty"><div class="empty-icone">${iconeNav('tag', 30)}</div>Aucun type d'équipement.<br><span class="small">${peutGererTypes() ? 'Créez-en un (ex. « Véhicule », « Dispositif médical », « Équipement industriel »…) pour commencer à ajouter des équipements.' : 'Aucun type ne vous a été attribué. Contactez votre administrateur.'}</span></div>`}
 </div>
 `;
 }
@@ -1003,7 +1199,7 @@ const { error } = await sb.from('equipment_types')
 if(error) throw error;
 } else {
 const { error } = await sb.from('equipment_types').insert({
-organization_id: state.profile.organization_id,
+organization_id: orgTypesCible(),
 nom, champs
 });
 if(error) throw error;
@@ -1130,17 +1326,21 @@ joinState.busy = false; render();
 /* View: Nouvel équipement */
 /* ---------------------------------------------------------------------- */
 
-let equipForm = { typeId:'', nom:'', serial_value:'', valeurs:{}, busy:false, error:'' };
+let equipForm = { typeId:'', orgId:'', nom:'', serial_value:'', valeurs:{}, busy:false, error:'' };
 
 function viewEquipNew(){
-if(!equipForm.typeId && state.types.length) equipForm.typeId = state.types[0].id;
-const type = state.types.find(t=>t.id===equipForm.typeId);
+// Super-admin : l'équipement est créé chez le client d'où l'on vient.
+if(isSuperAdmin() && !equipForm.orgId) return viewReglages('clients');
+const types = typesPour(equipForm.orgId);
+if(!types.some(t => t.id === equipForm.typeId)) equipForm.typeId = types[0]?.id || '';
+const type = types.find(t=>t.id===equipForm.typeId);
 const champs = type?.champs || [];
+const retour = routeParc(equipForm.orgId);
 
 return `
 <div class="row" style="margin-bottom:14px;gap:10px;">
-<button class="icon-btn" data-action="go" data-path="/equipements" title="Retour">←</button>
-<h2>Nouvel équipement</h2>
+<button class="icon-btn" data-action="go" data-path="${retour}" title="Retour">←</button>
+<div><h2>Nouvel équipement</h2>${isSuperAdmin() ? `<div class="small muted">chez <strong>${esc(nomClientDe(equipForm.orgId))}</strong></div>` : ''}</div>
 </div>
 <div class="card">
 ${equipForm.error ? `<div class="alert alert-error">${esc(equipForm.error)}</div>` : ''}
@@ -1148,7 +1348,7 @@ ${equipForm.error ? `<div class="alert alert-error">${esc(equipForm.error)}</div
 <div class="field">
 <label>Type d'équipement</label>
 <select data-action="equip-type">
-${state.types.map(t=>`<option value="${t.id}" ${t.id===equipForm.typeId?'selected':''}>${esc(t.nom)}</option>`).join('')}
+${types.map(t=>`<option value="${t.id}" ${t.id===equipForm.typeId?'selected':''}>${esc(t.nom)}</option>`).join('')}
 </select>
 </div>
 <div class="field">
@@ -1174,7 +1374,7 @@ ${c.type==='textarea'
 </div>
 <div class="row" style="margin-top:8px;">
 <button class="btn btn-primary" data-action="save-equip" ${equipForm.busy?'disabled':''}>${equipForm.busy?'Enregistrement…':"Créer l'équipement"}</button>
-<button class="btn" data-action="go" data-path="/equipements">Annuler</button>
+<button class="btn" data-action="go" data-path="${retour}">Annuler</button>
 </div>
 </div>
 `;
@@ -1188,7 +1388,7 @@ if(!equipForm.typeId){ equipForm.error = "Choisissez un type d'équipement."; re
 equipForm.busy = true; render();
 try{
 const { data, error } = await sb.from('equipements').insert({
-organization_id: state.profile.organization_id,
+organization_id: isSuperAdmin() ? equipForm.orgId : state.profile.organization_id,
 type_id: equipForm.typeId,
 nom,
 serial_value: equipForm.serial_value.trim() || null,
@@ -1196,7 +1396,8 @@ valeurs: equipForm.valeurs,
 archived: false
 }).select('id').single();
 if(error) throw error;
-equipForm = { typeId:'', nom:'', serial_value:'', valeurs:{}, busy:false, error:'' };
+equipForm = { typeId:'', orgId:'', nom:'', serial_value:'', valeurs:{}, busy:false, error:'' };
+reglages.parcs = {};
 refreshDashboard();
 toast('Équipement créé — son QR code est prêt');
 nav('/equip/' + data.id);
@@ -1215,6 +1416,7 @@ showEditForm:false, editBusy:false, editError:'',
 editIvId:null, editIvBusy:false, editIvError:'' };
 
 function viewEquipDetail(id){
+if(isSuperAdmin()) chargerClients(false); // pour afficher le nom du client
 if(equipDetail.id !== id){
 equipDetail = { id, item:null, interventions:null, loading:true, error:'',
 showIvForm:false, ivBusy:false, ivError:'', ivNotice:'',
@@ -1266,10 +1468,10 @@ setTimeout(() => drawQr(url), 0);
 
 return `
 <div class="fiche-entete">
-<button class="icon-btn" data-action="go" data-path="/equipements" title="Retour">←</button>
+<button class="icon-btn" data-action="go" data-path="${routeParc(eq.organization_id)}" title="Retour">←</button>
 <div class="titre">
 <h2>${esc(eq.nom)} ${eq.archived?'<span class="badge badge-warn">archivé</span>':''}</h2>
-<div class="small muted">${esc(type?.nom || '')}${eq.serial_value ? ' · N/S ' + esc(eq.serial_value) : ''}</div>
+<div class="small muted">${isSuperAdmin() && nomClientDe(eq.organization_id) ? `<a href="#/reglages/clients/${eq.organization_id}">${esc(nomClientDe(eq.organization_id))}</a> · ` : ''}${esc(type?.nom || '')}${eq.serial_value ? ' · N/S ' + esc(eq.serial_value) : ''}</div>
 </div>
 <div class="actions">
 ${!eq.archived ? `<button class="btn btn-sm" data-action="toggle-edit-equip">${equipDetail.showEditForm ? 'Annuler' : 'Modifier'}</button>` : ''}
@@ -1716,6 +1918,11 @@ render();
 }
 else if(action === 'support-supprimer'){ actionSupprimerDemande(t.dataset.id); }
 else if(action === 'renommer-membre'){ ouvrirRenommage(t.dataset.id); }
+else if(action === 'renommer-moi'){ renommerMoi(); }
+else if(action === 'nouvel-equip-client'){
+equipForm = { typeId:'', orgId:t.dataset.id, nom:'', serial_value:'', valeurs:{}, busy:false, error:'' };
+nav('/equip-new');
+}
 else if(action === 'renommer-annuler'){ reglages.renommage = null; render(); }
 else if(action === 'support-filtre'){ reglages.supportFiltre = t.dataset.filtre; render(); }
 else if(action === 'toggle-invite-client'){ reglages.inviteOuvert = !reglages.inviteOuvert; render(); }
@@ -1783,7 +1990,11 @@ reglages.invite.error = ''; render();
 else if(action === 'sel-equip'){ basculer(dashboardCache, 'sel', t.dataset.id, t.checked); render(); }
 else if(action === 'sel-equip-tous'){ dashboardCache.sel = t.checked ? (dashboardCache.items||[]).map(e => e.id) : []; render(); }
 else if(action === 'sel-client'){ basculer(reglages, 'selClients', t.dataset.id, t.checked); render(); }
-else if(action === 'sel-clients-tous'){ reglages.selClients = t.checked ? (reglages.clients||[]).filter(c => !c.est_mon_organisation).map(c => c.id) : []; render(); }
+else if(action === 'sel-clients-tous'){ reglages.selClients = t.checked ? (t.dataset.ids || '').split(',').filter(Boolean) : []; render(); }
+else if(action === 'recherche-client'){ reglages.rechercheClient = t.value; reglages.selClients = []; render(); }
+else if(action === 'tri-clients'){ reglages.triClients = t.value; render(); }
+else if(action === 'recherche-parc'){ reglages.rechercheParc = t.value; render(); }
+else if(action === 'parc-archives'){ reglages.parcArchives = t.checked; render(); }
 else if(action === 'sel-membre'){ basculer(reglages, 'selMembres', t.dataset.id, t.checked); render(); }
 else if(action === 'sel-membres-tous'){
 const ids = (t.dataset.ids || '').split(',').filter(Boolean);
@@ -1884,6 +2095,7 @@ resetReglages();
 modal = null;
 supportState = { categorie:'question', sujet:'', message:'', email:'', busy:false, error:'', ok:'', mesDemandes:null };
 accueilCache = { chiffres: null, loading: false, error: '' };
+fondateurCache = { donnees:null, loading:false, error:'' };
 joinState = { token:null, loading:false, preview:null, error:'', busy:false, notice:'' };
 state.typesLoaded = false; state.types = [];
 }

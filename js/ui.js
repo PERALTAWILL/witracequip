@@ -43,7 +43,7 @@ const parties = String(message).split(/\n\s*\n/);
 return { titre: parties.shift(), corps: parties.join('\n\n') };
 }
 
-function ouvrirDialogue({ message, ok, danger, saisie }){
+function ouvrirDialogue({ message, ok, danger, saisie, valeur }){
 return new Promise((resolve) => {
 if(dialogueOuvert) dialogueOuvert.fermer(null);
 const { titre, corps } = decouperMessage(message);
@@ -53,7 +53,7 @@ fond.innerHTML = `
 <div class="dlg" role="alertdialog" aria-modal="true">
 <div class="dlg-titre">${esc(titre)}</div>
 ${corps ? `<div class="dlg-corps">${esc(corps)}</div>` : ''}
-${saisie ? `<input type="text" class="dlg-saisie" autocomplete="off" spellcheck="false" placeholder="${esc(saisie)}">` : ''}
+${saisie ? `<input type="text" class="dlg-saisie" autocomplete="off" spellcheck="false" placeholder="${esc(saisie)}" value="${esc(valeur || '')}">` : ''}
 <div class="dlg-actions">
 <button class="btn" data-dlg="annuler">Annuler</button>
 <button class="btn ${danger ? 'btn-danger-plein' : 'btn-primary'}" data-dlg="ok">${esc(ok || 'Confirmer')}</button>
@@ -83,6 +83,7 @@ dialogueOuvert = { fermer };
 requestAnimationFrame(() => {
 fond.classList.add('visible');
 (champ || fond.querySelector('[data-dlg="ok"]')).focus();
+if(champ && champ.value) champ.select();
 });
 });
 }
@@ -103,7 +104,7 @@ return ouvrirDialogue({ message, ok, danger });
 /** Renvoie le texte saisi, ou null si annulé. */
 function demander(message, options){
 const o = options || {};
-return ouvrirDialogue({ message, ok: o.ok || 'Valider', danger: !!o.danger, saisie: o.placeholder || '…' });
+return ouvrirDialogue({ message, ok: o.ok || 'Valider', danger: !!o.danger, saisie: o.placeholder || '…', valeur: o.valeur });
 }
 
 /* ---------- Rendu sans à-coups ---------- */

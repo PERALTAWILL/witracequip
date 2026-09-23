@@ -44,8 +44,8 @@ const journal = { cle:'journal', l:'Journal', aide:"Historique des suppressions,
 if(isSuperAdmin()){
 const aTraiter = (reglages.support || []).filter(d => d.statut !== 'traite').length;
 return [
-{ cle:'clients', l:'Clients', n: reglages.clients ? reglages.clients.length : null,
-aide:"Ouvrez un client pour tout gérer au même endroit : sa fiche, son modèle métier, ses membres et ses invitations." },
+{ cle:'clients', l:'Clients', n: reglages.clients ? reglages.clients.filter(c => !c.est_mon_organisation).length : null,
+aide:"Ouvrez un client pour voir tout son parc et gérer sa fiche, ses membres et ses invitations." },
 { cle:'support', l:'Support', n: aTraiter || null, alerte: aTraiter > 0,
 aide:"Les demandes envoyées par vos clients. Une fois traitées, elles passent dans « Traitées »." },
 journal,
@@ -139,10 +139,19 @@ else if(onglet === 'equipe') contenu = viewMembres() + viewInvitations();
 else if(onglet === 'support') contenu = viewSupportAdmin();
 else if(onglet === 'journal') contenu = viewJournal();
 
+// Super-admin : la navigation principale mène déjà à Clients / Support /
+// Journal ; pas de seconde rangée d'onglets, juste le titre de la section.
+if(isSuperAdmin()){
+const titres = { clients:'Clients', support:'Support clients', journal:'Journal' };
+return `
+${sous ? '' : `<div class="row between wrap" style="margin-bottom:6px;"><h2>${titres[onglet]}</h2></div>
+${courant?.aide ? `<div class="reglages-aide">${esc(courant.aide)}</div>` : ''}`}
+${contenu}`;
+}
 return `
 <div class="row between wrap" style="margin-bottom:10px;">
 <h2>Réglages</h2>
-${isSuperAdmin() ? '<span class="badge badge-role">Super-administrateur</span>' : `<span class="badge badge-role">${esc(state.orgName || '')}</span>`}
+<span class="badge badge-role">${esc(state.orgName || '')}</span>
 </div>
 <div class="reglages-onglets">
 ${onglets.map(o => `<button class="reglages-onglet ${o.cle === onglet ? 'active' : ''}" data-action="go" data-path="/reglages/${o.cle}">${o.l}${o.n ? ` <span class="onglet-compteur ${o.alerte ? 'alerte' : ''}">${o.n}</span>` : ''}</button>`).join('')}
@@ -156,49 +165,70 @@ ${contenu}
 /* Onglet Clients (super-admin)                                            */
 /* ---------------------------------------------------------------------- */
 
+/* Liste pensée pour 20, 30, 50 clients et plus : recherche instantanée (nom,
+   n°, référent, ville), tri, et des lignes compactes. Le propre compte de
+   WiDIAG MQ n'y figure pas : ce n'est pas un client. */
 function viewClients(){
 chargerClients(false);
 chargerMembres(false); // pour compter les invitations en attente de chaque client
 if(reglages.clientsError) return `<div class="alert alert-error">${esc(reglages.clientsError)}</div>`;
-if(reglages.clients === null) return squeletteListe(4);
+if(reglages.clients === null) return squeletteListe(6);
 
-const clients = reglages.clients;
-const selectionnables = clients.filter(c => !c.est_mon_organisation);
+const tous = reglages.clients.filter(c => !c.est_mon_organisation);
+const rq = (reglages.rechercheClient || '').trim().toLowerCase();
+let clients = rq ? tous.filter(c => [c.nom, c.code_client, c.referent, c.adresse, c.telephone, nomModele(c.modele_metier)]
+.some(v => (v || '').toLowerCase().includes(rq))) : tous;
+const tri = reglages.triClients || 'nom';
+clients = [...clients].sort((x, y) =>
+tri === 'recents' ? (y.created_at || '').localeCompare(x.created_at || '')
+: tri === 'parc' ? (y.nb_equipements - x.nb_equipements)
+: x.nom.localeCompare(y.nom, 'fr', { sensitivity:'base' }));
 const sel = reglages.selClients;
-const tousCoches = selectionnables.length > 0 && selectionnables.every(c => sel.includes(c.id));
+const tousCoches = clients.length > 0 && clients.every(c => sel.includes(c.id));
+const totalParc = tous.reduce((n, c) => n + (c.nb_equipements || 0), 0);
 
-const lignes = clients.map(c => `
-<div class="ligne-select cliquable ${sel.includes(c.id) ? 'cochee' : ''}">
-${c.est_mon_organisation
-? `<span class="case-vide" title="Votre propre organisation"></span>`
-: `<input type="checkbox" class="case-sel" data-action="sel-client" data-id="${c.id}" ${sel.includes(c.id) ? 'checked' : ''}>`}
+const lignes = clients.map(c => {
+const nInv = (reglages.invites || []).filter(i => i.organization_id === c.id).length;
+return `
+<div class="ligne-select cliquable ligne-client ${sel.includes(c.id) ? 'cochee' : ''}">
+<input type="checkbox" class="case-sel" data-action="sel-client" data-id="${c.id}" ${sel.includes(c.id) ? 'checked' : ''}>
+<div class="avatar-client" style="--teinte:${teinteClient(c.nom)};">${esc(initials(c.nom))}</div>
 <div class="ligne-corps" data-action="go" data-path="/reglages/clients/${c.id}">
 <div class="ligne-titre">
 ${esc(c.nom)}
 <span class="code-client">N° ${esc(c.code_client)}</span>
-${c.est_mon_organisation ? '<span class="badge badge-neutral">votre organisation</span>' : ''}
 ${!c.active ? '<span class="badge badge-off">suspendu</span>' : ''}
+${nInv ? `<span class="badge badge-warn">${nInv} invit.</span>` : ''}
 </div>
 <div class="small muted">
-${c.modele_metier ? esc(nomModele(c.modele_metier)) : 'Aucun modèle métier'}
-${c.referent ? ' · Référent : ' + esc(c.referent) : ''}
-${c.telephone ? ' · ' + esc(c.telephone) : ''}
+${c.modele_metier ? esc(nomModele(c.modele_metier)) : 'Aucun modèle métier'}${c.referent ? ' · ' + esc(c.referent) : ''}
 </div>
 </div>
-<div class="ligne-chiffres small muted">
-<span class="compteur" title="Membres">${iconeNav('users', 14)} ${c.nb_membres}</span>
-<span class="compteur" title="Équipements actifs">${iconeNav('box', 14)} ${c.nb_equipements}</span>
-${(() => { const n = (reglages.invites || []).filter(i => i.organization_id === c.id).length;
-return n ? `<span class="badge badge-warn" title="Invitation${n > 1 ? 's' : ''} en attente">${n} invit.</span>` : ''; })()}
+<div class="ligne-chiffres">
+<span class="chiffre-client" title="Équipements actifs"><strong>${c.nb_equipements}</strong> équip.</span>
+<span class="chiffre-client" title="Membres"><strong>${c.nb_membres}</strong> membre${c.nb_membres > 1 ? 's' : ''}</span>
 </div>
-</div>`).join('');
+<span class="chevron">›</span>
+</div>`;
+}).join('');
 
 return `
-${reglages.clientForm && !reglages.clientForm.id ? renderClientForm() : `
-<div class="row between wrap" style="margin-bottom:12px;">
-<div class="small muted">${clients.length} client${clients.length > 1 ? 's' : ''}</div>
-<button class="btn btn-primary" data-action="nouveau-client">+ Nouveau client</button>
-</div>`}
+${reglages.clientForm && !reglages.clientForm.id ? renderClientForm() : ''}
+<div class="barre-clients">
+<div class="recherche-client">
+${iconeNav('search', 16)}
+<input type="search" placeholder="Rechercher un client : nom, n°, référent, ville…" value="${esc(reglages.rechercheClient || '')}" data-action="recherche-client">
+</div>
+<select data-action="tri-clients" title="Trier">
+<option value="nom" ${tri === 'nom' ? 'selected' : ''}>Nom A → Z</option>
+<option value="recents" ${tri === 'recents' ? 'selected' : ''}>Plus récents</option>
+<option value="parc" ${tri === 'parc' ? 'selected' : ''}>Plus gros parc</option>
+</select>
+${!reglages.clientForm ? `<button class="btn btn-primary" data-action="nouveau-client">+ Nouveau client</button>` : ''}
+</div>
+<div class="small muted" style="margin:0 0 10px 2px;">
+${rq ? `${clients.length} résultat${clients.length > 1 ? 's' : ''} sur ${tous.length} clients` : `${tous.length} client${tous.length > 1 ? 's' : ''} · ${totalParc} équipement${totalParc > 1 ? 's' : ''} suivis`}
+</div>
 
 ${sel.length ? `
 <div class="barre-selection">
@@ -210,14 +240,21 @@ ${sel.length ? `
 </div>` : ''}
 
 <div class="card liste-select">
-${selectionnables.length ? `
+${clients.length ? `
 <label class="tout-selectionner">
-<input type="checkbox" data-action="sel-clients-tous" ${tousCoches ? 'checked' : ''}>
-<span>Tout sélectionner</span>
+<input type="checkbox" data-action="sel-clients-tous" data-ids="${clients.map(c => c.id).join(',')}" ${tousCoches ? 'checked' : ''}>
+<span>Tout sélectionner${rq ? ' (résultats)' : ''}</span>
 </label>` : ''}
-${lignes || `<div class="empty small">Aucun client.</div>`}
+${lignes || `<div class="empty small">${rq ? 'Aucun client ne correspond à « ' + esc(reglages.rechercheClient) + ' ».' : 'Aucun client pour l\'instant. Créez le premier avec « + Nouveau client ».'}</div>`}
 </div>
 `;
+}
+
+/* Une couleur stable par client (dérivée du nom) : on reconnaît chacun d'un coup d'œil. */
+function teinteClient(nom){
+let h = 0;
+for(const ch of String(nom || '')) h = (h * 31 + ch.charCodeAt(0)) % 360;
+return h;
 }
 
 function ouvrirClientForm(client){
@@ -308,7 +345,9 @@ const c = reglages.clients.find(x => x.id === id);
 if(!c) return `<div class="alert alert-error">Client introuvable.</div>
 <button class="btn" data-action="go" data-path="/reglages/clients">← Retour aux clients</button>`;
 
+if(reglages.parcClientVu !== c.id){ reglages.parcClientVu = c.id; reglages.rechercheParc = ''; reglages.parcArchives = false; }
 const enEdition = reglages.clientForm && reglages.clientForm.id === c.id;
+chargerParcClient(c.id, false);
 const membres = (reglages.membres || []).filter(m => m.organization_id === c.id);
 const invites = (reglages.invites || []).filter(i => i.organization_id === c.id);
 // Formulaire d'invitation pré-réglé sur ce client.
@@ -330,6 +369,8 @@ ${!c.est_mon_organisation ? `
 <button class="btn btn-sm btn-danger" data-action="clients-supprimer" data-id="${c.id}">Supprimer</button>` : ''}
 </div>
 </div>
+
+${renderParcClient(c)}
 
 ${enEdition ? renderClientForm() : `
 <div class="grid-2" style="align-items:start;">
@@ -370,6 +411,68 @@ ${invites.length ? `
 ${invites.map(i => renderInvite(i, false)).join('')}
 </div>` : ''}
 `;
+}
+
+/* ---- Parc d'un client (vue super-admin) ---- */
+function chargerParcClient(orgId, force){
+reglages.parcs = reglages.parcs || {};
+const p = reglages.parcs[orgId];
+if(p && (p.loading || (p.items && !force))) return;
+reglages.parcs[orgId] = { items: p?.items || null, loading:true, error:'' };
+listEquipements({ orgId, showArchived:true })
+.then(items => { reglages.parcs[orgId] = { items, loading:false, error:'' }; })
+.catch(e => { reglages.parcs[orgId] = { items:null, loading:false, error:e.message }; })
+.finally(() => render());
+}
+
+function renderParcClient(c){
+const p = (reglages.parcs || {})[c.id] || { items:null };
+const rq = (reglages.rechercheParc || '').trim().toLowerCase();
+const voirArchives = !!reglages.parcArchives;
+let items = (p.items || []).filter(e => voirArchives || !e.archived);
+if(rq) items = items.filter(e => [e.nom, e.serial_value, (state.types.find(t => t.id === e.type_id) || {}).nom]
+.some(v => (v || '').toLowerCase().includes(rq)));
+const actifs = (p.items || []).filter(e => !e.archived).length;
+const nbTypes = state.types.filter(t => t.organization_id === c.id).length;
+
+// Regroupé par type : 3 extincteurs, 2 ascenseurs… se lisent d'un coup.
+const groupes = {};
+for(const e of items){ const k = e.type_id; (groupes[k] = groupes[k] || []).push(e); }
+const blocs = Object.entries(groupes)
+.map(([tid, liste]) => ({ type: state.types.find(t => t.id === tid), liste }))
+.sort((a, b) => (a.type?.nom || '').localeCompare(b.type?.nom || '', 'fr'))
+.map(({ type, liste }) => `
+<div class="parc-groupe">
+<div class="parc-groupe-titre">${esc(type?.nom || 'Type inconnu')} <span class="muted">· ${liste.length}</span></div>
+${liste.map(e => `
+<div class="ligne-select cliquable" data-action="go" data-path="/equip/${e.id}">
+<div class="thumb">${esc(initials(e.nom))}</div>
+<div class="ligne-corps">
+<div class="ligne-titre">${esc(e.nom)} ${e.archived ? '<span class="badge badge-warn">archivé</span>' : ''}</div>
+<div class="small muted">${e.serial_value ? 'N/S ' + esc(e.serial_value) : 'Sans n° de série'}</div>
+</div>
+<span class="chevron">›</span>
+</div>`).join('')}
+</div>`).join('');
+
+return `
+<div class="card carte-parc">
+<div class="row between wrap" style="gap:10px;">
+<h3 style="margin:0;">Parc <span class="muted" style="font-weight:500;">· ${actifs} équipement${actifs > 1 ? 's' : ''} actif${actifs > 1 ? 's' : ''}</span></h3>
+<div class="row wrap" style="gap:6px;">
+<button class="btn btn-sm" data-action="go" data-path="/types/${c.id}">Types (${nbTypes})</button>
+<button class="btn btn-sm btn-primary" data-action="nouvel-equip-client" data-id="${c.id}" ${nbTypes ? '' : 'disabled title="Ajoutez d\'abord un type d\'équipement"'}>+ Équipement</button>
+</div>
+</div>
+${(p.items || []).length > 4 ? `
+<div class="row wrap" style="gap:10px;margin:12px 0 4px;">
+<input type="search" style="flex:1;min-width:180px;" placeholder="Chercher dans le parc : nom, n° de série, type…" value="${esc(reglages.rechercheParc || '')}" data-action="recherche-parc">
+<label class="case" style="margin:0;"><input type="checkbox" data-action="parc-archives" ${voirArchives ? 'checked' : ''}><span>Voir les archivés</span></label>
+</div>` : ''}
+${p.error ? `<div class="alert alert-error">${esc(p.error)}</div>`
+: p.items === null ? squeletteListe(3).replace('card liste-select', 'liste-select')
+: blocs || `<div class="empty small">${rq ? 'Aucun équipement ne correspond.' : (nbTypes ? 'Aucun équipement pour ce client. Ajoutez le premier avec « + Équipement ».' : "Ce client n'a encore aucun type d'équipement : attribuez-lui un modèle métier (Modifier) ou créez un type.")}</div>`}
+</div>`;
 }
 
 async function actionClientsStatut(ids, actif){
@@ -505,7 +608,7 @@ return `
 ${verrouille
 ? `<span class="case-vide"></span>`
 : `<input type="checkbox" class="case-sel" data-action="sel-membre" data-id="${m.id}" ${coche ? 'checked' : ''}>`}
-<div class="thumb">${esc(initials(m.full_name))}</div>
+<div class="thumb role-${m.fondateur ? 'fondateur' : esc(m.role)}">${esc(initials(m.full_name))}</div>
 <div class="who">
 ${peutRenommer(m) && reglages.renommage?.id === m.id ? renderRenommage() : `
 <div style="font-weight:650;">
@@ -521,7 +624,7 @@ ${avecClient && m.organizations ? ` · <a href="#/reglages/clients/${m.organizat
 </div>
 </div>
 ${verrouille
-? `<span class="badge badge-role">${esc(roleLabel(m.role))}</span>`
+? `<span class="badge badge-role role-${m.fondateur ? 'fondateur' : esc(m.role)}">${esc(m.fondateur ? 'Fondateur' : roleLabel(m.role))}</span>`
 : `<select data-action="member-role" data-id="${m.id}">
 ${ROLES_ASSIGNABLES.map(r => `<option value="${r}" ${r === m.role ? 'selected' : ''}>${esc(roleLabel(r))}</option>`).join('')}
 </select>`}
@@ -668,7 +771,7 @@ ${choixClient ? `
 <label>Client</label>
 <select data-action="invite-org">
 <option value="">— Choisir un client —</option>
-${clients.filter(c => c.active).map(c => `<option value="${c.id}" ${c.id === inv.orgId ? 'selected' : ''}>${esc(c.nom)} — n° ${esc(c.code_client)}</option>`).join('')}
+${clients.filter(c => c.active && !c.est_mon_organisation).map(c => `<option value="${c.id}" ${c.id === inv.orgId ? 'selected' : ''}>${esc(c.nom)} — n° ${esc(c.code_client)}</option>`).join('')}
 </select>
 </div>` : ''}
 <div class="grid-2">
@@ -1141,7 +1244,7 @@ const surLaFiche = state.route.name === 'equip' && modal.ids.includes(state.rout
 const n = modal.ids.length;
 apresActionEquipements();
 toast(n > 1 ? n + ' équipements supprimés' : 'Équipement supprimé définitivement');
-if(surLaFiche) nav('/equipements');
+if(surLaFiche) nav(routeParc(equipDetail.item?.organization_id));
 }catch(e){ modal.busy = false; modal.error = e.message; render(); }
 }
 }
@@ -1149,6 +1252,7 @@ if(surLaFiche) nav('/equipements');
 /* Après archivage / suppression : on vide la sélection et on recharge. */
 function apresActionEquipements(){
 modal = null;
+reglages.parcs = {};
 dashboardCache.sel = [];
 if(equipDetail.id){ equipDetail.id = null; }   // force le rechargement de la fiche ouverte
 reglages.journal = null;
