@@ -249,6 +249,11 @@ if(error) throw error;
 if(!data || !data.length) throw new Error("Vous n'avez pas le droit de modifier ce profil.");
 }
 
+async function deplacerProfil(id, orgId){
+const { error } = await sb.rpc('deplacer_profil', { p_id: id, p_org: orgId });
+if(error) throw error;
+}
+
 async function supprimerDemandeSupport(id){
 const { error } = await sb.from('demandes_support').delete().eq('id', id);
 if(error) throw error;
