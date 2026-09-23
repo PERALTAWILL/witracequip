@@ -1012,3 +1012,14 @@ padding-bottom:4px; border-bottom:1px solid var(--border);}
 .mm-champ{grid-template-columns:1fr auto; padding-bottom:8px; border-bottom:1px dashed var(--border);}
 .mm-champ input{grid-column:1 / -1;}
 }
+
+/* ===== v2.16.9 : mots de passe ===== */
+.dlg-form .dlg-corps{margin-bottom:6px;}
+.dlg-champ{display:block; margin-top:12px;}
+.dlg-champ > span:first-child{display:block; font-size:12.5px; font-weight:650; color:var(--text-dim); margin-bottom:5px; text-transform:none; letter-spacing:0;}
+.champ-mdp{position:relative; display:block;}
+.champ-mdp input{width:100%; padding-right:44px;}
+.dlg-oeil{position:absolute; right:6px; top:50%; transform:translateY(-50%); width:34px; height:34px; border:none; background:none; color:var(--text-dim); cursor:pointer; display:flex; align-items:center; justify-content:center; border-radius:8px;}
+.dlg-oeil:hover{background:var(--surface-2);}
+.dlg-erreur{margin-top:12px; padding:9px 12px; border-radius:10px; background:var(--danger-bg); color:var(--danger); font-size:13.5px; font-weight:600;}
+.btn-mdp{display:inline-flex; align-items:center; gap:6px; white-space:nowrap;}
