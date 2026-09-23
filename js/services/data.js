@@ -229,6 +229,11 @@ const { error } = await sb.from('demandes_support')
 if(error) throw error;
 }
 
+async function supprimerDemandeSupport(id){
+const { error } = await sb.from('demandes_support').delete().eq('id', id);
+if(error) throw error;
+}
+
 /* Base de toutes les adresses fabriquées par l'appli (QR codes, invitations). */
 function baseUrl(){
 const b = (APP_BASE_URL || '').trim();
