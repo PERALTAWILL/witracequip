@@ -27,6 +27,7 @@ restauration_equipement: 'Équipement restauré',
 modification_intervention: 'Intervention modifiée',
 suppression_intervention: 'Intervention supprimée',
 suppression_membre: 'Membre supprimé',
+deplacement_membre: 'Profil changé de client',
 suppression_client: 'Client supprimé',
 suspension_client: 'Client suspendu',
 reactivation_client: 'Client réactivé',
@@ -665,6 +666,13 @@ ${verrouille
 : `<select data-action="member-role" data-id="${m.id}">
 ${ROLES_ASSIGNABLES.map(r => `<option value="${r}" ${r === m.role ? 'selected' : ''}>${esc(roleLabel(r))}</option>`).join('')}
 </select>`}
+${isSuperAdmin() && !verrouille ? `
+<label class="choix-client">
+<span>Client</span>
+<select data-action="deplacer-membre" data-id="${m.id}">
+${[...(reglages.clients || [])].sort((a, b) => a.nom.localeCompare(b.nom, 'fr')).map(c => `<option value="${c.id}" ${c.id === m.organization_id ? 'selected' : ''}>${esc(c.nom)}${c.est_mon_organisation ? ' (votre entreprise)' : ''}</option>`).join('')}
+</select>
+</label>` : ''}
 ${blocAcces}
 </div>`;
 }
@@ -708,6 +716,21 @@ reglages.renommage = null;
 toast('Nom mis à jour');
 render();
 }catch(e){ r.busy = false; r.error = e.message; render(); }
+}
+
+/* Super-admin : rattacher un profil existant à un autre client (sans recréer de compte). */
+async function actionDeplacerMembre(id, orgId){
+const m = (reglages.membres || []).find(x => x.id === id);
+const cible = (reglages.clients || []).find(c => c.id === orgId);
+if(!m || !cible || m.organization_id === orgId){ render(); return; }
+const ancien = (reglages.clients || []).find(c => c.id === m.organization_id)?.nom || 'son client actuel';
+if(!await confirmer(`Rattacher ${m.full_name || 'ce profil'} à ${cible.nom} ?\n\nLa personne quitte ${ancien} et accède dès sa prochaine ouverture de l'appli à tout le parc de ${cible.nom}, avec son rôle actuel (${roleLabel(m.role)}). Vous pourrez ensuite limiter ses accès à certains types. Le changement est tracé dans le journal.`, { ok:'Rattacher' })){ render(); return; }
+try{
+await deplacerProfil(id, orgId);
+toast(`${m.full_name || 'Profil'} rattaché à ${cible.nom}`);
+reglages.journal = null;
+rafraichirReglages();
+}catch(e){ toast('Erreur : ' + e.message, 'erreur'); rafraichirReglages(); }
 }
 
 async function actionMembresActive(ids, active){

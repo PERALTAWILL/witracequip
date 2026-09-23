@@ -1965,6 +1965,7 @@ else if(action === 'modal-choix'){ modal.choix = t.value; modal.error = ''; rend
 else if(action === 'modal-precision'){ modal.precision = t.value; }
 else if(action === 'client-modele'){ reglages.clientForm.modele = t.value; majClientFormDepuisDom(); render(); }
 else if(action === 'member-role'){ actionRoleMembre(t.dataset.id, t.value); }
+else if(action === 'deplacer-membre'){ actionDeplacerMembre(t.dataset.id, t.value); }
 else if(action === 'acces-tous'){ actionAccesTous(t.dataset.id, t.checked); }
 else if(action === 'acces-type'){ actionAccesType(t.dataset.id, t.dataset.type, t.checked); }
 });
