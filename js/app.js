@@ -697,7 +697,11 @@ nav(chemin);
 /* View: Dashboard (équipements) */
 /* ---------------------------------------------------------------------- */
 
-let dashboardCache = { items: null, search:'', typeId:'', showArchived:false, loading:false, error:'', sel:[], perime:false, requete:0 };
+/* Un seul modèle d'état initial : la déconnexion le réutilise. (v2.14.2 : la
+réinitialisation oubliait `requete`, d'où une boucle de requêtes après
+changement de compte — la liste mettait très longtemps à s'afficher.) */
+function dashboardInitial(requete){ return { items: null, search:'', typeId:'', showArchived:false, loading:false, error:'', sel:[], perime:false, requete: requete || 0 }; }
+let dashboardCache = dashboardInitial();
 
 /* Charge la liste. Pendant un rechargement (recherche, filtre), l'ancienne
 liste reste affichée — estompée — au lieu d'un écran vide : pas de saut. */
@@ -705,7 +709,9 @@ function chargerEquipements(){
 if(dashboardCache.loading) return;
 dashboardCache.loading = true;
 const n = ++dashboardCache.requete;
-listEquipements({ search: dashboardCache.search, typeId: dashboardCache.typeId, showArchived: dashboardCache.showArchived })
+// Filet de sécurité : une requête qui ne répond jamais ne doit pas figer la liste.
+const delai = new Promise((_, rej) => setTimeout(() => rej(new Error('Le chargement prend trop de temps. Vérifiez la connexion puis réessayez.')), 20000));
+Promise.race([listEquipements({ search: dashboardCache.search, typeId: dashboardCache.typeId, showArchived: dashboardCache.showArchived }), delai])
 .then(items => {
 if(n !== dashboardCache.requete) return;
 dashboardCache.items = items; dashboardCache.error = '';
@@ -721,13 +727,13 @@ render();
 }
 
 function viewDashboard(){
-if(dashboardCache.items === null && !dashboardCache.loading) chargerEquipements();
+if(dashboardCache.items === null && !dashboardCache.loading && !dashboardCache.error) chargerEquipements();
 
 const typeOptions = state.types.map(t => `<option value="${t.id}" ${dashboardCache.typeId===t.id?'selected':''}>${esc(t.nom)}</option>`).join('');
 
 let list = '';
 if(dashboardCache.error){
-list = `<div class="alert alert-error">${esc(dashboardCache.error)}</div>`;
+list = `<div class="alert alert-error">${esc(dashboardCache.error)}</div><button class="btn" data-action="dash-recharger">Réessayer</button>`;
 } else if(dashboardCache.items === null){
 list = squeletteListe(6);
 } else if(dashboardCache.items.length === 0){
@@ -1652,6 +1658,7 @@ const action = t.dataset.action;
 if(action === 'go'){ nav(t.dataset.path); closeMenus(); }
 else if(action === 'toggle-menu'){ e.stopPropagation(); document.getElementById('user-dropdown')?.classList.toggle('open'); }
 else if(action === 'logout'){ sb.auth.signOut(); }
+else if(action === 'dash-recharger'){ dashboardCache.error = ''; dashboardCache.items = null; render(); chargerEquipements(); }
 else if(action === 'auth-mode'){ state.authMode = t.dataset.mode; state.authError=''; state.authNotice=''; render(); }
 else if(action === 'toggle-type-form'){ typeForm.open ? (typeForm = { open:false, id:null, nom:'', champs:[], busy:false, error:'' }, render()) : ouvrirTypeForm(null); }
 else if(action === 'edit-type'){
@@ -1815,8 +1822,22 @@ function debounce(fn, ms=250){ clearTimeout(debounceTimer); debounceTimer = setT
 /* Auth bootstrap */
 /* ---------------------------------------------------------------------- */
 
-sb.auth.onAuthStateChange(async (event, session) => {
+/* IMPORTANT : ne jamais attendre (await) un appel Supabase DANS ce callback.
+supabase-js le déclenche en tenant son verrou d'authentification ; une requête
+lancée dedans attend ce même verrou → blocage définitif de TOUTES les requêtes
+(symptôme : listes qui ne chargent plus après un retour sur l'appli, ex. onglet
+Équipements figé). On se contente de noter la session, puis on travaille
+en dehors du callback (setTimeout 0), comme le recommande Supabase. */
+sb.auth.onAuthStateChange((event, session) => {
+const memeUtilisateur = !!(session && state.session && state.profile && state.profile.id === session.user.id);
 state.session = session;
+// Rafraîchissement du jeton, retour au premier plan : même utilisateur, rien à recharger.
+if(session && memeUtilisateur && event !== 'INITIAL_SESSION') return;
+setTimeout(() => appliquerSession(session), 0);
+});
+
+async function appliquerSession(session){
+if(session !== state.session) return; // une autre session est arrivée entre-temps
 state.accessError = '';
 if(session){
 try{
@@ -1836,7 +1857,7 @@ state.accessError = (e && e.message) ? e.message : 'Erreur de chargement du prof
 }
 } else {
 state.profile = null; state.orgName = ''; state.superAdmin = false;
-dashboardCache = { items: null, search:'', typeId:'', showArchived:false, loading:false, error:'', sel:[] };
+dashboardCache = dashboardInitial(dashboardCache.requete + 1); // invalide toute réponse encore en route
 resetReglages();
 modal = null;
 supportState = { categorie:'question', sujet:'', message:'', email:'', busy:false, error:'', ok:'', mesDemandes:null };
@@ -1846,6 +1867,6 @@ state.typesLoaded = false; state.types = [];
 }
 state.loading = false;
 render();
-});
+}
 
 render(); // premier rendu (spinner) pendant que la session se charge
