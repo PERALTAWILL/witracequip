@@ -28,6 +28,7 @@ modification_intervention: 'Intervention modifiée',
 suppression_intervention: 'Intervention supprimée',
 suppression_membre: 'Membre supprimé',
 deplacement_membre: 'Profil changé de client',
+reinitialisation_mdp: 'Mot de passe réinitialisé',
 suppression_client: 'Client supprimé',
 suspension_client: 'Client suspendu',
 reactivation_client: 'Client réactivé',
@@ -670,6 +671,7 @@ ${verrouille
 : `<select data-action="member-role" data-id="${m.id}">
 ${ROLES_ASSIGNABLES.map(r => `<option value="${r}" ${r === m.role ? 'selected' : ''}>${esc(roleLabel(r))}</option>`).join('')}
 </select>`}
+${isSuperAdmin() && !estMoi ? `<button class="btn btn-sm btn-mdp" data-action="reset-mdp" data-id="${m.id}" title="Donner un mot de passe provisoire">${iconeNav('key', 15)} Mot de passe</button>` : ''}
 ${isSuperAdmin() && !verrouille ? `
 <label class="choix-client">
 <span>Client</span>

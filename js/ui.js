@@ -43,7 +43,7 @@ const parties = String(message).split(/\n\s*\n/);
 return { titre: parties.shift(), corps: parties.join('\n\n') };
 }
 
-function ouvrirDialogue({ message, ok, danger, saisie, valeur }){
+function ouvrirDialogue({ message, ok, danger, saisie, valeur, info }){
 return new Promise((resolve) => {
 if(dialogueOuvert) dialogueOuvert.fermer(null);
 const { titre, corps } = decouperMessage(message);
@@ -55,7 +55,7 @@ fond.innerHTML = `
 ${corps ? `<div class="dlg-corps">${esc(corps)}</div>` : ''}
 ${saisie ? `<input type="text" class="dlg-saisie" autocomplete="off" spellcheck="false" placeholder="${esc(saisie)}" value="${esc(valeur || '')}">` : ''}
 <div class="dlg-actions">
-<button class="btn" data-dlg="annuler">Annuler</button>
+${info ? '' : `<button class="btn" data-dlg="annuler">Annuler</button>`}
 <button class="btn ${danger ? 'btn-danger-plein' : 'btn-primary'}" data-dlg="ok">${esc(ok || 'Confirmer')}</button>
 </div>
 </div>`;
@@ -88,6 +88,77 @@ if(champ && champ.value) champ.select();
 });
 }
 
+/* Petit formulaire en boîte de dialogue (mots de passe…). La boîte reste
+ouverte tant que verifier() renvoie un message d'erreur : on corrige sans
+tout retaper. Renvoie les valeurs saisies, ou null si annulé.
+champs : [{ name, label, type:'password'|'text', valeur, autocomplete }] */
+function ouvrirFormulaire({ titre, texte, champs, ok, annuler, verifier }){
+return new Promise((resolve) => {
+if(dialogueOuvert) dialogueOuvert.fermer(null);
+const fond = document.createElement('div');
+fond.className = 'dlg-fond';
+fond.innerHTML = `
+<form class="dlg dlg-form" role="dialog" aria-modal="true" novalidate>
+<div class="dlg-titre">${esc(titre)}</div>
+${texte ? `<div class="dlg-corps">${esc(texte)}</div>` : ''}
+${champs.map(c => `
+<label class="dlg-champ">
+<span>${esc(c.label)}</span>
+<span class="champ-mdp">
+<input type="${c.type || 'password'}" name="${esc(c.name)}" value="${esc(c.valeur || '')}" autocomplete="${esc(c.autocomplete || 'off')}" spellcheck="false">
+${(c.type || 'password') === 'password' ? `<button type="button" class="dlg-oeil" tabindex="-1" aria-label="Afficher">${ICONE_OEIL}</button>` : ''}
+</span>
+</label>`).join('')}
+<div class="dlg-erreur" hidden></div>
+<div class="dlg-actions">
+<button type="button" class="btn" data-dlg="annuler">${esc(annuler || 'Annuler')}</button>
+<button type="submit" class="btn btn-primary" data-dlg="ok">${esc(ok || 'Valider')}</button>
+</div>
+</form>`;
+document.body.appendChild(fond);
+const form = fond.querySelector('form');
+const erreur = fond.querySelector('.dlg-erreur');
+const bOk = fond.querySelector('[data-dlg="ok"]');
+const fermer = (v) => {
+document.removeEventListener('keydown', clavier, true);
+fond.classList.remove('visible');
+setTimeout(() => fond.remove(), 180);
+dialogueOuvert = null;
+resolve(v);
+};
+const clavier = (e) => { if(e.key === 'Escape'){ e.stopPropagation(); fermer(null); } };
+document.addEventListener('keydown', clavier, true);
+fond.addEventListener('click', (e) => {
+const oeil = e.target.closest('.dlg-oeil');
+if(oeil){
+const i = oeil.parentElement.querySelector('input');
+const visible = i.type === 'text';
+i.type = visible ? 'password' : 'text';
+oeil.innerHTML = visible ? ICONE_OEIL : ICONE_OEIL_BARRE;
+return;
+}
+if(e.target.closest('[data-dlg="annuler"]')) fermer(null);
+});
+form.addEventListener('submit', async (e) => {
+e.preventDefault();
+const valeurs = Object.fromEntries(champs.map(c => [c.name, form.elements[c.name].value]));
+erreur.hidden = true;
+bOk.disabled = true; const libelle = bOk.textContent; bOk.textContent = '…';
+let msg = null;
+try{ msg = verifier ? await verifier(valeurs) : null; }catch(err){ msg = err.message || String(err); }
+bOk.disabled = false; bOk.textContent = libelle;
+if(msg){ erreur.textContent = msg; erreur.hidden = false; return; }
+fermer(valeurs);
+});
+dialogueOuvert = { fermer };
+requestAnimationFrame(() => {
+fond.classList.add('visible');
+const premier = form.querySelector('input');
+if(premier){ premier.focus(); if(premier.value) premier.select(); }
+});
+});
+}
+
 /** if(!await confirmer('Supprimer ?\n\nDétails…', { danger:true, ok:'Supprimer' })) return; */
 function confirmer(message, options){
 const o = options || {};
@@ -98,7 +169,7 @@ const verbes = [[/^supprimer/i,'Supprimer'],[/^suspendre/i,'Suspendre'],[/^réac
 [/^annuler cette/i,"Annuler l'invitation"],[/^fermer/i,'Fermer'],[/^changer/i,'Changer le lien'],[/^promouvoir/i,'Promouvoir'],
 [/^créer/i,'Créer'],[/^ajouter/i,'Ajouter']];
 const ok = o.ok || (verbes.find(([re]) => re.test(titre)) || [null, 'Confirmer'])[1];
-return ouvrirDialogue({ message, ok, danger });
+return ouvrirDialogue({ message, ok, danger, info: !!o.info });
 }
 
 /** Renvoie le texte saisi, ou null si annulé. */

@@ -387,6 +387,105 @@ function nomClientDe(orgId){ return ((reglages.clients || []).find(c => c.id ===
 function typesPour(orgId){ return isSuperAdmin() ? state.types.filter(t => t.organization_id === orgId) : state.types; }
 function orgTypesCible(){ return isSuperAdmin() ? state.route.param : state.profile.organization_id; }
 
+/* ---------------------------------------------------------------------- */
+/* Mots de passe                                                           */
+/* ---------------------------------------------------------------------- */
+const MDP_MIN = 8;
+
+function traduireErreurMdp(m){
+const s = String(m || '').toLowerCase();
+if(s.includes('different from the old')) return "Le nouveau mot de passe doit être différent de l'ancien.";
+if(s.includes('at least') || s.includes('weak') || s.includes('pwned')) return `Mot de passe trop faible : au moins ${MDP_MIN} caractères, en mélangeant lettres et chiffres.`;
+if(s.includes('reauthentication')) return "Pour des raisons de sécurité, déconnectez-vous puis reconnectez-vous avant de changer le mot de passe.";
+if(s.includes('failed to fetch') || s.includes('network')) return "Pas de réseau : réessayez une fois connecté.";
+return m;
+}
+
+function controlerNouveau(nouveau, confirmation){
+if((nouveau || '').length < MDP_MIN) return `Le mot de passe doit faire au moins ${MDP_MIN} caractères.`;
+if(!/[A-Za-z]/.test(nouveau) || !/[0-9]/.test(nouveau)) return 'Mélangez au moins des lettres et des chiffres.';
+if(nouveau !== confirmation) return 'Les deux saisies du nouveau mot de passe ne sont pas identiques.';
+return null;
+}
+
+async function changerMonMotDePasse(){
+const email = state.session?.user?.email;
+const ok = await ouvrirFormulaire({
+titre: 'Modifier mon mot de passe',
+texte: `Au moins ${MDP_MIN} caractères, avec des lettres et des chiffres.`,
+champs: [
+{ name:'actuel', label:'Mot de passe actuel', autocomplete:'current-password' },
+{ name:'nouveau', label:'Nouveau mot de passe', autocomplete:'new-password' },
+{ name:'confirmation', label:'Confirmer le nouveau', autocomplete:'new-password' },
+],
+ok: 'Enregistrer',
+verifier: async (v) => {
+if(!v.actuel) return 'Saisissez votre mot de passe actuel.';
+const pb = controlerNouveau(v.nouveau, v.confirmation);
+if(pb) return pb;
+if(v.nouveau === v.actuel) return "Le nouveau mot de passe doit être différent de l'ancien.";
+// On vérifie l'actuel : quelqu'un qui trouve le téléphone déverrouillé
+// ne doit pas pouvoir changer le mot de passe.
+const verif = await sb.auth.signInWithPassword({ email, password: v.actuel });
+if(verif.error) return /invalid/i.test(verif.error.message) ? 'Mot de passe actuel incorrect.' : traduireErreurMdp(verif.error.message);
+const { error } = await sb.auth.updateUser({ password: v.nouveau });
+if(error) return traduireErreurMdp(error.message);
+try{ await mdpChangeFait(); }catch(e){}
+return null;
+},
+});
+if(ok) toast('Mot de passe modifié');
+}
+
+/* Après une réinitialisation par le fondateur : la personne choisit le sien. */
+async function imposerNouveauMotDePasse(){
+if(!state.profile?.mdp_a_changer) return;
+const ok = await ouvrirFormulaire({
+titre: 'Choisissez votre mot de passe',
+texte: `Vous vous êtes connecté avec un mot de passe provisoire. Choisissez le vôtre pour continuer (au moins ${MDP_MIN} caractères, lettres et chiffres).`,
+champs: [
+{ name:'nouveau', label:'Nouveau mot de passe', autocomplete:'new-password' },
+{ name:'confirmation', label:'Confirmer', autocomplete:'new-password' },
+],
+ok: 'Enregistrer', annuler: 'Se déconnecter',
+verifier: async (v) => {
+const pb = controlerNouveau(v.nouveau, v.confirmation);
+if(pb) return pb;
+const { error } = await sb.auth.updateUser({ password: v.nouveau });
+if(error) return traduireErreurMdp(error.message);
+try{ await mdpChangeFait(); }catch(e){}
+return null;
+},
+});
+if(ok) toast('Mot de passe enregistré');
+else { effacerInstantanes(); sb.auth.signOut(); }
+}
+
+/* Fondateur : mot de passe provisoire pour un profil. */
+async function reinitialiserMdpMembre(id){
+const m = (reglages.membres || []).find(x => x.id === id);
+if(!m || !isSuperAdmin()) return;
+const email = reglages.emails?.[id]?.email || '';
+const v = await ouvrirFormulaire({
+titre: `Réinitialiser le mot de passe de ${m.full_name || 'ce profil'}`,
+texte: `${email ? email + ' — ' : ''}Un mot de passe provisoire est proposé ; vous pouvez le modifier. La personne sera déconnectée de ses appareils et devra choisir son propre mot de passe à la prochaine connexion.`,
+champs: [{ name:'mdp', label:'Mot de passe provisoire', type:'text', valeur: genererMotDePasse() }],
+ok: 'Réinitialiser',
+verifier: async (x) => {
+const mdp = (x.mdp || '').trim();
+if(mdp.length < MDP_MIN) return `Au moins ${MDP_MIN} caractères.`;
+await reinitialiserMotDePasse(id, mdp);
+return null;
+},
+});
+if(!v) return;
+const mdp = v.mdp.trim();
+let copie = false;
+try{ await navigator.clipboard.writeText(mdp); copie = true; }catch(e){}
+reglages.journal = null;
+await confirmer(`Mot de passe réinitialisé\n\nTransmettez à ${m.full_name || 'la personne'} :\n${email ? 'Identifiant : ' + email + '\n' : ''}Mot de passe provisoire : ${mdp}\n\n${copie ? 'Le mot de passe est copié : vous pouvez le coller dans un SMS ou un mail.' : ''} Il lui sera demandé d'en choisir un nouveau à la connexion.`, { ok:'Compris', danger:false, info:true });
+}
+
 async function renommerMoi(){
 closeMenus();
 const nom = await demander("Modifier mon nom\n\nPrénom et nom, tels qu'ils apparaîtront dans l'application et sur vos prochaines interventions.",
@@ -466,6 +565,7 @@ ${state.enAttenteCount > 0 ? `<span class="badge-attente" title="${state.enAtten
 <div style="margin-top:6px;"><span class="badge badge-role role-${roleTheme()}">${esc(libelleRoleTheme())}</span></div>
 </div>
 <button data-action="renommer-moi">${iconeNav('pencil', 15)} Modifier mon nom</button>
+<button data-action="changer-mdp">${iconeNav('key', 15)} Modifier mon mot de passe</button>
 ${sa ? '' : `<button data-action="go" data-path="/support">${iconeNav('help', 15)} Support & réclamations</button>`}
 <button data-action="logout" class="dropdown-sortie">Se déconnecter</button>
 </div>
@@ -2263,6 +2363,8 @@ render();
 else if(action === 'support-supprimer'){ actionSupprimerDemande(t.dataset.id); }
 else if(action === 'renommer-membre'){ ouvrirRenommage(t.dataset.id); }
 else if(action === 'renommer-moi'){ renommerMoi(); }
+else if(action === 'changer-mdp'){ closeMenus(); changerMonMotDePasse(); }
+else if(action === 'reset-mdp'){ reinitialiserMdpMembre(t.dataset.id); }
 else if(action === 'nouvel-equip-client'){
 equipForm = { typeId:'', orgId:t.dataset.id, nom:'', serial_value:'', valeurs:{}, busy:false, error:'' };
 nav('/equip-new');
@@ -2443,6 +2545,7 @@ await loadTypes(true);
 try{ await chargerModeles(); }catch(err){ console.error('[modèles]', err); }
 state.horsLigne = false;
 sauverInstantane({ profile: state.profile, orgName: state.orgName, superAdmin: state.superAdmin, types: state.types, modeles: state.modeles });
+if(state.profile?.mdp_a_changer) setTimeout(imposerNouveauMotDePasse, 400);
 retourApresConnexion();
 // Préchargement discret : la liste des équipements est prête avant qu'on l'ouvre.
 if(dashboardCache.items === null) setTimeout(() => { if(state.session && dashboardCache.items === null) chargerEquipements(); }, 300);
