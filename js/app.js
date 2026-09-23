@@ -1,10 +1,27 @@
 /* Render root */
 /* ---------------------------------------------------------------------- */
 
+/* Clé de la page affichée : l'animation d'arrivée ne se joue qu'en changeant
+de page, pas à chaque petit réaffichage (sinon tout clignoterait). */
+let dernierePage = null;
+
 function render(){
+const focus = capturerFocus();
+peindre();
+const page = location.hash + '|' + !!state.session;
+const main = document.querySelector('#app main');
+if(main && page !== dernierePage){
+main.classList.remove('entree'); void main.offsetWidth; main.classList.add('entree');
+if(dernierePage !== null) window.scrollTo({ top: 0, behavior: 'instant' });
+}
+dernierePage = page;
+restaurerFocus(focus);
+}
+
+function peindre(){
 const app = document.getElementById('app');
 if(state.loading){
-app.innerHTML = `<div class="center-screen"><div class="spinner"></div></div>`;
+app.innerHTML = `<div class="center-screen demarrage"><img src="${LOGO_DATA_URL}" alt=""><div class="spinner"></div></div>`;
 return;
 }
 // Consultation publique : l'adresse portée par le QR code collé sur
@@ -680,19 +697,31 @@ nav(chemin);
 /* View: Dashboard (équipements) */
 /* ---------------------------------------------------------------------- */
 
-let dashboardCache = { items: null, search:'', typeId:'', showArchived:false, loading:false, error:'', sel:[] };
+let dashboardCache = { items: null, search:'', typeId:'', showArchived:false, loading:false, error:'', sel:[], perime:false, requete:0 };
 
-function viewDashboard(){
-if(dashboardCache.items === null && !dashboardCache.loading){
+/* Charge la liste. Pendant un rechargement (recherche, filtre), l'ancienne
+liste reste affichée — estompée — au lieu d'un écran vide : pas de saut. */
+function chargerEquipements(){
+if(dashboardCache.loading) return;
 dashboardCache.loading = true;
+const n = ++dashboardCache.requete;
 listEquipements({ search: dashboardCache.search, typeId: dashboardCache.typeId, showArchived: dashboardCache.showArchived })
 .then(items => {
-dashboardCache.items = items; dashboardCache.loading = false;
+if(n !== dashboardCache.requete) return;
+dashboardCache.items = items; dashboardCache.error = '';
 dashboardCache.sel = (dashboardCache.sel || []).filter(id => items.some(e => e.id === id));
-render();
 })
-.catch(e => { dashboardCache.error = e.message; dashboardCache.loading = false; render(); });
+.catch(e => { if(n === dashboardCache.requete) dashboardCache.error = e.message; })
+.finally(() => {
+dashboardCache.loading = false;
+// Un filtre a changé pendant le chargement : on relance avec les bons critères.
+if(dashboardCache.perime){ dashboardCache.perime = false; chargerEquipements(); }
+render();
+});
 }
+
+function viewDashboard(){
+if(dashboardCache.items === null && !dashboardCache.loading) chargerEquipements();
 
 const typeOptions = state.types.map(t => `<option value="${t.id}" ${dashboardCache.typeId===t.id?'selected':''}>${esc(t.nom)}</option>`).join('');
 
@@ -700,14 +729,16 @@ let list = '';
 if(dashboardCache.error){
 list = `<div class="alert alert-error">${esc(dashboardCache.error)}</div>`;
 } else if(dashboardCache.items === null){
-list = `<div class="spinner"></div>`;
+list = squeletteListe(6);
 } else if(dashboardCache.items.length === 0){
-list = `<div class="empty"><div class="big">🔧</div>Aucun équipement pour l'instant.<br><span class="small">Ajoutez votre premier équipement pour générer son QR code.</span></div>`;
+list = (dashboardCache.search || dashboardCache.typeId)
+? `<div class="card empty"><div class="empty-icone">${iconeNav('box', 30)}</div><strong>Aucun résultat</strong><br><span class="small">Aucun équipement ne correspond à « ${esc(dashboardCache.search)} ». Essayez le n° de série ou la plaque.</span></div>`
+: `<div class="card empty"><div class="empty-icone">${iconeNav('box', 30)}</div><strong>Aucun équipement pour l'instant</strong><br><span class="small">Ajoutez votre premier équipement pour générer son QR code.</span></div>`;
 } else {
 const selection = peutSupprimer();
 const sel = dashboardCache.sel;
 const tousCoches = dashboardCache.items.every(e => sel.includes(e.id));
-list = `<div class="card liste-select">`
+list = `<div class="card liste-select ${dashboardCache.loading ? 'rafraichit' : ''}">`
 + (selection ? `<label class="tout-selectionner">
 <input type="checkbox" data-action="sel-equip-tous" ${tousCoches ? 'checked' : ''}>
 <span>Tout sélectionner (${dashboardCache.items.length})</span>
@@ -716,7 +747,7 @@ list = `<div class="card liste-select">`
 const t = state.types.find(t=>t.id===eq.type_id);
 const coche = sel.includes(eq.id);
 return `
-<div class="ligne-select ${coche ? 'cochee' : ''}">
+<div class="ligne-select cliquable ${coche ? 'cochee' : ''}">
 ${selection ? `<input type="checkbox" class="case-sel" data-action="sel-equip" data-id="${eq.id}" ${coche ? 'checked' : ''}>` : ''}
 <div class="thumb">${esc(initials(eq.nom))}</div>
 <div class="ligne-corps" data-action="go" data-path="/equip/${eq.id}">
@@ -768,18 +799,21 @@ ${list}
 async function restaurerSelection(){
 const ids = (dashboardCache.items || []).filter(e => e.archived && dashboardCache.sel.includes(e.id)).map(e => e.id);
 if(!ids.length) return;
-if(!confirm(`Restaurer ${ids.length > 1 ? 'ces ' + ids.length + ' équipements' : 'cet équipement'} ? ${ids.length > 1 ? 'Ils réapparaîtront' : 'Il réapparaîtra'} dans la liste active.`)) return;
+if(!await confirmer(`Restaurer ${ids.length > 1 ? 'ces ' + ids.length + ' équipements' : 'cet équipement'} ? ${ids.length > 1 ? 'Ils réapparaîtront' : 'Il réapparaîtra'} dans la liste active.`)) return;
 try{
 const { error } = await sb.from('equipements')
 .update({ archived:false, archived_at:null, archived_by:null, archive_reason:null }).in('id', ids);
 if(error) throw error;
 apresActionEquipements();
-}catch(e){ alert('Erreur : ' + e.message); }
+toast(ids.length > 1 ? ids.length + ' équipements restaurés' : 'Équipement restauré');
+}catch(e){ toast('Erreur : ' + e.message, 'erreur'); }
 }
 
 function refreshDashboard(){
-dashboardCache.items = null; dashboardCache.error='';
+dashboardCache.error = '';
 accueilCache.chiffres = null; // les compteurs d'accueil se recalculent
+if(dashboardCache.items === null){ render(); return; }
+if(dashboardCache.loading) dashboardCache.perime = true; else chargerEquipements();
 render();
 }
 
@@ -799,13 +833,13 @@ const existants = new Set(state.types.map(t => (t.nom||'').trim().toLowerCase())
 const aCreer = modele.types.filter(t => !existants.has(t.nom.trim().toLowerCase()));
 
 if(!aCreer.length){
-alert('Tous les types de ce modèle sont déjà présents dans cette organisation.');
+toast('Tous les types de ce modèle sont déjà présents.', 'info');
 return;
 }
 
 const resume = aCreer.map(t => ' • ' + t.nom).join('\n');
 const ignores = modele.types.length - aCreer.length;
-if(!confirm(
+if(!await confirmer(
 `Ajouter ${aCreer.length} type(s) d'équipement :\n\n${resume}\n\n` +
 (ignores ? `${ignores} type(s) déjà présent(s) seront ignorés.\n\n` : '') +
 `Vous pourrez ensuite renommer, ajouter ou retirer des champs librement.`)) return;
@@ -825,7 +859,7 @@ dashboardCache.items = null; accueilCache.chiffres = null;
 render();
 }catch(e){
 modeleState.busy = false; render();
-alert('Erreur : ' + e.message);
+toast('Erreur : ' + e.message, 'erreur');
 }
 }
 
@@ -843,7 +877,7 @@ render();
 function viewTypes(){
 const rows = state.types.map(t => `
 <div class="list-item">
-<div class="thumb">🏷️</div>
+<div class="thumb">${iconeNav('tag', 18)}</div>
 <div style="flex:1;min-width:0;">
 <div style="font-weight:650;">${esc(t.nom)}</div>
 <div class="small muted">${(t.champs||[]).length} champ(s) personnalisé(s)${(t.champs||[]).length ? ' · ' + (t.champs||[]).map(c=>esc(c.label)).join(', ') : ''}</div>
@@ -892,7 +926,7 @@ ${modeleState.busy ? 'Création…' : `Ajouter ces ${m.types.length} types`}
 </div>` : ''}
 
 <div class="card" style="padding:0 18px;">
-${state.types.length ? rows : `<div class="empty"><div class="big">🏷️</div>Aucun type d'équipement.<br><span class="small">${isAdmin() ? 'Créez-en un (ex. « Véhicule », « Dispositif médical », « Équipement industriel »…) pour commencer à ajouter des équipements.' : 'Aucun type ne vous a été attribué. Contactez votre administrateur.'}</span></div>`}
+${state.types.length ? rows : `<div class="empty"><div class="empty-icone">${iconeNav('tag', 30)}</div>Aucun type d'équipement.<br><span class="small">${isAdmin() ? 'Créez-en un (ex. « Véhicule », « Dispositif médical », « Équipement industriel »…) pour commencer à ajouter des équipements.' : 'Aucun type ne vous a été attribué. Contactez votre administrateur.'}</span></div>`}
 </div>
 `;
 }
@@ -957,9 +991,11 @@ nom, champs
 });
 if(error) throw error;
 }
+const modifie = !!typeForm.id;
 typeForm = { open:false, id:null, nom:'', champs:[], busy:false, error:'' };
 await loadTypes(true);
 dashboardCache.items = null; accueilCache.chiffres = null;
+toast(modifie ? 'Type modifié' : "Type d'équipement créé");
 render();
 }catch(e){
 typeForm.busy = false; typeForm.error = e.message; render();
@@ -1145,6 +1181,7 @@ archived: false
 if(error) throw error;
 equipForm = { typeId:'', nom:'', serial_value:'', valeurs:{}, busy:false, error:'' };
 refreshDashboard();
+toast('Équipement créé — son QR code est prêt');
 nav('/equip/' + data.id);
 }catch(e){
 equipForm.busy = false; equipForm.error = e.message; render();
@@ -1172,10 +1209,9 @@ equipDetail.item = item; equipDetail.interventions = ivs; equipDetail.loading = 
 setTimeout(()=>drawQr(lienPublic(item.public_token)), 30);
 })
 .catch(e => { equipDetail.error = e.message; equipDetail.loading = false; render(); });
-return `<div class="spinner"></div>`;
 }
 
-if(equipDetail.loading) return `<div class="spinner"></div>`;
+if(equipDetail.loading) return squeletteFiche((dashboardCache.items || []).find(e => e.id === id)?.nom);
 if(equipDetail.error) return `<div class="alert alert-error">${esc(equipDetail.error)}</div>`;
 if(!equipDetail.item) return `<div class="empty">Équipement introuvable.</div>`;
 
@@ -1348,7 +1384,8 @@ const { error } = await sb.from('equipements')
 if(error) throw error;
 equipDetail.item = await getEquipement(equipDetail.id);
 equipDetail.showEditForm = false;
-dashboardCache.items = null; accueilCache.chiffres = null;
+refreshDashboard();
+toast('Fiche enregistrée');
 }catch(e){
 equipDetail.editError = e.message;
 }finally{
@@ -1357,7 +1394,7 @@ equipDetail.editBusy = false; render();
 }
 
 async function restoreEquipement(){
-if(!confirm("Restaurer cet équipement ? Il réapparaîtra dans la liste active.")) return;
+if(!await confirmer("Restaurer cet équipement ? Il réapparaîtra dans la liste active.")) return;
 try{
 const { error } = await sb.from('equipements')
 .update({ archived:false, archived_at:null, archived_by:null, archive_reason:null })
@@ -1367,7 +1404,7 @@ equipDetail.item = await getEquipement(equipDetail.id);
 dashboardCache.items = null; accueilCache.chiffres = null;
 render();
 }catch(e){
-alert('Erreur : ' + e.message);
+toast('Erreur : ' + e.message, 'erreur');
 }
 }
 
@@ -1461,6 +1498,7 @@ if(error) throw error;
 equipDetail.showIvForm = false;
 equipDetail.interventions = await listInterventions(equipDetail.id);
 equipDetail.ivBusy = false;
+toast('Intervention enregistrée');
 render();
 }catch(e){
 // Le réseau se coupe parfois entre le test navigator.onLine et l'envoi
@@ -1505,6 +1543,7 @@ if(error) throw error;
 equipDetail.interventions = await listInterventions(equipDetail.id);
 equipDetail.editIvId = null;
 reglages.journal = null;
+toast('Intervention modifiée');
 }catch(e){
 equipDetail.editIvError = e.message;
 }finally{
@@ -1515,7 +1554,7 @@ equipDetail.editIvBusy = false; render();
 async function supprimerIntervention(id){
 const iv = (equipDetail.interventions || []).find(x => x.id === id);
 if(!iv) return;
-if(!confirm(`Supprimer l'intervention « ${iv.type} » du ${fmtDate(iv.date)} ?\n\nElle disparaît du carnet de cet équipement. Une copie est conservée dans le journal.`)) return;
+if(!await confirmer(`Supprimer l'intervention « ${iv.type} » du ${fmtDate(iv.date)} ?\n\nElle disparaît du carnet de cet équipement. Une copie est conservée dans le journal.`)) return;
 try{
 const { data, error } = await sb.from('interventions').delete().eq('id', id).select('id');
 if(error) throw error;
@@ -1523,8 +1562,9 @@ if(!data || !data.length) throw new Error("Suppression refusée : seul un admini
 equipDetail.interventions = await listInterventions(equipDetail.id);
 reglages.journal = null;
 accueilCache.chiffres = null;
+toast('Intervention supprimée');
 render();
-}catch(e){ alert('Erreur : ' + e.message); }
+}catch(e){ toast('Erreur : ' + e.message, 'erreur'); }
 }
 
 /* Ouvrir ou fermer la consultation libre d'un equipement. Fermee, l'etiquette
@@ -1533,14 +1573,14 @@ async function actionTogglePartage(){
 const eq = equipDetail.item;
 if(!eq) return;
 const ouvrir = !eq.partage_public;
-if(!ouvrir && !confirm("Fermer la consultation publique ? Les étiquettes déjà collées sur cet équipement ne montreront plus rien à ceux qui les scannent.")) return;
+if(!ouvrir && !await confirmer("Fermer la consultation publique ? Les étiquettes déjà collées sur cet équipement ne montreront plus rien à ceux qui les scannent.")) return;
 try{
 const { error } = await sb.from('equipements')
 .update({ partage_public: ouvrir }).eq('id', eq.id);
 if(error) throw error;
 eq.partage_public = ouvrir;
 render();
-}catch(e){ alert('Erreur : ' + e.message); }
+}catch(e){ toast('Erreur : ' + e.message, 'erreur'); }
 }
 
 /* Changer le jeton : l'ancienne etiquette devient muette, la fiche et son
@@ -1554,14 +1594,14 @@ il se redessine à chaque rendu de la fiche à partir de eq.public_token). */
 async function actionRegenererLienPublic(){
 const eq = equipDetail.item;
 if(!eq) return;
-if(!confirm("Changer le lien public ? Toutes les étiquettes déjà imprimées pour cet équipement cesseront de fonctionner : il faudra en réimprimer une. La fiche et son historique sont conservés.")) return;
+if(!await confirmer("Changer le lien public ? Toutes les étiquettes déjà imprimées pour cet équipement cesseront de fonctionner : il faudra en réimprimer une. La fiche et son historique sont conservés.")) return;
 try{
 const { data: nouveauToken, error } = await sb.rpc('regenerer_public_token', { p_equipement_id: eq.id });
 if(error) throw error;
 eq.public_token = nouveauToken;
 eq.ancien_lien_actif = false;
 render();
-}catch(e){ alert('Erreur : ' + e.message); }
+}catch(e){ toast('Erreur : ' + e.message, 'erreur'); }
 }
 
 function printQr(){
@@ -1649,7 +1689,7 @@ else if(action === 'support-rafraichir'){ reglages.support = null; render(); }
 else if(action === 'support-statut'){
 setStatutDemande(t.dataset.id, t.dataset.statut)
 .then(() => { reglages.support = null; render(); })
-.catch(err => alert('Erreur : ' + err.message));
+.catch(err => toast('Erreur : ' + err.message, 'erreur'));
 }
 else if(action === 'restore-equip'){ restoreEquipement(); }
 else if(action === 'toggle-edit-equip'){ equipDetail.showEditForm = !equipDetail.showEditForm; equipDetail.editError=''; render(); }
@@ -1769,7 +1809,7 @@ for(const k of ['nom','adresse','telephone','email','referent','notes']) reglage
 document.addEventListener('keydown', (e) => { if(e.key === 'Escape' && modal && !modal.busy) fermerModal(); });
 
 let debounceTimer;
-function debounce(fn, ms=350){ clearTimeout(debounceTimer); debounceTimer = setTimeout(fn, ms); }
+function debounce(fn, ms=250){ clearTimeout(debounceTimer); debounceTimer = setTimeout(fn, ms); }
 
 /* ---------------------------------------------------------------------- */
 /* Auth bootstrap */
@@ -1784,6 +1824,8 @@ await loadProfileAndOrg();
 await chargerStatutSuperAdmin();
 await loadTypes(true);
 retourApresConnexion();
+// Préchargement discret : la liste des équipements est prête avant qu'on l'ouvre.
+if(dashboardCache.items === null) setTimeout(() => { if(state.session && dashboardCache.items === null) chargerEquipements(); }, 300);
 try{
 state.enAttenteCount = await offlineCompterEnAttente();
 if(navigator.onLine) synchroniserInterventionsEnAttente();

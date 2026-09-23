@@ -136,7 +136,7 @@ ${contenu}
 function viewClients(){
 chargerClients(false);
 if(reglages.clientsError) return `<div class="alert alert-error">${esc(reglages.clientsError)}</div>`;
-if(reglages.clients === null) return `<div class="spinner"></div>`;
+if(reglages.clients === null) return squeletteListe(4);
 
 const clients = reglages.clients;
 const selectionnables = clients.filter(c => !c.est_mon_organisation);
@@ -144,7 +144,7 @@ const sel = reglages.selClients;
 const tousCoches = selectionnables.length > 0 && selectionnables.every(c => sel.includes(c.id));
 
 const lignes = clients.map(c => `
-<div class="ligne-select ${sel.includes(c.id) ? 'cochee' : ''}">
+<div class="ligne-select cliquable ${sel.includes(c.id) ? 'cochee' : ''}">
 ${c.est_mon_organisation
 ? `<span class="case-vide" title="Votre propre organisation"></span>`
 : `<input type="checkbox" class="case-sel" data-action="sel-client" data-id="${c.id}" ${sel.includes(c.id) ? 'checked' : ''}>`}
@@ -162,8 +162,8 @@ ${c.telephone ? ' · ' + esc(c.telephone) : ''}
 </div>
 </div>
 <div class="ligne-chiffres small muted">
-<span title="Membres">👤 ${c.nb_membres}</span>
-<span title="Équipements actifs">🔧 ${c.nb_equipements}</span>
+<span class="compteur" title="Membres">${iconeNav('users', 14)} ${c.nb_membres}</span>
+<span class="compteur" title="Équipements actifs">${iconeNav('box', 14)} ${c.nb_equipements}</span>
 </div>
 </div>`).join('');
 
@@ -254,10 +254,12 @@ if(f.id){
 await modifierClient(f.id, f);
 reglages.clientForm = null;
 await chargerClientsMaintenant();
+toast('Fiche client enregistrée');
 } else {
 const res = await creerClient(f);
 reglages.clientForm = null;
 await chargerClientsMaintenant();
+toast(`Client créé — code ${res.code_client}`);
 nav('/reglages/clients/' + res.id);
 return;
 }
@@ -275,7 +277,7 @@ function viewClientDetail(id){
 chargerClients(false);
 chargerMembres(false);
 if(reglages.clientsError) return `<div class="alert alert-error">${esc(reglages.clientsError)}</div>`;
-if(reglages.clients === null) return `<div class="spinner"></div>`;
+if(reglages.clients === null) return squeletteFiche('', '/reglages/clients');
 const c = reglages.clients.find(x => x.id === id);
 if(!c) return `<div class="alert alert-error">Client introuvable.</div>
 <button class="btn" data-action="go" data-path="/reglages/clients">← Retour aux clients</button>`;
@@ -348,31 +350,33 @@ const noms = clients.map(c => c.nom).join(', ');
 const msg = actif
 ? `Réactiver ${ids.length > 1 ? 'ces ' + ids.length + ' clients' : 'ce client'} ?\n\n${noms}\n\nTous leurs membres retrouvent l'accès.`
 : `Suspendre ${ids.length > 1 ? 'ces ' + ids.length + ' clients' : 'ce client'} ?\n\n${noms}\n\nTous leurs membres perdent immédiatement l'accès. Rien n'est effacé.`;
-if(!confirm(msg)) return;
+if(!await confirmer(msg)) return;
 try{
 await definirStatutClients(ids, actif);
 reglages.selClients = [];
+toast(actif ? 'Accès rétabli' : 'Client suspendu — accès coupé');
 rafraichirReglages();
-}catch(e){ alert('Erreur : ' + e.message); }
+}catch(e){ toast('Erreur : ' + e.message, 'erreur'); }
 }
 
 async function actionClientsSupprimer(ids){
 const clients = (reglages.clients || []).filter(c => ids.includes(c.id));
 if(!clients.length) return;
 const noms = clients.map(c => `• ${c.nom} (${c.code_client})`).join('\n');
-const saisie = window.prompt(
+const saisie = await demander(
 `SUPPRESSION DÉFINITIVE de ${clients.length > 1 ? clients.length + ' clients' : 'ce client'} :\n\n${noms}\n\n` +
 `Seront effacés : tous ses comptes, tous ses équipements et tout leur historique d'interventions. ` +
 `Une trace est conservée dans le journal.\n\nPour une coupure temporaire, préférez « Suspendre ».\n\n` +
-`Tapez SUPPRIMER pour confirmer :`, '');
+`Tapez SUPPRIMER pour confirmer :`, { danger:true, ok:'Supprimer définitivement', placeholder:'SUPPRIMER' });
 if(saisie === null) return;
-if(saisie.trim().toUpperCase() !== 'SUPPRIMER'){ alert('Suppression annulée : confirmation incorrecte.'); return; }
+if(saisie.trim().toUpperCase() !== 'SUPPRIMER'){ toast('Suppression annulée : confirmation incorrecte.', 'info'); return; }
 try{
 await supprimerClients(clients.map(c => c.id));
 reglages.selClients = [];
+toast(clients.length > 1 ? clients.length + ' clients supprimés' : 'Client supprimé');
 rafraichirReglages();
 if(state.route.name === 'reglages' && state.route.sub) nav('/reglages/clients');
-}catch(e){ alert('Erreur : ' + e.message); }
+}catch(e){ toast('Erreur : ' + e.message, 'erreur'); }
 }
 
 /* ---------------------------------------------------------------------- */
@@ -388,7 +392,7 @@ function viewMembres(){
 chargerMembres(false);
 if(isSuperAdmin()) chargerClients(false);
 if(reglages.membresError) return `<div class="alert alert-error">${esc(reglages.membresError)}</div>`;
-if(reglages.membres === null) return `<div class="spinner"></div>`;
+if(reglages.membres === null) return squeletteListe(4);
 
 let membres = reglages.membres;
 const filtre = reglages.filtreClient;
@@ -499,45 +503,47 @@ async function actionMembresActive(ids, active){
 const msg = active
 ? `Réactiver ${ids.length} profil${ids.length > 1 ? 's' : ''} ? ${ids.length > 1 ? 'Ils retrouveront' : 'La personne retrouvera'} l'accès à l'application.`
 : `Suspendre ${ids.length} profil${ids.length > 1 ? 's' : ''} ? Perte immédiate de l'accès, sans rien supprimer.`;
-if(!confirm(msg)) return;
+if(!await confirmer(msg)) return;
 try{
 await setMembresActive(ids, active);
 reglages.selMembres = [];
+toast(active ? 'Profil(s) réactivé(s)' : 'Profil(s) suspendu(s)');
 rafraichirReglages();
-}catch(e){ alert('Erreur : ' + e.message); rafraichirReglages(); }
+}catch(e){ toast('Erreur : ' + e.message, 'erreur'); rafraichirReglages(); }
 }
 
 async function actionMembresSupprimer(ids){
 const noms = (reglages.membres || []).filter(m => ids.includes(m.id)).map(m => '• ' + (m.full_name || 'Sans nom')).join('\n');
-if(!confirm(
+if(!await confirmer(
 `Supprimer définitivement ${ids.length > 1 ? 'ces ' + ids.length + ' profils' : 'ce profil'} ?\n\n${noms}\n\n` +
 `• Les comptes de connexion sont effacés\n• Les interventions qu'ils ont enregistrées sont CONSERVÉES\n` +
 `• Une trace est gardée dans le journal\n\nIrréversible. Pour un départ temporaire, préférez « Suspendre ».`)) return;
 try{
 await supprimerProfils(ids);
 reglages.selMembres = [];
+toast(ids.length > 1 ? ids.length + ' profils supprimés' : 'Profil supprimé');
 rafraichirReglages();
-}catch(e){ alert('Erreur : ' + e.message); rafraichirReglages(); }
+}catch(e){ toast('Erreur : ' + e.message, 'erreur'); rafraichirReglages(); }
 }
 
 async function actionRoleMembre(id, role){
-if(role === 'admin' && !confirm(
+if(role === 'admin' && !await confirmer(
 "Promouvoir ce profil ADMINISTRATEUR de son organisation ?\n\n" +
 "Il pourra gérer tout le parc de son organisation, en modifier les membres " +
 "et supprimer définitivement équipements et interventions.")){
 rafraichirReglages(); return;
 }
-try{ await setMemberRole(id, role); }catch(e){ alert('Erreur : ' + e.message); }
+try{ await setMemberRole(id, role); toast('Rôle mis à jour : ' + roleLabel(role)); }catch(e){ toast('Erreur : ' + e.message, 'erreur'); }
 rafraichirReglages();
 }
 
 async function actionAccesTous(id, valeur){
-try{ await setAccesTousTypes(id, valeur); }catch(e){ alert('Erreur : ' + e.message); }
+try{ await setAccesTousTypes(id, valeur); }catch(e){ toast('Erreur : ' + e.message, 'erreur'); }
 rafraichirReglages();
 }
 
 async function actionAccesType(profileId, typeId, autoriser){
-try{ await setAccesType(profileId, typeId, autoriser); }catch(e){ alert('Erreur : ' + e.message); }
+try{ await setAccesType(profileId, typeId, autoriser); }catch(e){ toast('Erreur : ' + e.message, 'erreur'); }
 rafraichirReglages();
 }
 
@@ -553,7 +559,7 @@ function viewInvitations(){
 chargerMembres(false);
 if(isSuperAdmin()) chargerClients(false);
 if(reglages.membresError) return `<div class="alert alert-error">${esc(reglages.membresError)}</div>`;
-if(reglages.membres === null) return `<div class="spinner"></div>`;
+if(reglages.membres === null) return squeletteListe(4);
 
 const invites = reglages.invites || [];
 return `
@@ -687,12 +693,13 @@ render(); return;
 }
 const orgNom = (reglages.clients || []).find(c => c.id === inv.orgId)?.nom
 || (inv.orgId === state.profile.organization_id ? state.orgName : '');
-if(estAdmin && !confirm(`Créer un lien d'invitation ADMINISTRATEUR pour ${orgNom || 'ce client'} ?`)) return;
+if(estAdmin && !await confirmer(`Créer un lien d'invitation ADMINISTRATEUR pour ${orgNom || 'ce client'} ?`)) return;
 
 inv.error = ''; inv.busy = true; render();
 try{
 const created = await createInvite(inv.orgId, inv.role, inv.label.trim(), inv.tousTypes, inv.types);
 inv.dernierToken = created.token;
+toast("Lien d'invitation créé");
 inv.derniereOrgNom = orgNom;
 inv.label = '';
 reglages.invites = await listInvites();
@@ -704,12 +711,13 @@ inv.busy = false; render();
 }
 
 async function actionAnnulerInvite(id){
-if(!confirm("Annuler cette invitation ? Le lien ne fonctionnera plus.")) return;
+if(!await confirmer("Annuler cette invitation ? Le lien ne fonctionnera plus.")) return;
 try{
 await cancelInvite(id);
 reglages.invites = await listInvites();
+toast('Invitation annulée');
 render();
-}catch(e){ alert('Erreur : ' + e.message); }
+}catch(e){ toast('Erreur : ' + e.message, 'erreur'); }
 }
 
 /* ---------------------------------------------------------------------- */
@@ -725,7 +733,7 @@ listJournal()
 .finally(() => { reglages.journalLoading = false; render(); });
 }
 if(reglages.journalError) return `<div class="alert alert-error">${esc(reglages.journalError)}</div>`;
-if(reglages.journal === null) return `<div class="spinner"></div>`;
+if(reglages.journal === null) return squeletteListe(5);
 
 const lignes = reglages.journal.map(j => {
 let detail = '';
@@ -893,7 +901,7 @@ listDemandesSupport()
 .finally(() => { reglages.supportLoading = false; render(); });
 }
 if(reglages.supportError) return `<div class="alert alert-error">${esc(reglages.supportError)}</div>`;
-if(reglages.support === null) return `<div class="spinner"></div>`;
+if(reglages.support === null) return squeletteListe(3);
 
 return `
 <div class="card">
@@ -1017,7 +1025,9 @@ const { error } = await sb.from('equipements').update({
 archived: true, archived_at: new Date().toISOString(), archived_by: nomOperateur(), archive_reason: motif,
 }).in('id', modal.ids).eq('archived', false);
 if(error) throw error;
+const n = modal.ids.length;
 apresActionEquipements();
+toast(n > 1 ? n + ' équipements archivés' : 'Équipement archivé');
 }catch(e){ modal.busy = false; modal.error = e.message; render(); }
 return;
 }
@@ -1027,7 +1037,9 @@ try{
 const { error } = await sb.rpc('supprimer_equipements', { p_ids: modal.ids, p_motif: modal.precision.trim() || null });
 if(error) throw error;
 const surLaFiche = state.route.name === 'equip' && modal.ids.includes(state.route.param);
+const n = modal.ids.length;
 apresActionEquipements();
+toast(n > 1 ? n + ' équipements supprimés' : 'Équipement supprimé définitivement');
 if(surLaFiche) nav('/equipements');
 }catch(e){ modal.busy = false; modal.error = e.message; render(); }
 }
