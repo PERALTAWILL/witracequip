@@ -134,7 +134,7 @@ if(error) throw error;
 
 async function listMembers(){
 const { data, error } = await sb.from('profiles')
-.select('id, organization_id, full_name, role, active, acces_tous_types, fondateur, created_at, appareil_info, appareil_lie_le, organizations(nom, code_client, active)')
+.select('id, organization_id, full_name, role, active, acces_tous_types, fondateur, created_at, appareil_info, appareil_lie_le, ordi_info, ordi_expire_le, organizations(nom, code_client, active)')
 .order('created_at');
 if(error) throw error;
 return data || [];
