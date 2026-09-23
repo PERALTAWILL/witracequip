@@ -190,9 +190,35 @@ if(error) throw error;
 return data || [];
 }
 
+/* --- Modèles métier (gérés par le fondateur : Support → Modèles métier) ---
+En base depuis la v2.16.8 ; la liste écrite dans config.js ne sert plus que
+de secours tant que la base n'a pas répondu (hors-ligne au premier lancement). */
+function modelesMetiers(){ return state.modeles || MODELES_METIERS; }
+
+async function chargerModeles(){
+const { data, error } = await sb.from('modeles_metiers').select('cle, nom, description, types, ordre').order('ordre').order('nom');
+if(error) throw error;
+state.modeles = data || [];
+return state.modeles;
+}
+
+async function enregistrerModele(m, nouveau){
+const ligne = { nom: m.nom, description: m.description || '', types: m.types, ordre: m.ordre || 0 };
+const q = nouveau
+? sb.from('modeles_metiers').insert({ cle: m.cle, ...ligne })
+: sb.from('modeles_metiers').update(ligne).eq('cle', m.cle);
+const { error } = await q;
+if(error) throw error;
+}
+
+async function supprimerModele(cle){
+const { error } = await sb.rpc('supprimer_modele_metier', { p_cle: cle });
+if(error) throw error;
+}
+
 /* Types d'un modèle métier, au format stocké en base (clé de champ incluse). */
 function typesDuModele(cle){
-const m = MODELES_METIERS.find(x => x.cle === cle);
+const m = modelesMetiers().find(x => x.cle === cle);
 if(!m) return null;
 return m.types.map(t => ({ nom: t.nom, champs: t.champs.map(c => ({ key: slugify(c.label), label: c.label, type: c.type })) }));
 }
