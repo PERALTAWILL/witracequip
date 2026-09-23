@@ -794,3 +794,10 @@ font-weight:650; font-size:13.5px; color:var(--text-dim);
 margin:12px 0 6px; padding:14px; border-radius:10px;
 background:var(--surface-2); border:1px solid var(--border);
 }
+.btn-crayon{
+border:none; background:none; cursor:pointer; padding:2px 6px; margin-left:2px; border-radius:6px;
+font-size:14px; color:var(--text-dim); vertical-align:middle;
+}
+.btn-crayon:hover{color:var(--primary); background:var(--surface-2);}
+.renommage{display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin-bottom:4px;}
+.renommage input{flex:1; min-width:160px; padding:6px 10px;}
