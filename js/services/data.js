@@ -3,12 +3,12 @@
 
 async function loadProfileAndOrg(){
 const uid = state.session.user.id;
-const { data: profile, error } = await sb.from('profiles').select('id, organization_id, full_name, role, active, fondateur').eq('id', uid).maybeSingle();
+const { data: profile, error } = await sb.from('profiles').select('id, organization_id, full_name, role, active, fondateur, mdp_a_changer').eq('id', uid).maybeSingle();
 if(error) throw error;
 if(!profile){
 // Le trigger d'inscription n'a pas encore tourné (rare / latence) — on réessaie une fois.
 await new Promise(r=>setTimeout(r, 800));
-const retry = await sb.from('profiles').select('id, organization_id, full_name, role, active, fondateur').eq('id', uid).maybeSingle();
+const retry = await sb.from('profiles').select('id, organization_id, full_name, role, active, fondateur, mdp_a_changer').eq('id', uid).maybeSingle();
 // Profil invisible malgré une session valide = accès coupé côté base
 // (profil suspendu ou organisation suspendue : current_org_id() renvoie NULL).
 if(retry.error || !retry.data) throw new Error('ACCES_SUSPENDU');
@@ -63,6 +63,25 @@ async function listInterventions(equipementId){
 const { data, error } = await sb.from('interventions').select('*').eq('equipement_id', equipementId).order('date', {ascending:false});
 if(error) throw error;
 return data || [];
+}
+
+/* --- Mots de passe ---------------------------------------------------- */
+/* Le fondateur réinitialise : mot de passe provisoire, à changer à la
+prochaine connexion (sql/18). */
+async function reinitialiserMotDePasse(id, mdp){
+const { error } = await sb.rpc('reinitialiser_mot_de_passe', { p_id: id, p_mdp: mdp });
+if(error) throw error;
+}
+async function mdpChangeFait(){
+const { error } = await sb.rpc('mdp_change_fait');
+if(error) throw error;
+if(state.profile) state.profile.mdp_a_changer = false;
+}
+/* Provisoire lisible à dicter au téléphone : sans 0/O, 1/l/I. */
+function genererMotDePasse(){
+const L = 'abcdefghjkmnpqrstuvwxyz', C = '23456789';
+const r = (s, n) => Array.from(crypto.getRandomValues(new Uint32Array(n)), x => s[x % s.length]).join('');
+return 'Wtq-' + r(C, 4) + '-' + r(L, 4);
 }
 
 /* --- Photos jointes aux interventions -------------------------------
