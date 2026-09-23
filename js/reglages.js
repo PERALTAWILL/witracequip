@@ -95,6 +95,7 @@ resetReglages();
 function chargerClients(force){
 if(!isSuperAdmin() || reglages.clientsLoading) return;
 if(reglages.clients !== null && !force) return;
+if(reglages.clientsError && !force) return; // pas de relance en boucle sur une erreur
 reglages.clientsLoading = true;
 listClients()
 .then(c => { reglages.clients = c; reglages.clientsError = ''; })
@@ -105,6 +106,7 @@ listClients()
 function chargerMembres(force){
 if(reglages.membresLoading) return;
 if(reglages.membres !== null && !force) return;
+if(reglages.membresError && !force) return;
 reglages.membresLoading = true;
 Promise.all([listMembers(), listInvites(), listAcces(), listTypesToutesOrgs(), listEmailsMembres()])
 .then(([m, i, a, t, em]) => {
@@ -423,7 +425,7 @@ ${invites.map(i => renderInvite(i, false)).join('')}
 function chargerParcClient(orgId, force){
 reglages.parcs = reglages.parcs || {};
 const p = reglages.parcs[orgId];
-if(p && (p.loading || (p.items && !force))) return;
+if(p && (p.loading || (p.items && !force) || (p.error && !force))) return;
 reglages.parcs[orgId] = { items: p?.items || null, loading:true, error:'' };
 listEquipements({ orgId, showArchived:true })
 .then(items => { reglages.parcs[orgId] = { items, loading:false, error:'' }; })
@@ -959,7 +961,7 @@ render();
 /* ---------------------------------------------------------------------- */
 
 function viewJournal(){
-if(reglages.journal === null && !reglages.journalLoading){
+if(reglages.journal === null && !reglages.journalLoading && !reglages.journalError){
 reglages.journalLoading = true;
 listJournal()
 .then(j => { reglages.journal = j; reglages.journalError = ''; })
@@ -1135,6 +1137,7 @@ render();
    être supprimée définitivement. */
 function chargerSupport(force){
 if(reglages.supportLoading || (reglages.support !== null && !force)) return;
+if(reglages.supportError && !force) return;
 reglages.supportLoading = true;
 listDemandesSupport()
 .then(d => { reglages.support = d; reglages.supportError = ''; })

@@ -135,6 +135,34 @@ state.authError = ''; state.authNotice = '';
 nav('/connexion');
 }
 
+/* ---------------------------------------------------------------------- */
+/* Hors-ligne : dernier état connu, gardé sur l'appareil                   */
+/* ---------------------------------------------------------------------- */
+/* Profil, types et liste d'équipements de la dernière connexion, rangés
+dans le stockage du navigateur au nom du compte (effacés à la déconnexion).
+Sans réseau, l'application démarre et affiche ce dernier état, clairement
+signalé comme tel, au lieu d'une erreur. */
+function estErreurReseau(e){
+if(!navigator.onLine) return true;
+return /failed to fetch|networkerror|load failed|network request failed|fetch failed|trop de temps/i.test((e && e.message) || String(e || ''));
+}
+function cleInstantane(){ return 'wte_hl_' + (state.session?.user?.id || ''); }
+function lireInstantane(){
+try{ return JSON.parse(localStorage.getItem(cleInstantane()) || 'null') || {}; }catch(e){ return {}; }
+}
+function sauverInstantane(ajout){
+try{ localStorage.setItem(cleInstantane(), JSON.stringify({ ...lireInstantane(), ...ajout })); }catch(e){}
+}
+function effacerInstantanes(){
+try{ Object.keys(localStorage).filter(k => k.startsWith('wte_hl_')).forEach(k => localStorage.removeItem(k)); }catch(e){}
+}
+/* Équipements connus sans réseau : ceux en attente d'envoi + la dernière liste. */
+async function equipementsConnus(){
+const enAttente = await offlineEquipCommeLignes();
+const liste = (dashboardCache.items && dashboardCache.items.length) ? dashboardCache.items : (lireInstantane().equipements || []);
+return [...enAttente, ...liste.filter(e => !enAttente.some(x => x.id === e.id))];
+}
+
 function retourApresConnexion(){
 let t = '';
 try{ t = sessionStorage.getItem('wt_retour_scan') || ''; sessionStorage.removeItem('wt_retour_scan'); }catch(e){}
@@ -152,8 +180,12 @@ if(!state.session){ return viewFichePublique(token); }
 if(resolvePublic.token !== token){
 resolvePublic = { token, busy:true };
 sb.from('equipements').select('id').eq('public_token', token).maybeSingle()
-.then(({ data }) => {
+.then(async ({ data, error }) => {
 if(data && data.id){ nav('/equip/' + data.id); return; }
+if(error || !navigator.onLine){
+const connu = (await equipementsConnus()).find(e => e.public_token === token);
+if(connu){ nav('/equip/' + connu.id); return; }
+}
 resolvePublic.busy = false; render();
 })
 .catch(() => { resolvePublic.busy = false; render(); });
@@ -407,7 +439,7 @@ ${entreesNav(r).map(n => `<div class="sidebar-link ${n.actif?'active':''}" data-
 </nav>
 <div class="sidebar-spacer"></div>
 ${sa ? `<div class="sidebar-fondateur">${iconeNav('crown', 16)}<div><strong>Espace fondateur</strong><span>${esc(state.orgName || 'WiDIAG MQ')}</span></div></div>` : ''}
-${state.enAttenteCount > 0 ? `<div class="sidebar-sync" title="${state.enAttenteCount} intervention${state.enAttenteCount>1?'s':''} en attente d'envoi (sans réseau)">${iconeNav('clock',15)}<span>${state.enAttenteCount} en attente</span></div>` : ''}
+${state.enAttenteCount > 0 ? `<div class="sidebar-sync" title="${state.enAttenteCount} saisie${state.enAttenteCount>1?'s':''} en attente d'envoi (sans réseau)">${iconeNav('clock',15)}<span>${state.enAttenteCount} en attente</span></div>` : ''}
 </aside>
 
 <div class="shell-main">
@@ -420,7 +452,7 @@ WiTracEQUIP
 </div>
 </div>
 <div class="topbar-spacer"></div>
-${state.enAttenteCount > 0 ? `<span class="badge-attente" title="${state.enAttenteCount} intervention${state.enAttenteCount>1?'s':''} en attente d'envoi (sans réseau)">⏳ ${state.enAttenteCount}</span>` : ''}
+${state.enAttenteCount > 0 ? `<span class="badge-attente" title="${state.enAttenteCount} saisie${state.enAttenteCount>1?'s':''} en attente d'envoi (sans réseau)">⏳ ${state.enAttenteCount}</span>` : ''}
 <div class="org-pill">${esc(state.orgName || '…')}</div>
 <div class="user-menu">
 <button class="user-btn" data-action="toggle-menu">
@@ -561,7 +593,7 @@ return { interventionsMois: (iv.data || []).length };
 function viewAccueilFondateur(){
 chargerClients(false);
 chargerSupport(false);
-if(fondateurCache.donnees === null && !fondateurCache.loading && state.typesLoaded){
+if(fondateurCache.donnees === null && !fondateurCache.loading && !fondateurCache.error && state.typesLoaded){
 fondateurCache.loading = true;
 chargerTableauFondateur()
 .then(d => { fondateurCache.donnees = d; fondateurCache.error = ''; })
@@ -631,11 +663,15 @@ ${scannerState.ouvert ? renderScannerOverlay() : ''}
 }
 
 function viewAccueil(){
-if(accueilCache.chiffres === null && !accueilCache.loading){
+if(accueilCache.chiffres === null && !accueilCache.loading && !accueilCache.error){
 accueilCache.loading = true;
 chargerChiffres()
 .then(c => { accueilCache.chiffres = c; accueilCache.loading = false; render(); })
-.catch(e => { accueilCache.error = e.message; accueilCache.loading = false; render(); });
+.catch(e => {
+// Sans réseau, l'accueil reste utilisable (les chiffres reviendront avec le réseau).
+if(estErreurReseau(e)) accueilCache.chiffres = {}; else accueilCache.error = e.message;
+accueilCache.loading = false; render();
+});
 }
 
 const prenom = (state.profile?.full_name || '').trim().split(/\s+/)[0] || '';
@@ -860,13 +896,34 @@ dashboardCache.loading = true;
 const n = ++dashboardCache.requete;
 // Filet de sécurité : une requête qui ne répond jamais ne doit pas figer la liste.
 const delai = new Promise((_, rej) => setTimeout(() => rej(new Error('Le chargement prend trop de temps. Vérifiez la connexion puis réessayez.')), 20000));
+const filtre = (liste) => {
+const q = (dashboardCache.search || '').trim().toLowerCase();
+return liste.filter(e => (!dashboardCache.typeId || e.type_id === dashboardCache.typeId)
+&& (dashboardCache.showArchived || !e.archived)
+&& (!q || (e.nom || '').toLowerCase().includes(q) || (e.serial_value || '').toLowerCase().includes(q)));
+};
+const sansFiltre = !dashboardCache.search && !dashboardCache.typeId && !dashboardCache.showArchived;
 Promise.race([listEquipements({ search: dashboardCache.search, typeId: dashboardCache.typeId, showArchived: dashboardCache.showArchived }), delai])
-.then(items => {
+.then(async items => {
 if(n !== dashboardCache.requete) return;
-dashboardCache.items = items; dashboardCache.error = '';
+if(sansFiltre && !isSuperAdmin()) sauverInstantane({ equipements: items, equipementsLe: new Date().toISOString() });
+const enAttente = filtre(await offlineEquipCommeLignes()).filter(e => !items.some(x => x.id === e.id));
+dashboardCache.items = [...enAttente, ...items]; dashboardCache.error = ''; dashboardCache.horsLigneLe = null;
 dashboardCache.sel = (dashboardCache.sel || []).filter(id => items.some(e => e.id === id));
 })
-.catch(e => { if(n === dashboardCache.requete) dashboardCache.error = e.message; })
+.catch(async e => {
+if(n !== dashboardCache.requete) return;
+const inst = lireInstantane();
+if(estErreurReseau(e) && (inst.equipements || navigator.onLine === false)){
+// Sans réseau : la dernière liste connue + ce qui attend d'être envoyé.
+const enAttente = filtre(await offlineEquipCommeLignes());
+dashboardCache.items = [...enAttente, ...filtre(inst.equipements || []).filter(x => !enAttente.some(y => y.id === x.id))];
+dashboardCache.horsLigneLe = inst.equipementsLe || '';
+dashboardCache.error = '';
+return;
+}
+dashboardCache.error = e.message;
+})
 .finally(() => {
 dashboardCache.loading = false;
 // Un filtre a changé pendant le chargement : on relance avec les bons critères.
@@ -892,7 +949,7 @@ list = (dashboardCache.search || dashboardCache.typeId)
 } else {
 const selection = peutSupprimer();
 const sel = dashboardCache.sel;
-const tousCoches = dashboardCache.items.every(e => sel.includes(e.id));
+const tousCoches = dashboardCache.items.filter(e => !e.en_attente).every(e => sel.includes(e.id));
 list = `<div class="card liste-select ${dashboardCache.loading ? 'rafraichit' : ''}">`
 + (selection ? `<label class="tout-selectionner">
 <input type="checkbox" data-action="sel-equip-tous" ${tousCoches ? 'checked' : ''}>
@@ -901,16 +958,17 @@ list = `<div class="card liste-select ${dashboardCache.loading ? 'rafraichit' : 
 + dashboardCache.items.map(eq => {
 const t = state.types.find(t=>t.id===eq.type_id);
 const coche = sel.includes(eq.id);
+const attente = !!eq.en_attente;
 return `
-<div class="ligne-select cliquable ${coche ? 'cochee' : ''}">
-${selection ? `<input type="checkbox" class="case-sel" data-action="sel-equip" data-id="${eq.id}" ${coche ? 'checked' : ''}>` : ''}
+<div class="ligne-select cliquable ${coche ? 'cochee' : ''} ${attente ? 'en-attente' : ''}">
+${selection ? (attente ? `<span class="case-sel"></span>` : `<input type="checkbox" class="case-sel" data-action="sel-equip" data-id="${eq.id}" ${coche ? 'checked' : ''}>`) : ''}
 <div class="thumb">${esc(initials(eq.nom))}</div>
 <div class="ligne-corps" data-action="go" data-path="/equip/${eq.id}">
-<div class="ligne-titre">${esc(eq.nom)} ${eq.archived?'<span class="badge badge-warn">archivé</span>':''}</div>
+<div class="ligne-titre">${esc(eq.nom)} ${eq.archived?'<span class="badge badge-warn">archivé</span>':''}${attente ? `<span class="badge badge-attente">⏳ en attente d'envoi</span>` : ''}</div>
 <div class="small muted">${esc(t?.nom || 'Type inconnu')}${eq.serial_value ? ' · N/S ' + esc(eq.serial_value) : ''}</div>
 </div>
 <div class="small muted ligne-date">${fmtDate(eq.created_at)}</div>
-${isAdmin() ? `<button class="icon-btn btn-poubelle" data-action="suppr-equip-un" data-id="${eq.id}" title="Supprimer définitivement">${iconeNav('trash', 17)}</button>` : ''}
+${isAdmin() && !attente ? `<button class="icon-btn btn-poubelle" data-action="suppr-equip-un" data-id="${eq.id}" title="Supprimer définitivement">${iconeNav('trash', 17)}</button>` : ''}
 </div>`;
 }).join('') + `</div>`;
 }
@@ -946,6 +1004,7 @@ Voir les archivés
 </div>
 </div>
 
+${dashboardCache.horsLigneLe !== null && dashboardCache.horsLigneLe !== undefined ? `<div class="alert alert-info bandeau-hl">${iconeNav('clock',16)} <span>Pas de réseau : liste ${dashboardCache.horsLigneLe ? 'du ' + fmtDateTime(dashboardCache.horsLigneLe) : 'des équipements créés sur ce téléphone'}. Vous pouvez créer un équipement et saisir des interventions : tout part dès le retour du réseau.</span></div>` : ''}
 ${barre}
 ${list}
 `;
@@ -966,8 +1025,8 @@ toast(ids.length > 1 ? ids.length + ' équipements restaurés' : 'Équipement re
 
 function refreshDashboard(){
 dashboardCache.error = '';
-accueilCache.chiffres = null; // les compteurs d'accueil se recalculent
-fondateurCache.donnees = null;
+accueilCache.chiffres = null; accueilCache.error = ''; // les compteurs d'accueil se recalculent
+fondateurCache.donnees = null; fondateurCache.error = '';
 if(dashboardCache.items === null){ render(); return; }
 if(dashboardCache.loading) dashboardCache.perime = true; else chargerEquipements();
 render();
@@ -1342,15 +1401,33 @@ const nom = equipForm.nom.trim();
 if(!nom){ equipForm.error = 'Le nom est obligatoire.'; render(); return; }
 if(!equipForm.typeId){ equipForm.error = "Choisissez un type d'équipement."; render(); return; }
 equipForm.busy = true; render();
-try{
-const { data, error } = await sb.from('equipements').insert({
+// Identifiant et lien QR créés ici : sans réseau, l'équipement existe déjà
+// sur le téléphone (étiquette imprimable, interventions possibles).
+const donnees = {
+id: idAleatoire(),
+public_token: idAleatoire(),
 organization_id: isSuperAdmin() ? equipForm.orgId : state.profile.organization_id,
 type_id: equipForm.typeId,
 nom,
 serial_value: equipForm.serial_value.trim() || null,
-valeurs: equipForm.valeurs,
+valeurs: { ...equipForm.valeurs },
 archived: false
-}).select('id').single();
+};
+const enAttente = async () => {
+await offlineEquipMettreEnAttente(donnees);
+state.enAttenteCount = await offlineCompterEnAttente();
+equipForm = { typeId:'', orgId:'', nom:'', serial_value:'', valeurs:{}, busy:false, error:'' };
+reglages.parcs = {};
+if(dashboardCache.items) dashboardCache.items = [...(await offlineEquipCommeLignes()).filter(e => e.id === donnees.id), ...dashboardCache.items];
+toast("Pas de réseau : équipement enregistré sur le téléphone. Il sera envoyé dès le retour du réseau.");
+nav('/equip/' + donnees.id);
+};
+if(!navigator.onLine){
+try{ await enAttente(); }catch(e){ equipForm.busy = false; equipForm.error = "Enregistrement hors-ligne impossible : " + e.message; render(); }
+return;
+}
+try{
+const { data, error } = await sb.from('equipements').insert(donnees).select('id').single();
 if(error) throw error;
 equipForm = { typeId:'', orgId:'', nom:'', serial_value:'', valeurs:{}, busy:false, error:'' };
 reglages.parcs = {};
@@ -1358,6 +1435,9 @@ refreshDashboard();
 toast('Équipement créé — son QR code est prêt');
 nav('/equip/' + data.id);
 }catch(e){
+if(estErreurReseau(e)){
+try{ await enAttente(); return; }catch(err){}
+}
 equipForm.busy = false; equipForm.error = e.message; render();
 }
 }
@@ -1382,13 +1462,28 @@ showEditForm:false, editBusy:false, editError:'',
 editIvId:null, editIvBusy:false, editIvError:'',
 photosNouvelles:[], photosEdit:[], photosUrls:{}, photoOuverte:null, photosBusy:false,
 brouillon:{}, brouillonEdit:null };
+chargerIvEnAttente();
 Promise.all([getEquipement(id), listInterventions(id)])
-.then(([item, ivs]) => {
+.then(async ([item, ivs]) => {
+if(!item){
+// Pas encore sur le serveur : créé hors-ligne, en attente d'envoi ?
+item = (await offlineEquipCommeLignes()).find(e => e.id === id) || null;
+}
 equipDetail.item = item; equipDetail.interventions = ivs; equipDetail.loading = false; render();
 chargerUrlsPhotos();
-setTimeout(()=>drawQr(lienPublic(item.public_token)), 30);
+if(item) setTimeout(()=>drawQr(lienPublic(item.public_token)), 30);
 })
-.catch(e => { equipDetail.error = e.message; equipDetail.loading = false; render(); });
+.catch(async e => {
+if(estErreurReseau(e)){
+const connu = (await equipementsConnus()).find(x => x.id === id);
+if(connu && equipDetail.id === id){
+equipDetail.item = connu; equipDetail.interventions = []; equipDetail.horsLigne = true;
+equipDetail.loading = false; render();
+return;
+}
+}
+equipDetail.error = e.message; equipDetail.loading = false; render();
+});
 }
 
 if(equipDetail.loading) return squeletteFiche((dashboardCache.items || []).find(e => e.id === id)?.nom);
@@ -1399,6 +1494,7 @@ const eq = equipDetail.item;
 const type = state.types.find(t=>t.id===eq.type_id);
 const champs = type?.champs || [];
 const url = lienPublic(eq.public_token);
+const surServeur = !eq.en_attente && !equipDetail.horsLigne;
 
 const infoRows = champs.map(c => {
 const brut = eq.valeurs?.[c.key];
@@ -1435,7 +1531,7 @@ return `
 <h2>${esc(eq.nom)} ${eq.archived?'<span class="badge badge-warn">archivé</span>':''}</h2>
 <div class="small muted">${isSuperAdmin() && nomClientDe(eq.organization_id) ? `<a href="#/reglages/clients/${eq.organization_id}">${esc(nomClientDe(eq.organization_id))}</a> · ` : ''}${esc(type?.nom || '')}${eq.serial_value ? ' · N/S ' + esc(eq.serial_value) : ''}</div>
 </div>
-<div class="actions">
+<div class="actions" ${surServeur ? '' : 'style="display:none"'}>
 ${!eq.archived ? `<button class="btn btn-sm" data-action="toggle-edit-equip">${equipDetail.showEditForm ? 'Annuler' : 'Modifier'}</button>` : ''}
 ${!eq.archived && peutSupprimer() ? `<button class="btn btn-sm" data-action="archive-equip">Archiver</button>` : ''}
 ${eq.archived && peutSupprimer() ? `<button class="btn btn-sm" data-action="restore-equip">Restaurer</button>` : ''}
@@ -1443,7 +1539,10 @@ ${isAdmin() ? `<button class="btn btn-danger btn-sm" data-action="suppr-equip-un
 </div>
 </div>
 
-${equipDetail.showEditForm && !eq.archived ? renderEditEquipForm(eq, champs) : ''}
+${eq.en_attente ? `<div class="alert alert-info bandeau-hl">${iconeNav('clock',16)} <span><strong>Créé sans réseau, en attente d'envoi.</strong> Il sera enregistré automatiquement dès le retour du réseau. Son QR code est déjà définitif : vous pouvez imprimer l'étiquette et saisir des interventions.${eq.derniere_erreur && navigator.onLine ? `<br><em>Dernier essai refusé : ${esc(eq.derniere_erreur)}</em>` : ''}</span></div>
+<div class="row" style="margin:-4px 0 14px;"><button class="btn btn-sm btn-lien" data-action="abandonner-equip-attente" data-id="${eq.id}">Abandonner cet équipement (non envoyé)</button></div>`
+: (equipDetail.horsLigne ? `<div class="alert alert-info bandeau-hl">${iconeNav('clock',16)} <span>Pas de réseau : fiche de la dernière consultation. Vous pouvez saisir une intervention, elle partira au retour du réseau. L'historique complet s'affichera à la reconnexion.</span></div>` : '')}
+${equipDetail.showEditForm && !eq.archived && surServeur ? renderEditEquipForm(eq, champs) : ''}
 ${renderVisionneuse()}
 
 <div class="grid-2" style="align-items:start;">
@@ -1459,7 +1558,7 @@ ${eq.partage_public
 : "Consultation publique fermée : scanner l'étiquette ne montre plus rien."}
 </div>
 
-${peutSupprimer() ? `
+${peutSupprimer() && surServeur ? `
 <div class="row" style="gap:8px;flex-wrap:wrap;justify-content:center;">
 <button class="btn btn-sm" data-action="toggle-partage">
 ${eq.partage_public ? 'Fermer la consultation publique' : 'Rouvrir la consultation publique'}
@@ -1495,6 +1594,13 @@ ${infoRows}
 ${equipDetail.showIvForm ? renderIvForm(null) : ''}
 ${equipDetail.ivNotice ? `<div class="alert alert-info" style="margin-top:10px;">${esc(equipDetail.ivNotice)}</div>` : ''}
 
+${(equipDetail.ivEnAttente || []).length ? `
+<div class="iv-attente-liste">
+${equipDetail.ivEnAttente.map(iv => `<div class="iv-attente">
+<div><strong>${fmtDate(iv.date)} · ${esc(iv.type)}</strong> <span class="badge badge-attente">⏳ en attente d'envoi</span></div>
+<div class="small muted">${esc(iv.technicien)}${iv.description ? ' — ' + esc(iv.description) : ''}</div>
+</div>`).join('')}
+</div>` : ''}
 ${equipDetail.interventions && equipDetail.interventions.length ? `
 <div style="overflow-x:auto;">
 <table class="table-iv">
@@ -1502,7 +1608,7 @@ ${equipDetail.interventions && equipDetail.interventions.length ? `
 <tbody>${ivRows}</tbody>
 </table>
 </div>
-` : `<div class="empty small">Aucune intervention enregistrée.</div>`}
+` : ((equipDetail.ivEnAttente || []).length ? '' : `<div class="empty small">${equipDetail.horsLigne ? 'Historique indisponible sans réseau.' : 'Aucune intervention enregistrée.'}</div>`)}
 </div>
 
 `;
@@ -1669,14 +1775,15 @@ const donneesIv = { equipement_id: equipDetail.id, date, type, technicien, descr
 const blobs = equipDetail.photosNouvelles.map(p => p.blob);
 const sansPhotos = blobs.length ? ` Les photos (${blobs.length}) n'ont pas pu partir : ajoutez-les avec « Modifier » une fois la connexion revenue.` : '';
 
-// Pas de réseau connu : on met en attente directement, inutile de tenter.
-if(!navigator.onLine){
+// Pas de réseau connu (ou équipement pas encore envoyé) : file d'attente.
+if(!navigator.onLine || equipDetail.item?.en_attente || equipDetail.horsLigne){
 await offlineMettreEnAttente(donneesIv);
 state.enAttenteCount = await offlineCompterEnAttente();
 equipDetail.showIvForm = false;
 equipDetail.ivBusy = false;
 equipDetail.ivNotice = "Pas de réseau : intervention enregistrée hors-ligne, elle sera envoyée automatiquement dès la reconnexion." + sansPhotos;
 viderPhotos('nouv'); equipDetail.brouillon = {};
+await chargerIvEnAttente();
 render();
 return;
 }
@@ -1715,6 +1822,7 @@ equipDetail.showIvForm = false;
 equipDetail.ivBusy = false;
 equipDetail.ivNotice = "Réseau indisponible : intervention enregistrée hors-ligne, elle sera envoyée automatiquement dès la reconnexion." + sansPhotos;
 viderPhotos('nouv'); equipDetail.brouillon = {};
+await chargerIvEnAttente();
 render();
 return;
 }
@@ -1780,6 +1888,51 @@ toast('Intervention supprimée');
 render();
 }catch(e){ toast('Erreur : ' + e.message, 'erreur'); }
 }
+
+/* Interventions saisies sans réseau pour la fiche ouverte (affichées en tête). */
+async function chargerIvEnAttente(){
+const id = equipDetail.id;
+try{
+const l = await offlineListerEnAttente(id);
+if(equipDetail.id !== id) return;
+equipDetail.ivEnAttente = l.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+render();
+}catch(e){}
+}
+
+async function abandonnerEquipEnAttente(id){
+if(!await confirmer("Abandonner cet équipement ?\n\nIl n'a jamais été envoyé : il disparaît de ce téléphone, ainsi que les interventions saisies dessus sans réseau.", { danger:true, ok:'Abandonner' })) return;
+try{
+await offlineEquipSupprimer(id);
+for(const iv of await offlineListerEnAttente(id)) await offlineSupprimer(iv.id);
+state.enAttenteCount = await offlineCompterEnAttente();
+if(dashboardCache.items) dashboardCache.items = dashboardCache.items.filter(e => e.id !== id);
+equipDetail.id = null;
+toast('Équipement abandonné');
+nav('/equipements');
+}catch(e){ toast('Erreur : ' + e.message, 'erreur'); }
+}
+
+/* Retour du réseau : les chargements en erreur repartent, on recharge le
+vrai profil si on avait démarré hors-ligne, puis la file s'envoie (offline.js). */
+window.addEventListener('online', async () => {
+if(!state.session) return;
+reglages.clientsError = ''; reglages.membresError = ''; reglages.supportError = ''; reglages.journalError = '';
+Object.keys(reglages.parcs || {}).forEach(k => { if(reglages.parcs[k]?.error) delete reglages.parcs[k]; });
+fondateurCache.error = ''; accueilCache.error = '';
+if(accueilCache.chiffres && !Object.keys(accueilCache.chiffres).length) accueilCache.chiffres = null;
+if(dashboardCache.error || dashboardCache.horsLigneLe !== null && dashboardCache.horsLigneLe !== undefined){ dashboardCache.error = ''; refreshDashboard(); }
+if(equipDetail.horsLigne){ equipDetail.id = null; }
+render();
+if(!state.horsLigne) return;
+try{
+await loadProfileAndOrg(); await chargerStatutSuperAdmin(); await loadTypes(true);
+state.horsLigne = false;
+sauverInstantane({ profile: state.profile, orgName: state.orgName, superAdmin: state.superAdmin, types: state.types });
+dashboardCache.horsLigneLe = null;
+refreshDashboard();
+}catch(e){}
+});
 
 /* ---------------------------------------------------------------------- */
 /* Photos des interventions (rapport, pièce remplacée, dégât…)             */
@@ -2041,7 +2194,7 @@ const action = t.dataset.action;
 
 if(action === 'go'){ nav(t.dataset.path); closeMenus(); }
 else if(action === 'toggle-menu'){ e.stopPropagation(); document.getElementById('user-dropdown')?.classList.toggle('open'); }
-else if(action === 'logout'){ sb.auth.signOut(); }
+else if(action === 'logout'){ effacerInstantanes(); sb.auth.signOut(); }
 else if(action === 'dash-recharger'){ dashboardCache.error = ''; dashboardCache.items = null; render(); chargerEquipements(); }
 else if(action === 'auth-mode'){ state.authMode = t.dataset.mode; state.authError=''; state.authNotice=''; render(); }
 else if(action === 'toggle-type-form'){ typeForm.open ? (typeForm = { open:false, id:null, nom:'', champs:[], busy:false, error:'' }, render()) : ouvrirTypeForm(null); }
@@ -2069,6 +2222,7 @@ else if(action === 'photo-ouvrir'){ equipDetail.photoOuverte = { ivId:t.dataset.
 else if(action === 'photo-fermer'){ if(t.tagName === 'BUTTON' || e.target === t){ equipDetail.photoOuverte = null; render(); } }
 else if(action === 'photo-suivante'){ changerPhoto(+t.dataset.sens); }
 else if(action === 'photo-supprimer'){ supprimerPhotoOuverte(); }
+else if(action === 'abandonner-equip-attente'){ abandonnerEquipEnAttente(t.dataset.id); }
 else if(action === 'archive-equip'){ ouvrirModalArchiver([equipDetail.id]); }
 else if(action === 'suppr-equip-un'){ ouvrirModalSupprimerEquip([t.dataset.id]); }
 else if(action === 'equip-archiver-sel'){ ouvrirModalArchiver((dashboardCache.items||[]).filter(e => !e.archived && dashboardCache.sel.includes(e.id)).map(e => e.id)); }
@@ -2176,7 +2330,7 @@ reglages.invite.types = t.checked
 reglages.invite.error = ''; render();
 }
 else if(action === 'sel-equip'){ basculer(dashboardCache, 'sel', t.dataset.id, t.checked); render(); }
-else if(action === 'sel-equip-tous'){ dashboardCache.sel = t.checked ? (dashboardCache.items||[]).map(e => e.id) : []; render(); }
+else if(action === 'sel-equip-tous'){ dashboardCache.sel = t.checked ? (dashboardCache.items||[]).filter(e => !e.en_attente).map(e => e.id) : []; render(); }
 else if(action === 'sel-client'){ basculer(reglages, 'selClients', t.dataset.id, t.checked); render(); }
 else if(action === 'sel-clients-tous'){ reglages.selClients = t.checked ? (t.dataset.ids || '').split(',').filter(Boolean) : []; render(); }
 else if(action === 'recherche-client'){ reglages.rechercheClient = t.value; reglages.selClients = []; render(); }
@@ -2283,6 +2437,8 @@ try{
 await loadProfileAndOrg();
 await chargerStatutSuperAdmin();
 await loadTypes(true);
+state.horsLigne = false;
+sauverInstantane({ profile: state.profile, orgName: state.orgName, superAdmin: state.superAdmin, types: state.types });
 retourApresConnexion();
 // Préchargement discret : la liste des équipements est prête avant qu'on l'ouvre.
 if(dashboardCache.items === null) setTimeout(() => { if(state.session && dashboardCache.items === null) chargerEquipements(); }, 300);
@@ -2292,6 +2448,17 @@ if(navigator.onLine) synchroniserInterventionsEnAttente();
 }catch(e){ console.error('[hors-ligne]', e); }
 }catch(e){
 console.error(e);
+const inst = lireInstantane();
+if(estErreurReseau(e) && inst.profile && inst.profile.id === session.user.id){
+// Pas de réseau : on démarre sur le dernier état connu.
+state.profile = inst.profile; state.orgName = inst.orgName || ''; state.superAdmin = !!inst.superAdmin;
+state.types = inst.types || []; state.typesLoaded = true; state.horsLigne = true;
+retourApresConnexion();
+try{ state.enAttenteCount = await offlineCompterEnAttente(); }catch(err){}
+state.loading = false;
+render();
+return;
+}
 state.accessError = (e && e.message) ? e.message : 'Erreur de chargement du profil.';
 }
 } else {
