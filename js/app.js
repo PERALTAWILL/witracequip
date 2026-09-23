@@ -1369,7 +1369,9 @@ equipForm.busy = false; equipForm.error = e.message; render();
 let equipDetail = { id:null, item:null, interventions:null, loading:false, error:'',
 showIvForm:false, ivBusy:false, ivError:'', ivNotice:'',
 showEditForm:false, editBusy:false, editError:'',
-editIvId:null, editIvBusy:false, editIvError:'' };
+editIvId:null, editIvBusy:false, editIvError:'',
+photosNouvelles:[], photosEdit:[], photosUrls:{}, photoOuverte:null, photosBusy:false,
+brouillon:{}, brouillonEdit:null };
 
 function viewEquipDetail(id){
 if(isSuperAdmin()) chargerClients(false); // pour afficher le nom du client
@@ -1377,10 +1379,13 @@ if(equipDetail.id !== id){
 equipDetail = { id, item:null, interventions:null, loading:true, error:'',
 showIvForm:false, ivBusy:false, ivError:'', ivNotice:'',
 showEditForm:false, editBusy:false, editError:'',
-editIvId:null, editIvBusy:false, editIvError:'' };
+editIvId:null, editIvBusy:false, editIvError:'',
+photosNouvelles:[], photosEdit:[], photosUrls:{}, photoOuverte:null, photosBusy:false,
+brouillon:{}, brouillonEdit:null };
 Promise.all([getEquipement(id), listInterventions(id)])
 .then(([item, ivs]) => {
 equipDetail.item = item; equipDetail.interventions = ivs; equipDetail.loading = false; render();
+chargerUrlsPhotos();
 setTimeout(()=>drawQr(lienPublic(item.public_token)), 30);
 })
 .catch(e => { equipDetail.error = e.message; equipDetail.loading = false; render(); });
@@ -1409,6 +1414,7 @@ const ivRows = (equipDetail.interventions||[]).map(iv => equipDetail.editIvId ==
 <td data-l="Intervenant">${esc(iv.technicien)}</td>
 <td class="muted" data-l="Description">${esc(iv.description||'—')}
 ${iv.modifie_le ? `<div class="iv-modif">Modifiée le ${fmtDateTime(iv.modifie_le)}${iv.modifie_par ? ' par ' + esc(iv.modifie_par) : ''}</div>` : ''}
+${vignettesIv(iv)}
 </td>
 <td class="iv-actions">
 <button class="btn btn-sm" data-action="iv-modifier" data-id="${iv.id}">Modifier</button>
@@ -1438,6 +1444,7 @@ ${isAdmin() ? `<button class="btn btn-danger btn-sm" data-action="suppr-equip-un
 </div>
 
 ${equipDetail.showEditForm && !eq.archived ? renderEditEquipForm(eq, champs) : ''}
+${renderVisionneuse()}
 
 <div class="grid-2" style="align-items:start;">
 <div class="card">
@@ -1596,6 +1603,9 @@ const d = new Date();
 const today = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 const modif = !!iv;
 const err = modif ? equipDetail.editIvError : equipDetail.ivError;
+// Brouillon : ce qui a été tapé survit à un réaffichage (ajout d'une photo…).
+const b = modif ? (equipDetail.brouillonEdit && equipDetail.brouillonEdit.id === iv.id ? equipDetail.brouillonEdit : {}) : (equipDetail.brouillon || {});
+const v = (cle, defaut) => b[cle] !== undefined ? b[cle] : defaut;
 return `
 <form class="card" style="background:var(--surface-2);margin:12px 0;" data-action="${modif ? 'submit-iv-edit' : 'submit-iv'}" ${modif ? `data-id="${iv.id}"` : ''}>
 ${modif ? `<div style="font-weight:650;margin-bottom:8px;">Modifier l'intervention</div>` : ''}
@@ -1603,29 +1613,30 @@ ${err ? `<div class="alert alert-error">${esc(err)}</div>` : ''}
 <div class="grid-2">
 <div class="field">
 <label>Date <span class="oblig">obligatoire</span></label>
-<input type="date" name="date" value="${modif ? esc(iv.date) : today}" required>
+<input type="date" name="date" value="${esc(v('date', modif ? iv.date : today))}" required>
 </div>
 <div class="field">
 <label>Type d'intervention <span class="oblig">obligatoire</span></label>
-<input type="text" name="type" value="${modif ? esc(iv.type) : ''}" placeholder="Ex : Entretien, Réparation, Contrôle…" required>
+<input type="text" name="type" value="${esc(v('type', modif ? iv.type : ''))}" placeholder="Ex : Entretien, Réparation, Contrôle…" required>
 </div>
 </div>
 <div class="field">
 <label>Intervenant <span class="oblig">obligatoire</span></label>
-<input type="text" name="technicien" value="${esc(modif ? iv.technicien : (state.profile?.full_name||''))}" required
+<input type="text" name="technicien" value="${esc(v('technicien', modif ? iv.technicien : (state.profile?.full_name||'')))}" required
 placeholder="Nom de la personne intervenue">
 <div class="hint">Nom de la personne qui a réalisé l'intervention. C'est lui qui figurera
 sur le carnet en cas de contrôle — pré-rempli avec le vôtre, modifiable si vous
 saisissez pour un collègue.</div>
 </div>
-<div class="field"><label>Description</label><textarea name="description" placeholder="Détails de l'intervention…">${modif ? esc(iv.description || '') : ''}</textarea></div>
+<div class="field"><label>Description</label><textarea name="description" placeholder="Détails de l'intervention…">${esc(v('description', modif ? (iv.description || '') : ''))}</textarea></div>
+${renderChampPhotos(iv)}
 ${modif ? `
 <div class="hint" style="margin-bottom:10px;">La modification est horodatée à votre nom et l'ancienne version est conservée dans le journal.</div>
 <div class="row wrap">
-<button class="btn btn-primary" type="submit" ${equipDetail.editIvBusy?'disabled':''}>${equipDetail.editIvBusy?'Enregistrement…':'Enregistrer les modifications'}</button>
+<button class="btn btn-primary" type="submit" ${equipDetail.editIvBusy || equipDetail.photosBusy?'disabled':''}>${equipDetail.editIvBusy?'Enregistrement…':'Enregistrer les modifications'}</button>
 <button class="btn" type="button" data-action="iv-annuler-modif">Annuler</button>
 </div>` : `
-<button class="btn btn-primary" type="submit" ${equipDetail.ivBusy?'disabled':''}>${equipDetail.ivBusy?'Enregistrement…':"Enregistrer l'intervention"}</button>`}
+<button class="btn btn-primary" type="submit" ${equipDetail.ivBusy || equipDetail.photosBusy?'disabled':''}>${equipDetail.ivBusy?(equipDetail.photosNouvelles.length ? 'Envoi des photos…' : 'Enregistrement…'):"Enregistrer l'intervention"}</button>`}
 </form>
 `;
 }
@@ -1655,6 +1666,8 @@ render(); return;
 equipDetail.ivError = ''; equipDetail.ivBusy = true; render();
 
 const donneesIv = { equipement_id: equipDetail.id, date, type, technicien, description: description || null };
+const blobs = equipDetail.photosNouvelles.map(p => p.blob);
+const sansPhotos = blobs.length ? ` Les photos (${blobs.length}) n'ont pas pu partir : ajoutez-les avec « Modifier » une fois la connexion revenue.` : '';
 
 // Pas de réseau connu : on met en attente directement, inutile de tenter.
 if(!navigator.onLine){
@@ -1662,18 +1675,32 @@ await offlineMettreEnAttente(donneesIv);
 state.enAttenteCount = await offlineCompterEnAttente();
 equipDetail.showIvForm = false;
 equipDetail.ivBusy = false;
-equipDetail.ivNotice = "Pas de réseau : intervention enregistrée hors-ligne, elle sera envoyée automatiquement dès la reconnexion.";
+equipDetail.ivNotice = "Pas de réseau : intervention enregistrée hors-ligne, elle sera envoyée automatiquement dès la reconnexion." + sansPhotos;
+viderPhotos('nouv'); equipDetail.brouillon = {};
 render();
 return;
 }
 
 try{
-const { error } = await sb.from('interventions').insert(donneesIv);
-if(error) throw error;
-equipDetail.showIvForm = false;
-equipDetail.interventions = await listInterventions(equipDetail.id);
+// Photos d'abord (l'identifiant de l'intervention est créé ici), puis la fiche.
+const ivId = idAleatoire();
+let photos = [];
+if(blobs.length){
+try{ photos = await televerserPhotos(equipDetail.item.organization_id, equipDetail.id, ivId, blobs); }
+catch(e){
+if(/failed to fetch|networkerror|load failed|network request failed/i.test(e.message || '')) throw e;
 equipDetail.ivBusy = false;
-toast('Intervention enregistrée');
+equipDetail.ivError = "Les photos n'ont pas pu être envoyées (" + (e.message || 'erreur') + "). Retirez-les ou réessayez.";
+render(); return;
+}
+}
+const { error } = await sb.from('interventions').insert({ id: ivId, ...donneesIv, photos });
+if(error){ if(photos.length) supprimerFichiersPhotos(photos).catch(()=>{}); throw error; }
+equipDetail.showIvForm = false;
+viderPhotos('nouv'); equipDetail.brouillon = {};
+await rechargerInterventions();
+equipDetail.ivBusy = false;
+toast(photos.length ? `Intervention enregistrée avec ${photos.length} photo${photos.length > 1 ? 's' : ''}` : 'Intervention enregistrée');
 render();
 }catch(e){
 // Le réseau se coupe parfois entre le test navigator.onLine et l'envoi
@@ -1686,7 +1713,8 @@ await offlineMettreEnAttente(donneesIv);
 state.enAttenteCount = await offlineCompterEnAttente();
 equipDetail.showIvForm = false;
 equipDetail.ivBusy = false;
-equipDetail.ivNotice = "Réseau indisponible : intervention enregistrée hors-ligne, elle sera envoyée automatiquement dès la reconnexion.";
+equipDetail.ivNotice = "Réseau indisponible : intervention enregistrée hors-ligne, elle sera envoyée automatiquement dès la reconnexion." + sansPhotos;
+viderPhotos('nouv'); equipDetail.brouillon = {};
 render();
 return;
 }
@@ -1711,15 +1739,25 @@ if(!technicien){ equipDetail.editIvError = "Le nom de l'intervenant est obligato
 if(!navigator.onLine){ equipDetail.editIvError = "Pas de réseau : la modification d'une intervention nécessite une connexion."; render(); return; }
 
 equipDetail.editIvError = ''; equipDetail.editIvBusy = true; render();
+let nouvelles = [];
 try{
-const { error } = await sb.from('interventions')
-.update({ date, type, technicien, description: description || null }).eq('id', id);
+const iv = (equipDetail.interventions || []).find(x => x.id === id) || {};
+const maj = { date, type, technicien, description: description || null };
+const blobs = equipDetail.photosEdit.map(p => p.blob);
+if(blobs.length){
+nouvelles = await televerserPhotos(equipDetail.item.organization_id, equipDetail.id, id, blobs);
+maj.photos = [...(iv.photos || []), ...nouvelles];
+}
+const { error } = await sb.from('interventions').update(maj).eq('id', id);
 if(error) throw error;
-equipDetail.interventions = await listInterventions(equipDetail.id);
+nouvelles = [];
+viderPhotos('edit'); equipDetail.brouillonEdit = null;
+await rechargerInterventions();
 equipDetail.editIvId = null;
 reglages.journal = null;
 toast('Intervention modifiée');
 }catch(e){
+if(nouvelles.length) supprimerFichiersPhotos(nouvelles).catch(()=>{});
 equipDetail.editIvError = e.message;
 }finally{
 equipDetail.editIvBusy = false; render();
@@ -1729,15 +1767,192 @@ equipDetail.editIvBusy = false; render();
 async function supprimerIntervention(id){
 const iv = (equipDetail.interventions || []).find(x => x.id === id);
 if(!iv) return;
-if(!await confirmer(`Supprimer l'intervention « ${iv.type} » du ${fmtDate(iv.date)} ?\n\nElle disparaît du carnet de cet équipement. Une copie est conservée dans le journal.`)) return;
+if(!await confirmer(`Supprimer l'intervention « ${iv.type} » du ${fmtDate(iv.date)} ?\n\nElle disparaît du carnet de cet équipement. Une copie est conservée dans le journal.${(iv.photos||[]).length ? ' Ses photos sont supprimées.' : ''}`)) return;
 try{
 const { data, error } = await sb.from('interventions').delete().eq('id', id).select('id');
 if(error) throw error;
 if(!data || !data.length) throw new Error("Suppression refusée : seul un administrateur peut supprimer une intervention.");
-equipDetail.interventions = await listInterventions(equipDetail.id);
+if((iv.photos || []).length) supprimerFichiersPhotos(iv.photos).catch(()=>{});
+await rechargerInterventions();
 reglages.journal = null;
 accueilCache.chiffres = null;
 toast('Intervention supprimée');
+render();
+}catch(e){ toast('Erreur : ' + e.message, 'erreur'); }
+}
+
+/* ---------------------------------------------------------------------- */
+/* Photos des interventions (rapport, pièce remplacée, dégât…)             */
+/* ---------------------------------------------------------------------- */
+const MAX_PHOTOS_IV = 6;
+const MAX_OCTETS_PHOTO = 5 * 1024 * 1024;
+
+async function rechargerInterventions(){
+equipDetail.interventions = await listInterventions(equipDetail.id);
+chargerUrlsPhotos();
+}
+
+/* Liens temporaires (1 h) vers les photos : le stockage est privé. */
+async function chargerUrlsPhotos(){
+const id = equipDetail.id;
+const manquants = [];
+(equipDetail.interventions || []).forEach(iv => (iv.photos || []).forEach(p => { if(!equipDetail.photosUrls[p]) manquants.push(p); }));
+if(!manquants.length) return;
+try{
+const urls = await urlsPhotos(manquants);
+if(equipDetail.id !== id) return;
+Object.assign(equipDetail.photosUrls, urls);
+render();
+}catch(e){ /* vignettes laissées en attente */ }
+}
+
+function viderPhotos(cible){
+const cle = cible === 'edit' ? 'photosEdit' : 'photosNouvelles';
+(equipDetail[cle] || []).forEach(p => URL.revokeObjectURL(p.url));
+equipDetail[cle] = [];
+}
+
+function memoriserBrouillon(form){
+if(!form) return;
+const fd = new FormData(form);
+const b = { date: fd.get('date'), type: fd.get('type'), technicien: fd.get('technicien'), description: fd.get('description') };
+if(form.dataset.action === 'submit-iv-edit') equipDetail.brouillonEdit = { id: form.dataset.id, ...b };
+else equipDetail.brouillon = b;
+}
+
+function chargerImage(fichier){
+return new Promise((ok, ko) => {
+const url = URL.createObjectURL(fichier);
+const img = new Image();
+img.onload = () => { URL.revokeObjectURL(url); ok(img); };
+img.onerror = () => { URL.revokeObjectURL(url); ko(new Error('Image illisible')); };
+img.src = url;
+});
+}
+
+/* Réduit la photo (1600 px max, JPEG) : une photo de téléphone passe de
+4–8 Mo à ~300 Ko, l'envoi reste rapide même en 4G faible. */
+async function compresserPhoto(fichier){
+try{
+const img = await chargerImage(fichier);
+const max = 1600;
+const r = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight));
+const c = document.createElement('canvas');
+c.width = Math.round(img.naturalWidth * r); c.height = Math.round(img.naturalHeight * r);
+c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+const blob = await new Promise(ok => c.toBlob(ok, 'image/jpeg', 0.82));
+if(blob && blob.size) return blob;
+throw new Error('compression');
+}catch(e){
+if(fichier.size <= MAX_OCTETS_PHOTO && /^image\/(jpeg|png|webp|heic|heif)$/.test(fichier.type)) return fichier;
+throw new Error(`« ${fichier.name} » n'est pas une image lisible ou dépasse 5 Mo.`);
+}
+}
+
+async function ajouterPhotos(input){
+const cible = input.dataset.cible === 'edit' ? 'edit' : 'nouv';
+const form = input.closest('form');
+memoriserBrouillon(form);
+const liste = cible === 'edit' ? equipDetail.photosEdit : equipDetail.photosNouvelles;
+const iv = cible === 'edit' ? (equipDetail.interventions || []).find(x => x.id === equipDetail.editIvId) : null;
+const deja = (iv?.photos || []).length + liste.length;
+let fichiers = [...(input.files || [])];
+input.value = '';
+if(!fichiers.length) return;
+const place = MAX_PHOTOS_IV - deja;
+if(place <= 0){ toast(`${MAX_PHOTOS_IV} photos maximum par intervention`, 'erreur'); return; }
+if(fichiers.length > place){ toast(`${MAX_PHOTOS_IV} photos maximum : seules les ${place} premières sont gardées`, 'erreur'); fichiers = fichiers.slice(0, place); }
+equipDetail.photosBusy = true; render();
+for(const f of fichiers){
+try{
+const blob = await compresserPhoto(f);
+liste.push({ blob, url: URL.createObjectURL(blob) });
+}catch(e){ toast(e.message, 'erreur'); }
+}
+equipDetail.photosBusy = false; render();
+}
+
+function renderChampPhotos(iv){
+const cible = iv ? 'edit' : 'nouv';
+const liste = iv ? equipDetail.photosEdit : equipDetail.photosNouvelles;
+const existantes = iv ? (iv.photos || []) : [];
+const total = existantes.length + liste.length;
+return `
+<div class="field">
+<label>Photos (facultatif)</label>
+${total ? `<div class="iv-apercus">
+${existantes.map(p => `<span class="iv-apercu">${equipDetail.photosUrls[p] ? `<img src="${equipDetail.photosUrls[p]}" alt="">` : ''}</span>`).join('')}
+${liste.map((p, i) => `<span class="iv-apercu nouvelle"><img src="${p.url}" alt="Photo ${i+1}">
+<button type="button" class="iv-apercu-x" data-action="iv-photo-retirer" data-cible="${cible}" data-i="${i}" title="Retirer" aria-label="Retirer la photo">×</button></span>`).join('')}
+</div>` : ''}
+${total < MAX_PHOTOS_IV ? `<label class="btn btn-sm iv-photo-btn ${equipDetail.photosBusy ? 'disabled' : ''}">
+<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+${equipDetail.photosBusy ? 'Préparation…' : (total ? 'Ajouter une autre photo' : 'Joindre une photo')}
+<input type="file" accept="image/*" multiple data-action="iv-photos" data-cible="${cible}" hidden>
+</label>` : ''}
+<div class="hint">Rapport d'intervention, pièce remplacée, dégât constaté… ${MAX_PHOTOS_IV} photos maximum. Elles servent de preuve et restent attachées à l'intervention.</div>
+</div>`;
+}
+
+function vignettesIv(iv){
+const ph = iv.photos || [];
+if(!ph.length) return '';
+return `<div class="iv-vignettes">${ph.map(p => {
+const u = equipDetail.photosUrls[p];
+return u ? `<button type="button" class="iv-vignette" data-action="photo-ouvrir" data-id="${iv.id}" data-path="${esc(p)}" title="Voir la photo"><img src="${u}" alt="Photo de l'intervention" loading="lazy"></button>`
+: `<span class="iv-vignette attente"></span>`;
+}).join('')}</div>`;
+}
+
+function renderVisionneuse(){
+const o = equipDetail.photoOuverte;
+if(!o) return '';
+const iv = (equipDetail.interventions || []).find(x => x.id === o.ivId);
+const ph = iv?.photos || [];
+const i = ph.indexOf(o.path);
+if(i < 0) return '';
+const u = equipDetail.photosUrls[o.path];
+return `
+<div class="visionneuse" data-action="photo-fermer" role="dialog" aria-label="Photo de l'intervention">
+<div class="visionneuse-haut">
+<div class="small">${esc(iv.type)} · ${fmtDate(iv.date)}${ph.length > 1 ? ` · ${i+1}/${ph.length}` : ''}</div>
+<button type="button" class="visionneuse-btn" data-action="photo-fermer" aria-label="Fermer">×</button>
+</div>
+<div class="visionneuse-image" data-action="photo-fermer">
+${ph.length > 1 ? `<button type="button" class="visionneuse-nav g" data-action="photo-suivante" data-sens="-1" aria-label="Précédente">‹</button>` : ''}
+${u ? `<img src="${u}" alt="Photo ${i+1}">` : ''}
+${ph.length > 1 ? `<button type="button" class="visionneuse-nav d" data-action="photo-suivante" data-sens="1" aria-label="Suivante">›</button>` : ''}
+</div>
+<div class="visionneuse-bas">
+${u ? `<a class="btn btn-sm" href="${u}" target="_blank" rel="noopener">Ouvrir en grand</a>` : ''}
+${isAdmin() ? `<button type="button" class="btn btn-sm btn-danger" data-action="photo-supprimer">Supprimer la photo</button>` : ''}
+</div>
+</div>`;
+}
+
+function changerPhoto(sens){
+const o = equipDetail.photoOuverte;
+const iv = (equipDetail.interventions || []).find(x => x.id === o?.ivId);
+const ph = iv?.photos || [];
+if(ph.length < 2) return;
+const i = (ph.indexOf(o.path) + sens + ph.length) % ph.length;
+equipDetail.photoOuverte = { ivId: iv.id, path: ph[i] };
+render();
+}
+
+async function supprimerPhotoOuverte(){
+const o = equipDetail.photoOuverte;
+const iv = (equipDetail.interventions || []).find(x => x.id === o?.ivId);
+if(!iv) return;
+if(!await confirmer("Supprimer cette photo ?\n\nElle ne pourra plus servir de preuve pour cette intervention.", { danger:true, ok:'Supprimer' })) return;
+try{
+const reste = (iv.photos || []).filter(p => p !== o.path);
+const { error } = await sb.from('interventions').update({ photos: reste }).eq('id', iv.id);
+if(error) throw error;
+await supprimerFichiersPhotos([o.path]).catch(() => {});
+iv.photos = reste;
+equipDetail.photoOuverte = null;
+toast('Photo supprimée');
 render();
 }catch(e){ toast('Erreur : ' + e.message, 'erreur'); }
 }
@@ -1838,7 +2053,22 @@ else if(action === 'champ-add'){ typeForm.champs.push({label:'', type:'text'}); 
 else if(action === 'champ-remove'){ typeForm.champs.splice(+t.dataset.i, 1); render(); }
 else if(action === 'save-type'){ saveType(); }
 else if(action === 'save-equip'){ saveEquip(); }
-else if(action === 'toggle-iv-form'){ equipDetail.showIvForm = !equipDetail.showIvForm; equipDetail.editIvId = null; equipDetail.ivNotice = ''; render(); }
+else if(action === 'toggle-iv-form'){
+equipDetail.showIvForm = !equipDetail.showIvForm; equipDetail.editIvId = null; equipDetail.ivNotice = '';
+if(!equipDetail.showIvForm){ viderPhotos('nouv'); equipDetail.brouillon = {}; equipDetail.ivError = ''; }
+render();
+}
+else if(action === 'iv-photo-retirer'){
+memoriserBrouillon(t.closest('form'));
+const liste = t.dataset.cible === 'edit' ? equipDetail.photosEdit : equipDetail.photosNouvelles;
+const [p] = liste.splice(+t.dataset.i, 1);
+if(p) URL.revokeObjectURL(p.url);
+render();
+}
+else if(action === 'photo-ouvrir'){ equipDetail.photoOuverte = { ivId:t.dataset.id, path:t.dataset.path }; render(); }
+else if(action === 'photo-fermer'){ if(t.tagName === 'BUTTON' || e.target === t){ equipDetail.photoOuverte = null; render(); } }
+else if(action === 'photo-suivante'){ changerPhoto(+t.dataset.sens); }
+else if(action === 'photo-supprimer'){ supprimerPhotoOuverte(); }
 else if(action === 'archive-equip'){ ouvrirModalArchiver([equipDetail.id]); }
 else if(action === 'suppr-equip-un'){ ouvrirModalSupprimerEquip([t.dataset.id]); }
 else if(action === 'equip-archiver-sel'){ ouvrirModalArchiver((dashboardCache.items||[]).filter(e => !e.archived && dashboardCache.sel.includes(e.id)).map(e => e.id)); }
@@ -1848,8 +2078,8 @@ else if(action === 'equip-desel'){ dashboardCache.sel = []; render(); }
 else if(action === 'modal-fermer'){ fermerModal(); }
 else if(action === 'modal-fond'){ if(e.target === t) fermerModal(); }
 else if(action === 'modal-valider'){ validerModal(); }
-else if(action === 'iv-modifier'){ equipDetail.editIvId = t.dataset.id; equipDetail.editIvError = ''; equipDetail.showIvForm = false; render(); }
-else if(action === 'iv-annuler-modif'){ equipDetail.editIvId = null; equipDetail.editIvError = ''; render(); }
+else if(action === 'iv-modifier'){ equipDetail.editIvId = t.dataset.id; equipDetail.editIvError = ''; equipDetail.showIvForm = false; viderPhotos('edit'); equipDetail.brouillonEdit = null; render(); }
+else if(action === 'iv-annuler-modif'){ equipDetail.editIvId = null; equipDetail.editIvError = ''; viderPhotos('edit'); equipDetail.brouillonEdit = null; render(); }
 else if(action === 'iv-supprimer'){ supprimerIntervention(t.dataset.id); }
 else if(action === 'nouveau-client'){ ouvrirClientForm(null); }
 else if(action === 'modifier-client'){ const c = (reglages.clients||[]).find(x => x.id === t.dataset.id); if(c) ouvrirClientForm(c); }
@@ -2006,7 +2236,23 @@ for(const k of ['nom','adresse','telephone','email','referent','notes']) reglage
 }
 
 /* Échap ferme la fenêtre modale. */
-document.addEventListener('keydown', (e) => { if(e.key === 'Escape' && modal && !modal.busy) fermerModal(); });
+document.addEventListener('keydown', (e) => {
+if(e.key === 'Escape' && modal && !modal.busy) fermerModal();
+else if(e.key === 'Escape' && equipDetail.photoOuverte){ equipDetail.photoOuverte = null; render(); }
+});
+
+/* Photos choisies (appareil photo ou galerie) : l'événement « change » est
+le seul fiable pour un champ fichier sur tous les téléphones. */
+document.addEventListener('change', (e) => {
+const t = e.target;
+if(t && t.dataset && t.dataset.action === 'iv-photos') ajouterPhotos(t);
+});
+
+/* Saisie du formulaire d'intervention mémorisée au fil de l'eau. */
+document.addEventListener('input', (e) => {
+const f = e.target.form;
+if(f && e.target.name && (f.dataset.action === 'submit-iv' || f.dataset.action === 'submit-iv-edit')) memoriserBrouillon(f);
+});
 
 let debounceTimer;
 function debounce(fn, ms=250){ clearTimeout(debounceTimer); debounceTimer = setTimeout(fn, ms); }
