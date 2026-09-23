@@ -31,7 +31,7 @@ deplacement_membre: 'Profil changé de client',
 reinitialisation_mdp: 'Mot de passe réinitialisé',
 liaison_appareil: 'Compte lié à un appareil',
 acces_refuse_appareil: 'Connexion refusée (autre appareil)',
-liberation_appareil: 'Appareil libéré',
+liberation_appareil: 'Déconnexion à distance (appareil libéré)',
 suppression_client: 'Client supprimé',
 suspension_client: 'Client suspendu',
 reactivation_client: 'Client réactivé',
@@ -664,8 +664,8 @@ ${estMoi ? '<span class="small muted">(vous)</span>' : ''}
 ${m.fondateur ? '<span class="badge badge-neutral">fondateur</span>' : ''}
 ${!m.active ? '<span class="badge badge-off">suspendu</span>' : ''}
 </div>`}
-${isSuperAdmin() && !m.fondateur ? `<div class="small appareil-ligne">${iconeNav('smartphone', 13)} ${m.appareil_lie_le
-? `Lié à : <strong>${esc(m.appareil_info || 'un appareil')}</strong> depuis le ${fmtDate(m.appareil_lie_le)} <button class="btn-lien-petit" data-action="liberer-appareil" data-id="${m.id}">Libérer l'appareil</button>`
+${isSuperAdmin() && !estMoi ? `<div class="small appareil-ligne">${iconeNav('smartphone', 13)} ${m.appareil_lie_le
+? `Appareil autorisé : <strong>${esc(m.appareil_info || 'un appareil')}</strong> depuis le ${fmtDate(m.appareil_lie_le)}`
 : `<span class="muted">Aucun appareil lié : le premier utilisé sera retenu</span>`}</div>` : ''}
 <div class="small muted">
 ${email ? esc(email) + ' · ' : ''}membre depuis le ${fmtDate(m.created_at)}
@@ -677,7 +677,8 @@ ${verrouille
 : `<select data-action="member-role" data-id="${m.id}">
 ${ROLES_ASSIGNABLES.map(r => `<option value="${r}" ${r === m.role ? 'selected' : ''}>${esc(roleLabel(r))}</option>`).join('')}
 </select>`}
-${isSuperAdmin() && !estMoi ? `<button class="btn btn-sm btn-mdp" data-action="reset-mdp" data-id="${m.id}" title="Donner un mot de passe provisoire">${iconeNav('key', 15)} Mot de passe</button>` : ''}
+${isSuperAdmin() && !estMoi ? `<button class="btn btn-sm btn-mdp" data-action="reset-mdp" data-id="${m.id}" title="Donner un mot de passe provisoire">${iconeNav('key', 15)} Mot de passe</button>
+<button class="btn btn-sm btn-mdp btn-deco" data-action="liberer-appareil" data-id="${m.id}" title="Téléphone perdu, volé ou remplacé : déconnecter cette personne partout et lui permettre de se reconnecter sur un nouvel appareil">${iconeNav('logout', 15)} Déconnecter</button>` : ''}
 ${isSuperAdmin() && !verrouille ? `
 <label class="choix-client">
 <span>Client</span>
@@ -689,16 +690,21 @@ ${blocAcces}
 </div>`;
 }
 
-/* Fondateur : réaccorder l'accès sur un autre appareil. */
+/* Fondateur : déconnexion à distance (téléphone perdu, volé ou remplacé).
+   La base ferme toutes les sessions de la personne et oublie son appareil :
+   l'ancien téléphone est éjecté (contrôle toutes les 60 s et à chaque retour
+   au premier plan) et ses données locales sont effacées ; le prochain
+   appareil utilisé devient l'appareil autorisé. */
 async function actionLibererAppareil(id){
 const m = (reglages.membres || []).find(x => x.id === id);
 if(!m) return;
-if(!await confirmer(`Libérer l'appareil de ${m.full_name || 'ce profil'} ?\n\nAppareil actuel : ${m.appareil_info || 'inconnu'}.\nLa personne est déconnectée partout. Le prochain appareil sur lequel elle se connecte deviendra son appareil autorisé.`, { ok:"Libérer l'appareil", danger:false })) return;
+const nom = m.full_name || 'ce profil';
+if(!await confirmer(`Déconnecter ${nom} à distance ?\n\n• ${nom} est déconnecté(e) de tous ses appareils${m.appareil_info ? ` (actuellement : ${m.appareil_info})` : ''}, en moins d'une minute dès que l'appareil capte le réseau.\n• Les données gardées sur l'ancien appareil sont effacées.\n• ${nom} pourra se reconnecter avec son e-mail et son mot de passe sur un nouvel appareil, qui deviendra son appareil autorisé.\n\nTéléphone perdu ou volé : pensez aussi à lui donner un nouveau mot de passe (bouton « Mot de passe »).`, { ok:'Déconnecter à distance', danger:true })) return;
 try{
 await libererAppareil(id);
 m.appareil_info = null; m.appareil_lie_le = null;
 reglages.journal = null;
-toast('Appareil libéré : la personne peut se connecter sur son nouvel appareil');
+toast(`${nom} est déconnecté(e) : reconnexion possible sur un nouvel appareil`);
 render();
 }catch(e){ toast('Erreur : ' + e.message, 'erreur'); }
 }

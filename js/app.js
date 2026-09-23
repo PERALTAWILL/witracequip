@@ -2557,7 +2557,7 @@ setTimeout(() => appliquerSession(session), 0);
 /* La dernière connexion l'emporte : l'appareil qui était connecté avant
 perd l'accès aux données (vérifié côté base, sql/19) et on l'en informe. */
 let deconnexionVolontaire = false;
-const MSG_SESSION_FERMEE = "Vous avez été déconnecté : l'accès de ce compte a été modifié par WiDIAG MQ (mot de passe ou appareil). Reconnectez-vous.";
+const MSG_SESSION_FERMEE = "Vous avez été déconnecté à distance par WiDIAG MQ. Reconnectez-vous avec votre e-mail et votre mot de passe.";
 const MSG_APPAREIL_REFUSE = "Ce compte est déjà utilisé sur un autre appareil. Un compte = une personne = un appareil. Pour l'utiliser sur celui-ci, demandez à WiDIAG MQ de réaccorder l'accès (widiagmq@gmail.com · 06 96 20 93 19).";
 
 /* Identifiant de CET appareil (navigateur), créé une fois et gardé.
