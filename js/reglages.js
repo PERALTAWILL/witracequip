@@ -59,6 +59,7 @@ journal,
 
 /* Anciennes adresses (#/reglages/membres, /invitations) → le bon onglet. */
 function ongletReglagesValide(onglet){
+if(onglet === 'profils') return isSuperAdmin() ? 'profils' : 'equipe';
 if(['membres','invitations','equipe'].includes(onglet)) return isSuperAdmin() ? 'clients' : 'equipe';
 return onglet;
 }
@@ -130,6 +131,10 @@ if(!peutReglages()) return viewNonAutorise();
 if(isSuperAdmin()){ chargerSupport(false); chargerClients(false); } // compteurs des onglets
 onglet = ongletReglagesValide(onglet);
 const onglets = ongletsReglages();
+if(isSuperAdmin() && onglet === 'profils') return `
+<div class="row between wrap" style="margin-bottom:6px;"><h2>Profils</h2></div>
+<div class="reglages-aide">Tous les comptes de vos clients : recherchez par nom, prénom, email ou client, puis modifiez, changez le rôle, suspendez ou supprimez.</div>
+${viewProfils()}`;
 if(!onglets.some(o => o.cle === onglet)) onglet = onglets[0].cle;
 const courant = onglets.find(o => o.cle === onglet);
 
@@ -547,6 +552,38 @@ ${clientsOptions.map(c => `<option value="${c.id}" ${c.id === filtre ? 'selected
 ${renderListeMembres(membres, isSuperAdmin() && !filtre)}
 </div>
 `;
+}
+
+/* Super-admin : tous les profils de tous les clients, avec recherche. */
+function viewProfils(){
+chargerMembres(false);
+chargerClients(false);
+if(reglages.membresError) return `<div class="alert alert-error">${esc(reglages.membresError)}</div>`;
+if(reglages.membres === null) return squeletteListe(6);
+const rq = (reglages.rechercheProfil || '').trim().toLowerCase();
+const tous = [...reglages.membres].sort((a, b) => (a.full_name || '').localeCompare(b.full_name || '', 'fr', { sensitivity:'base' }));
+const liste = rq ? tous.filter(m => [m.full_name, reglages.emails[m.id]?.email, m.organizations?.nom, roleLabel(m.role)]
+.some(v => (v || '').toLowerCase().includes(rq))) : tous;
+const actifs = tous.filter(m => m.active && m.id !== state.profile?.id).length;
+return `
+<div class="barre-clients">
+<div class="recherche-client">
+${iconeNav('search', 16)}
+<input type="search" placeholder="Rechercher un profil : nom, prénom, email, client…" value="${esc(reglages.rechercheProfil || '')}" data-action="recherche-profil">
+</div>
+</div>
+<div class="small muted" style="margin:0 0 10px 2px;">
+${rq ? `${liste.length} résultat${liste.length > 1 ? 's' : ''} sur ${tous.length} profils` : `${tous.length} profil${tous.length > 1 ? 's' : ''} · ${actifs} actif${actifs > 1 ? 's' : ''} (hors vous)`}
+</div>
+<div class="card">
+<h3>Comptes créés (${liste.length})</h3>
+${liste.length ? renderListeMembres(liste, true) : `<div class="empty small">Aucun profil ne correspond à « ${esc(reglages.rechercheProfil || '')} ».</div>`}
+</div>
+${(() => {
+// Personnes invitées qui n'ont pas encore créé leur compte : elles font aussi partie des personnes ajoutées.
+const inv = (reglages.invites || []).filter(i => !rq || [i.label, i.organizations?.nom, roleLabel(i.role)].some(v => (v || '').toLowerCase().includes(rq)));
+return inv.length ? `<div class="card"><h3>Invitées, compte pas encore créé (${inv.length})</h3>${inv.map(i => renderInvite(i, true)).join('')}</div>` : '';
+})()}`;
 }
 
 /* Liste de membres avec sélection multiple.

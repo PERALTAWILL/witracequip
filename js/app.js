@@ -334,6 +334,7 @@ return [
 { path:'/', icone:'home', label:'Accueil', actif: r.name === 'accueil' },
 { path:'/reglages/clients', icone:'briefcase', label:'Clients',
 actif: sousPage === 'clients' || ['equip','equip-new','types','equipements','dashboard'].includes(r.name) },
+{ path:'/reglages/profils', icone:'users', label:'Profils', actif: sousPage === 'profils' },
 { path:'/reglages/support', icone:'inbox', label:'Support', actif: sousPage === 'support' || r.name === 'support', badge: aTraiter || '' },
 { path:'/reglages/journal', icone:'journal', label:'Journal', actif: sousPage === 'journal' },
 ];
@@ -569,7 +570,8 @@ chargerTableauFondateur()
 }
 const prenom = (state.profile?.full_name || '').trim().split(/\s+/)[0] || '';
 const clients = (reglages.clients || []).filter(c => !c.est_mon_organisation);
-const parc = clients.reduce((n, c) => n + (c.nb_equipements || 0), 0);
+chargerMembres(false);
+const profilsActifs = (reglages.membres || []).filter(m => m.active && m.id !== state.profile?.id).length;
 const aTraiter = (reglages.support || []).filter(d => d.statut !== 'traite').length;
 const d = fondateurCache.donnees;
 const heure = new Date().getHours();
@@ -592,7 +594,7 @@ return `
 </div>
 <div class="kpis">
 <div class="kpi" data-action="go" data-path="/reglages/clients"><div class="kpi-val">${chiffre(reglages.clients ? clients.length : null)}</div><div class="kpi-lib">Clients</div></div>
-<div class="kpi" data-action="go" data-path="/reglages/clients"><div class="kpi-val">${chiffre(reglages.clients ? parc : null)}</div><div class="kpi-lib">Équipements suivis</div></div>
+<div class="kpi" data-action="go" data-path="/reglages/profils"><div class="kpi-val">${chiffre(reglages.membres ? profilsActifs : null)}</div><div class="kpi-lib">Profils actifs</div></div>
 <div class="kpi"><div class="kpi-val">${chiffre(d ? d.interventionsMois : null)}</div><div class="kpi-lib">Interventions ce mois</div></div>
 <div class="kpi ${aTraiter ? 'kpi-alerte' : ''}" data-action="go" data-path="/reglages/support"><div class="kpi-val">${chiffre(reglages.support ? aTraiter : null)}</div><div class="kpi-lib">Demandes à traiter</div></div>
 </div>
@@ -1948,6 +1950,7 @@ else if(action === 'sel-equip-tous'){ dashboardCache.sel = t.checked ? (dashboar
 else if(action === 'sel-client'){ basculer(reglages, 'selClients', t.dataset.id, t.checked); render(); }
 else if(action === 'sel-clients-tous'){ reglages.selClients = t.checked ? (t.dataset.ids || '').split(',').filter(Boolean) : []; render(); }
 else if(action === 'recherche-client'){ reglages.rechercheClient = t.value; reglages.selClients = []; render(); }
+else if(action === 'recherche-profil'){ reglages.rechercheProfil = t.value; reglages.selMembres = []; render(); }
 else if(action === 'tri-clients'){ reglages.triClients = t.value; render(); }
 else if(action === 'recherche-parc'){ reglages.rechercheParc = t.value; render(); }
 else if(action === 'parc-archives'){ reglages.parcArchives = t.checked; render(); }
