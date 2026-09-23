@@ -26,7 +26,7 @@
 
 /* Changer ce numéro à chaque déploiement : c'est ce qui déclenche le
    remplacement de l'ancien cache par le nouveau chez tous les utilisateurs. */
-const VERSION = 'wte-v2.14.0';
+const VERSION = 'wte-v2.14.1';
 
 const CACHE_SHELL = `${VERSION}-shell`;
 const CACHE_EXTERNE = `${VERSION}-externe`;
@@ -76,6 +76,10 @@ self.addEventListener('install', (event) => {
       .catch((e) => {
         console.error('[SW] Mise en cache initiale incomplète :', e);
       })
+      // Nouvelle version prête : elle prend la main tout de suite, sans
+      // attendre que l'utilisateur ferme tous ses onglets. Sinon le téléphone
+      // mélange l'ancien JavaScript (en cache) et le nouveau HTML.
+      .then(() => self.skipWaiting())
   );
 });
 
@@ -149,7 +153,9 @@ self.addEventListener('fetch', (event) => {
   // reconstruit le cache de toute façon.
   if (url.origin === self.location.origin) {
     event.respondWith(
-      caches.match(req).then((enCache) => enCache || fetch(req).then((rep) => {
+      // Uniquement dans le cache de CETTE version : jamais un fichier resté
+      // dans le cache d'une version précédente.
+      caches.open(CACHE_SHELL).then((c) => c.match(req)).then((enCache) => enCache || fetch(req).then((rep) => {
         if (rep && rep.status === 200 && rep.type === 'basic') {
           const copie = rep.clone();
           caches.open(CACHE_SHELL).then((c) => c.put(req, copie));
