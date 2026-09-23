@@ -945,3 +945,6 @@ background:linear-gradient(135deg, hsl(var(--teinte) 55% 45%), hsl(calc(var(--te
 .parc-groupe{margin-top:12px;}
 .parc-groupe-titre{font-size:12px; font-weight:750; letter-spacing:.05em; text-transform:uppercase; color:var(--text-dim);
 padding-bottom:4px; border-bottom:1px solid var(--border);}
+.journal-ligne{position:relative;}
+.journal-suppr{position:absolute; right:0; top:10px;}
+.journal-ligne .journal-corps{padding-right:36px;}
