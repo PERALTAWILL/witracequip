@@ -490,7 +490,7 @@ render();
 }
 
 }
-async function /* ---------- ARCHIVER ---------- */
+/* ---------- ARCHIVER ---------- */
 
 async function rpArchiver(id){
 
@@ -535,7 +535,9 @@ toast(
 
 render();
 
-}rpSupprimer(id){
+}
+
+async function rpSupprimer(id){
 const r = (rapports.liste || []).find(x => x.id === id);
 if(!r) return;
 if(!await confirmer('Supprimer ce rapport ?\n\nLe rapport, la signature et les documents joints seront définitivement effacés.', { danger: true, ok: 'Supprimer' })) return;
@@ -611,6 +613,9 @@ rpArchiver(t.dataset.id);
 }
 
 else if(a === 'exporter'){
+rpExporterPDF(t.dataset.id);
+}
+
 else if(a === 'email'){
 rpPreparerEmail(t.dataset.id);
 }
@@ -622,7 +627,7 @@ chargerRapports(true);
 });
 
 document.addEventListener('submit', (e) => {
-if(e.target && e.target.id === 'rp-form'){ e.preventDefault(); rpEnregistrer(); }
+if(e.target && e.target.id === 'rp-form'){ e.preventDefault(); rapports.modificationId ? rpEnregistrerModification() : rpEnregistrer(); }
 });
 /* ---------- EXPORT PDF / EMAIL ---------- */
 
