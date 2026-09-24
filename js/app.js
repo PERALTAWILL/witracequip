@@ -2175,30 +2175,41 @@ return u ? `<button type="button" class="iv-vignette" data-action="photo-ouvrir"
 }).join('')}</div>`;
 }
 
-function renderVisionneuse(){
-const o = equipDetail.photoOuverte;
-if(!o) return '';
-const iv = (equipDetail.interventions || []).find(x => x.id === o.ivId);
-const ph = iv?.photos || [];
-const i = ph.indexOf(o.path);
-if(i < 0) return '';
-const u = equipDetail.photosUrls[o.path];
-return `
-<div class="visionneuse" data-action="photo-fermer" role="dialog" aria-label="Photo de l'intervention">
-<div class="visionneuse-haut">
-<div class="small">${esc(iv.type)} · ${fmtDate(iv.date)}${ph.length > 1 ? ` · ${i+1}/${ph.length}` : ''}</div>
-<button type="button" class="visionneuse-btn" data-action="photo-fermer" aria-label="Fermer">×</button>
-</div>
-<div class="visionneuse-image" data-action="photo-fermer">
-${ph.length > 1 ? `<button type="button" class="visionneuse-nav g" data-action="photo-suivante" data-sens="-1" aria-label="Précédente">‹</button>` : ''}
-${u ? `<img src="${u}" alt="Photo ${i+1}">` : ''}
-${ph.length > 1 ? `<button type="button" class="visionneuse-nav d" data-action="photo-suivante" data-sens="1" aria-label="Suivante">›</button>` : ''}
-</div>
-<div class="visionneuse-bas">
-${u ? `<a class="btn btn-sm" href="${u}" target="_blank" rel="noopener">Ouvrir en grand</a>` : ''}
-${isAdmin() ? `<button type="button" class="btn btn-sm btn-danger" data-action="photo-supprimer">Supprimer la photo</button>` : ''}
-</div>
-</div>`;
+function renderVisionneuse() {
+  const o = equipDetail.photoOuverte;
+  if (!o) return '';
+
+  const iv = (equipDetail.interventions || []).find(x => x.id === o.ivId);
+  const ph = iv?.photos || [];
+  const i = ph.indexOf(o.path);
+  
+  if (!iv || i < 0) return '';
+
+  const u = equipDetail.photosUrls[o.path];
+  const urlEsc = u ? esc(u) : '';
+  const totalPhotos = ph.length;
+
+  return `
+    <div class="visionneuse" data-action="photo-fermer" role="dialog" aria-label="Photo de l'intervention">
+      <div class="visionneuse-haut">
+        <div class="small">
+          ${esc(iv.type)} · ${fmtDate(iv.date)}${totalPhotos > 1 ? ` · ${i + 1}/${totalPhotos}` : ''}
+        </div>
+        <button type="button" class="visionneuse-btn" data-action="photo-fermer" aria-label="Fermer">×</button>
+      </div>
+      
+      <div class="visionneuse-image">
+        ${totalPhotos > 1 ? `<button type="button" class="visionneuse-nav g" data-action="photo-suivante" data-sens="-1" aria-label="Précédente">‹</button>` : ''}
+        ${u ? `<img src="${urlEsc}" alt="Photo ${i + 1} sur${totalPhotos}">` : ''}
+        ${totalPhotos > 1 ? `<button type="button" class="visionneuse-nav d" data-action="photo-suivante" data-sens="1" aria-label="Suivante">›</button>` : ''}
+      </div>
+      
+      <div class="visionneuse-bas">
+        ${u ? `<a class="btn btn-sm" href="${urlEsc}" target="_blank" rel="noopener">Ouvrir en grand</a>` : ''}
+        ${isAdmin() ? `<button type="button" class="btn btn-sm btn-danger" data-action="photo-supprimer" data-id="${iv.id}" data-path="${esc(o.path)}">Supprimer cette photo</button>` : ''}
+      </div>
+    </div>
+  `;
 }
 
 function changerPhoto(sens){
