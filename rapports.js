@@ -141,7 +141,6 @@ ${rapports.urls[f.signatureExistante] ? `<img src="${esc(rapports.urls[f.signatu
 <button class="btn btn-primary" type="submit" ${rapports.busy ? 'disabled' : ''}>${rapports.busy ? 'Enregistrement…' : (modif ? 'Enregistrer les modifications' : 'Enregistrer le rapport')}</button>
 </form>
 </div>
-
 <div class="card">
 <div class="row between wrap" style="margin-bottom:6px;">
 <h3>Rapports ${rapports.vue === 'archives' ? 'archivés' : 'enregistrés'}</h3>
@@ -151,6 +150,21 @@ ${rapports.urls[f.signatureExistante] ? `<img src="${esc(rapports.urls[f.signatu
 <button class="btn btn-sm ${rapports.vue === 'actifs' ? 'btn-primary' : ''}" data-rp="vue" data-vue="actifs">Actifs</button>
 <button class="btn btn-sm ${rapports.vue === 'archives' ? 'btn-primary' : ''}" data-rp="vue" data-vue="archives">Archivés</button>
 </div>
+// ... (début de la fonction viewRapports)
+
+<div class="card">
+<div class="row between wrap" style="margin-bottom:6px;">
+<h3>Rapports ${rapports.vue === 'archives' ? 'archivés' : 'enregistrés'}</h3>
+<button class="btn btn-sm" data-rp="actualiser">Actualiser</button>
+</div>
+
+<!-- >>> INSÉREZ LES LIGNES ICI (APRES LE TITRE, AVANT LA LISTE) <<< -->
+<div class="row" style="gap:6px;margin-bottom:8px;">
+<button class="btn btn-sm ${rapports.vue === 'actifs' ? 'btn-primary' : ''}" data-rp="vue" data-vue="actifs">Actifs</button>
+<button class="btn btn-sm ${rapports.vue === 'archives' ? 'btn-primary' : ''}" data-rp="vue" data-vue="archives">Archivés</button>
+</div>
+<!-- >>> FIN DE L'INSERTION <<< -->
+
 ${viewListeRapports()}
 <div class="small muted" style="margin-top:10px;">Module rapports ${RP_VERSION}</div>
 </div>`;
