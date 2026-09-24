@@ -41,8 +41,11 @@ if(rapports.liste !== null && !force) return;
 if(rapports.listeError && !force) return; // pas de relance en boucle sur une erreur
 rapports.listeLoading = true;
 sb.from('rapports_intervention')
-.select('id, organization_id, nom_support, date_intervention, raison, nom_signataire, email_destinataire, signature_path, pieces_jointes, created_at, organizations(nom, code_client)')
-.order('date_intervention', { ascending: false }).order('created_at', { ascending: false }).limit(100)
+.select('id, organization_id, nom_support, date_intervention, raison, nom_signataire, email_destinataire, signature_path, pieces_jointes, created_at, archived_at, organizations(nom, code_client)')
+.is('archived_at', null)
+.order('date_intervention', { ascending: false })
+.order('created_at', { ascending: false })
+.limit(100)
 .then(({ data, error }) => { if(error) throw error; rapports.liste = data || []; rapports.listeError = ''; })
 .catch(e => { rapports.listeError = e.message || String(e); })
 .finally(() => { rapports.listeLoading = false; render(); });
@@ -161,6 +164,13 @@ ${pj.map(p => rapports.urls[p.chemin]
 <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;">
 <button class="btn btn-sm" data-rp="exporter" data-id="${r.id}">
 📄 Exporter PDF
+<button class="btn btn-sm" data-rp="modifier" data-id="${r.id}">
+✏️ Modifier
+</button>
+
+<button class="btn btn-sm" data-rp="archiver" data-id="${r.id}">
+🗄️ Archiver
+</button>
 </button>
 
 <button class="btn btn-sm" data-rp="email" data-id="${r.id}">
@@ -327,8 +337,202 @@ if(error){ toast('Impossible de charger les fichiers : ' + error.message, 'erreu
 (data || []).forEach(x => { if(x.signedUrl) rapports.urls[x.path] = x.signedUrl; });
 render();
 }
+/* ---------- MODIFICATION D'UN RAPPORT ---------- */
 
-async function rpSupprimer(id){
+async function rpModifier(id){
+
+const r = (rapports.liste || []).find(x => x.id === id);
+
+if(!r){
+toast('Rapport introuvable.', 'erreur');
+return;
+}
+
+/*
+   On recharge le rapport dans le formulaire.
+   Les fichiers et la signature existants sont conservés.
+*/
+
+rapports.form = {
+nom_support: r.nom_support || '',
+client_id: r.organization_id || '',
+date: r.date_intervention || rpAujourdhui(),
+raison: r.raison || '',
+signataire: r.nom_signataire || '',
+email_destinataire: r.email_destinataire || '',
+signature: rapports.urls[r.signature_path] || null,
+fichiers: [],
+};
+
+rapports.modificationId = id;
+rapports.error = '';
+
+render();
+
+window.scrollTo({
+top: 0,
+behavior: 'smooth'
+});
+
+toast('Rapport chargé pour modification');
+}
+
+
+/* ---------- ENREGISTREMENT D'UNE MODIFICATION ---------- */
+
+async function rpEnregistrerModification(){
+
+const id = rapports.modificationId;
+
+if(!id){
+rpEnregistrer();
+return;
+}
+
+if(rapports.busy) return;
+
+const f = rapports.form;
+
+const emailValide =
+/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(
+f.email_destinataire.trim()
+);
+
+const erreur =
+!f.nom_support.trim()
+? 'Indiquez le nom du support.'
+
+: !f.client_id
+? 'Choisissez un client.'
+
+: !f.date
+? "Indiquez la date de l'intervention."
+
+: !f.raison.trim()
+? "Indiquez la raison de l'intervention."
+
+: !f.email_destinataire.trim()
+? "Indiquez l'adresse e-mail du destinataire."
+
+: !emailValide
+? "L'adresse e-mail indiquée n'est pas valide."
+
+: '';
+
+if(erreur){
+
+rapports.error = erreur;
+
+render();
+
+window.scrollTo({
+top:0,
+behavior:'smooth'
+});
+
+return;
+}
+
+rapports.busy = true;
+rapports.error = '';
+
+try{
+
+const { error } = await sb
+.from('rapports_intervention')
+.update({
+
+organization_id: f.client_id,
+
+nom_support:
+f.nom_support.trim(),
+
+date_intervention:
+f.date,
+
+raison:
+f.raison.trim(),
+
+nom_signataire:
+f.signataire.trim() || null,
+
+email_destinataire:
+f.email_destinataire.trim()
+
+})
+.eq('id', id);
+
+if(error) throw error;
+
+rapports.modificationId = null;
+
+rapports.form = rpFormVide();
+
+rapports.liste = null;
+
+toast('Rapport modifié avec succès');
+
+}catch(e){
+
+rapports.error =
+'Modification impossible : ' +
+(e.message || e);
+
+}finally{
+
+rapports.busy = false;
+
+render();
+
+}
+
+}
+async function /* ---------- ARCHIVER ---------- */
+
+async function rpArchiver(id){
+
+const r = (rapports.liste || []).find(x => x.id === id);
+
+if(!r) return;
+
+if(!await confirmer(
+'Archiver ce rapport ?\n\nLe rapport ne sera pas supprimé. Il pourra être retrouvé dans les archives.',
+{
+ok:'Archiver'
+}
+)) return;
+
+try{
+
+const { error } = await sb
+.from('rapports_intervention')
+.update({
+archived_at: new Date().toISOString()
+})
+.eq('id', id);
+
+if(error) throw error;
+
+rapports.liste =
+rapports.liste.filter(x => x.id !== id);
+
+rapports.ouvert = null;
+
+toast('Rapport archivé');
+
+}catch(e){
+
+toast(
+'Archivage impossible : ' +
+(e.message || e),
+'erreur'
+);
+
+}
+
+render();
+
+}rpSupprimer(id){
 const r = (rapports.liste || []).find(x => x.id === id);
 if(!r) return;
 if(!await confirmer('Supprimer ce rapport ?\n\nLe rapport, la signature et les documents joints seront définitivement effacés.', { danger: true, ok: 'Supprimer' })) return;
