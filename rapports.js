@@ -14,7 +14,7 @@
    - Envoyer par e-mail : PDF + documents joints via la feuille de partage du
      téléphone ; sur ordinateur, PDF téléchargé + messagerie ouverte. */
 
-const RP_VERSION = 'v2.17.10';
+const RP_VERSION = 'v2.17.11';
 const BUCKET_RAPPORTS = 'rapports-intervention';
 const RP_TAILLE_MAX = 10 * 1024 * 1024; // 10 Mo par document
 const RP_EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
