@@ -22,8 +22,9 @@ client_id: '',
 date: rpAujourdhui(),
 raison: '',
 signataire: '',
-signature: null, // image PNG (dataURL) de la signature
-fichiers: [], // documents joints (objets File)
+email_destinataire: '',
+signature: null,
+fichiers: [],
 };
 }
 
@@ -40,7 +41,7 @@ if(rapports.liste !== null && !force) return;
 if(rapports.listeError && !force) return; // pas de relance en boucle sur une erreur
 rapports.listeLoading = true;
 sb.from('rapports_intervention')
-.select('id, organization_id, nom_support, date_intervention, raison, nom_signataire, signature_path, pieces_jointes, created_at, organizations(nom, code_client)')
+.select('id, organization_id, nom_support, date_intervention, raison, nom_signataire, email_destinataire, signature_path, pieces_jointes, created_at, organizations(nom, code_client)')
 .order('date_intervention', { ascending: false }).order('created_at', { ascending: false }).limit(100)
 .then(({ data, error }) => { if(error) throw error; rapports.liste = data || []; rapports.listeError = ''; })
 .catch(e => { rapports.listeError = e.message || String(e); })
@@ -75,6 +76,19 @@ ${rapports.error ? `<div class="alert alert-error">${esc(rapports.error)}</div>`
 <option value="">${reglages.clients === null ? 'Chargement des clients…' : '— Choisir un client —'}</option>
 ${clients.map(c => `<option value="${c.id}" ${c.id === f.client_id ? 'selected' : ''}>${esc(c.nom)}${c.code_client ? ' — n° ' + esc(c.code_client) : ''}</option>`).join('')}
 </select></div>
+<div class="field">
+<label>Adresse e-mail du destinataire <span class="oblig">obligatoire</span></label>
+<input
+type="email"
+name="email_destinataire"
+data-rp="champ"
+value="${esc(f.email_destinataire)}"
+placeholder="exemple@entreprise.fr"
+autocomplete="email">
+<div class="hint">
+Adresse de la personne qui recevra ce rapport. Elle peut être différente du contact principal du client.
+</div>
+</div>
 <div class="field"><label>Raison de l'intervention <span class="oblig">obligatoire</span></label>
 <textarea name="raison" data-rp="champ" rows="4" placeholder="Décrivez la raison de l'intervention et ce qui a été fait…">${esc(f.raison)}</textarea></div>
 
@@ -128,7 +142,15 @@ return `
 ${ouvert ? `
 <div style="flex-basis:100%;padding-top:8px;">
 <div style="white-space:pre-wrap;overflow-wrap:anywhere;">${esc(r.raison)}</div>
-<div class="small muted" style="margin-top:8px;">Signature${r.nom_signataire ? ' de ' + esc(r.nom_signataire) : ' du client'} :</div>
+
+<div class="small muted" style="margin-top:8px;">
+<strong>Destinataire :</strong>
+${r.email_destinataire ? esc(r.email_destinataire) : 'Non renseigné'}
+</div>
+
+<div class="small muted" style="margin-top:8px;">
+Signature${r.nom_signataire ? ' de ' + esc(r.nom_signataire) : ' du client'} :
+</div>
 ${rapports.urls[r.signature_path]
 ? `<img src="${esc(rapports.urls[r.signature_path])}" alt="Signature" style="display:block;max-width:320px;width:100%;background:#fff;border:1px solid var(--border);border-radius:8px;margin-top:4px;">`
 : `<div class="small muted">Chargement…</div>`}
@@ -136,7 +158,19 @@ ${pj.length ? `<div class="small muted" style="margin-top:10px;">Documents joint
 ${pj.map(p => rapports.urls[p.chemin]
 ? `<div><a href="${esc(rapports.urls[p.chemin])}" target="_blank" rel="noopener">${esc(p.nom)}</a></div>`
 : `<div class="small muted">${esc(p.nom)} …</div>`).join('')}` : ''}
-<div style="margin-top:12px;"><button class="btn btn-sm btn-danger" data-rp="supprimer" data-id="${r.id}">Supprimer ce rapport</button></div>
+<div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;">
+<button class="btn btn-sm" data-rp="exporter" data-id="${r.id}">
+📄 Exporter PDF
+</button>
+
+<button class="btn btn-sm" data-rp="email" data-id="${r.id}">
+✉ Préparer l'e-mail
+</button>
+
+<button class="btn btn-sm btn-danger" data-rp="supprimer" data-id="${r.id}">
+Supprimer ce rapport
+</button>
+</div>
 </div>` : ''}
 </div>`;
 }).join('');
@@ -225,10 +259,15 @@ return String(nom).normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^A-Za-z0-9
 async function rpEnregistrer(){
 if(rapports.busy) return;
 const f = rapports.form;
+
+const emailValide = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(f.email_destinataire.trim());
+
 const erreur = !f.nom_support.trim() ? 'Indiquez le nom du support.'
 : !f.client_id ? 'Choisissez un client.'
 : !f.date ? "Indiquez la date de l'intervention."
 : !f.raison.trim() ? "Indiquez la raison de l'intervention."
+: !f.email_destinataire.trim() ? "Indiquez l'adresse e-mail du destinataire."
+: !emailValide ? "L'adresse e-mail indiquée n'est pas valide."
 : !f.signature ? 'La signature du client est obligatoire.' : '';
 if(erreur){ rapports.error = erreur; render(); window.scrollTo({ top: 0, behavior: 'smooth' }); return; }
 
@@ -252,9 +291,15 @@ pieces.push({ chemin, nom: fichier.name, taille: fichier.size, type: fichier.typ
 }
 
 const { error } = await sb.from('rapports_intervention').insert({
-id, organization_id: f.client_id, nom_support: f.nom_support.trim(), date_intervention: f.date,
-raison: f.raison.trim(), nom_signataire: f.signataire.trim() || null,
-signature_path: cheminSig, pieces_jointes: pieces,
+id,
+organization_id: f.client_id,
+nom_support: f.nom_support.trim(),
+date_intervention: f.date,
+raison: f.raison.trim(),
+nom_signataire: f.signataire.trim() || null,
+email_destinataire: f.email_destinataire.trim(),
+signature_path: cheminSig,
+pieces_jointes: pieces,
 });
 if(error) throw error;
 
@@ -329,19 +374,311 @@ else if(t.dataset.rp === 'fichiers') rpAjouterFichiers(t);
 document.addEventListener('click', (e) => {
 const t = e.target.closest('[data-rp]');
 if(!t || !rapports.form) return;
+
 const a = t.dataset.rp;
+
 if(a === 'effacer'){
 rapports.form.signature = null;
 rpPreparerCanvas();
 }
-else if(a === 'retirer-fichier'){ rapports.form.fichiers.splice(+t.dataset.i, 1); render(); }
-else if(a === 'ouvrir') rpOuvrir(t.dataset.id);
-else if(a === 'supprimer') rpSupprimer(t.dataset.id);
-else if(a === 'actualiser'){ rapports.listeError = ''; chargerRapports(true); }
+
+else if(a === 'retirer-fichier'){
+rapports.form.fichiers.splice(+t.dataset.i, 1);
+render();
+}
+
+else if(a === 'ouvrir'){
+rpOuvrir(t.dataset.id);
+}
+
+else if(a === 'supprimer'){
+rpSupprimer(t.dataset.id);
+}
+
+else if(a === 'exporter'){
+rpExporterPDF(t.dataset.id);
+}
+
+else if(a === 'email'){
+rpPreparerEmail(t.dataset.id);
+}
+
+else if(a === 'actualiser'){
+rapports.listeError = '';
+chargerRapports(true);
+}
 });
 
 document.addEventListener('submit', (e) => {
 if(e.target && e.target.id === 'rp-form'){ e.preventDefault(); rpEnregistrer(); }
 });
+/* ---------- EXPORT PDF / EMAIL ---------- */
 
+function rpRapportHTML(r){
+
+const client = (r.organizations && r.organizations.nom) || 'Client';
+const codeClient = (r.organizations && r.organizations.code_client) || '';
+
+const signature = rapports.urls[r.signature_path]
+? `<img src="${rapports.urls[r.signature_path]}" style="max-width:320px;max-height:160px;">`
+: '<p>Signature non disponible</p>';
+
+return `
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+
+<meta charset="UTF-8">
+
+<title>Rapport d'intervention - ${esc(client)}</title>
+
+<style>
+
+body{
+font-family:Arial,sans-serif;
+margin:40px;
+color:#222;
+}
+
+h1{
+text-align:center;
+margin-bottom:30px;
+}
+
+.info{
+border:1px solid #ccc;
+padding:15px;
+margin-bottom:20px;
+}
+
+.raison{
+border:1px solid #ccc;
+padding:15px;
+white-space:pre-wrap;
+min-height:120px;
+}
+
+.signature{
+margin-top:30px;
+border-top:1px solid #ccc;
+padding-top:15px;
+}
+
+</style>
+
+</head>
+
+<body>
+
+<h1>RAPPORT D'INTERVENTION</h1>
+
+<div class="info">
+
+<p>
+<strong>Client :</strong>
+${esc(client)}
+</p>
+
+${codeClient ? `
+<p>
+<strong>N° client :</strong>
+${esc(codeClient)}
+</p>
+` : ''}
+
+<p>
+<strong>Date :</strong>
+${esc(fmtDate(r.date_intervention))}
+</p>
+
+<p>
+<strong>Technicien :</strong>
+${esc(r.nom_support || '')}
+</p>
+
+<p>
+<strong>Destinataire :</strong>
+${esc(r.email_destinataire || '')}
+</p>
+
+</div>
+
+<h3>Raison / description de l'intervention</h3>
+
+<div class="raison">
+${esc(r.raison || '')}
+</div>
+
+<div class="signature">
+
+<h3>Signature du client</h3>
+
+${signature}
+
+${r.nom_signataire ? `
+<p>
+<strong>Nom du signataire :</strong>
+${esc(r.nom_signataire)}
+</p>
+` : ''}
+
+</div>
+
+<p style="margin-top:40px;font-size:12px;color:#777;">
+Rapport généré par WiTracEQUIP
+</p>
+
+</body>
+
+</html>
+`;
+}
+
+
+/* ---------- CHARGEMENT DES URL DES FICHIERS ---------- */
+
+async function rpChargerURLsRapport(r){
+
+const chemins = [
+r.signature_path,
+...(r.pieces_jointes || []).map(p => p.chemin)
+].filter(Boolean);
+
+const manquants = chemins.filter(c => !rapports.urls[c]);
+
+if(!manquants.length) return;
+
+const { data, error } = await sb.storage
+.from(BUCKET_RAPPORTS)
+.createSignedUrls(manquants, 3600);
+
+if(error) throw error;
+
+(data || []).forEach(x => {
+
+if(x.signedUrl){
+rapports.urls[x.path] = x.signedUrl;
+}
+
+});
+
+}
+
+
+/* ---------- EXPORT PDF ---------- */
+
+async function rpExporterPDF(id){
+
+const r = (rapports.liste || []).find(x => x.id === id);
+
+if(!r){
+toast('Rapport introuvable.', 'erreur');
+return;
+}
+
+try{
+
+await rpChargerURLsRapport(r);
+
+const fenetre = window.open('', '_blank');
+
+if(!fenetre){
+
+toast(
+'Le navigateur a bloqué la fenêtre. Autorisez les fenêtres pop-up pour cette application.',
+'erreur'
+);
+
+return;
+}
+
+fenetre.document.open();
+
+fenetre.document.write(
+rpRapportHTML(r)
+);
+
+fenetre.document.close();
+
+fenetre.onload = () => {
+
+setTimeout(() => {
+
+fenetre.focus();
+
+fenetre.print();
+
+}, 300);
+
+};
+
+}
+catch(e){
+
+toast(
+'Impossible de préparer le PDF : ' + (e.message || e),
+'erreur'
+);
+
+}
+
+}
+
+
+/* ---------- PREPARER EMAIL ---------- */
+
+async function rpPreparerEmail(id){
+
+const r = (rapports.liste || []).find(x => x.id === id);
+
+if(!r){
+
+toast('Rapport introuvable.', 'erreur');
+
+return;
+
+}
+
+const email = (r.email_destinataire || '').trim();
+
+if(!email){
+
+toast(
+'Aucune adresse e-mail n’est enregistrée pour ce rapport.',
+'erreur'
+);
+
+return;
+
+}
+
+const client =
+(r.organizations && r.organizations.nom)
+|| 'Client';
+
+const sujet =
+`Rapport d'intervention - ${client} - ${fmtDate(r.date_intervention)}`;
+
+const message =
+`Bonjour,
+
+Veuillez trouver ci-joint le rapport d'intervention réalisé le ${fmtDate(r.date_intervention)}.
+
+Client : ${client}
+Technicien : ${r.nom_support || ''}
+
+Nous restons à votre disposition pour toute information complémentaire.
+
+Cordialement,
+WiTracEQUIP`;
+
+const url =
+`mailto:${encodeURIComponent(email)}` +
+`?subject=${encodeURIComponent(sujet)}` +
+`&body=${encodeURIComponent(message)}`;
+
+window.location.href = url;
+
+}
 /* ---------------------------------------------------------------------- */
