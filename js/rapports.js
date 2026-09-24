@@ -162,8 +162,7 @@ ${pj.map(p => rapports.urls[p.chemin]
 ? `<div><a href="${esc(rapports.urls[p.chemin])}" target="_blank" rel="noopener">${esc(p.nom)}</a></div>`
 : `<div class="small muted">${esc(p.nom)} …</div>`).join('')}` : ''}
 <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;">
-<button class="btn btn-sm" data-rp="exporter" data-id="${r.id}">
-📄 Exporter PDF
+
 <button class="btn btn-sm" data-rp="modifier" data-id="${r.id}">
 ✏️ Modifier
 </button>
@@ -171,6 +170,9 @@ ${pj.map(p => rapports.urls[p.chemin]
 <button class="btn btn-sm" data-rp="archiver" data-id="${r.id}">
 🗄️ Archiver
 </button>
+
+<button class="btn btn-sm" data-rp="exporter" data-id="${r.id}">
+📄 Exporter PDF
 </button>
 
 <button class="btn btn-sm" data-rp="email" data-id="${r.id}">
@@ -180,6 +182,7 @@ ${pj.map(p => rapports.urls[p.chemin]
 <button class="btn btn-sm btn-danger" data-rp="supprimer" data-id="${r.id}">
 Supprimer ce rapport
 </button>
+
 </div>
 </div>` : ''}
 </div>`;
@@ -599,10 +602,15 @@ else if(a === 'supprimer'){
 rpSupprimer(t.dataset.id);
 }
 
-else if(a === 'exporter'){
-rpExporterPDF(t.dataset.id);
+else if(a === 'modifier'){
+rpModifier(t.dataset.id);
 }
 
+else if(a === 'archiver'){
+rpArchiver(t.dataset.id);
+}
+
+else if(a === 'exporter'){
 else if(a === 'email'){
 rpPreparerEmail(t.dataset.id);
 }
