@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>WiTracEQUIP — Passeport technique d'équipement</title>
+<link rel="icon" type="image/png" href="assets/icons/favicon-64.png">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0f766e" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#12181a" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="WiTracEQUIP">
+<link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrious/4.0.2/qrious.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="app"></div>
+<div id="print-area"></div>
+
+<script src="js/config.js"></script>
+<script src="js/core/icons.js"></script>
+<script src="js/services/offline.js"></script>
+<script src="js/services/data.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/reglages.js"></script>
+<script src="js/rapports.js"></script>
+<script src="js/app.js"></script>
+
+<!-- =========================================================================
+     Progressive Web App — enregistrement du Service Worker
+     -------------------------------------------------------------------------
+     Met en cache la coquille de l'application au premier chargement, pour
+     qu'elle démarre ensuite sans réseau (voir sw.js).
+     ========================================================================= -->
+<script>
+if ('serviceWorker' in navigator) {
+  // Quand une nouvelle version prend la main, on recharge UNE fois la page
+  // pour que tout (HTML, CSS, JavaScript) vienne de la même version.
+  let dejaRecharge = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (dejaRecharge || !navigator.serviceWorker.controller) return;
+    dejaRecharge = true;
+    window.location.reload();
+  });
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then((reg) => {
+      // En revenant sur l'appli (téléphone), on vérifie s'il existe une
+      // nouvelle version : plus besoin de la fermer complètement.
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') reg.update().catch(() => {});
+      });
+    }).catch((e) => {
+      console.error('[SW] Échec d\'enregistrement :', e);
+    });
+  });
+}
+</script>
+</body>
+</html>
