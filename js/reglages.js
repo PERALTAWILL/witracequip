@@ -151,7 +151,7 @@ let contenu = '';
 if(onglet === 'clients') contenu = sous ? viewClientDetail(sous) : viewClients();
 else if(onglet === 'equipe') contenu = viewMembres() + viewInvitations();
 else if(onglet === 'support') contenu = isSuperAdmin()
-? sousMenuSupport(['modeles','stats'].includes(sous) ? sous : 'demandes') + (sous === 'modeles' ? viewModelesMetier() : sous === 'stats' ? viewStats() : viewSupportAdmin())
+? sousMenuSupport(['modeles','stats','rapports'].includes(sous) ? sous : 'demandes') + (sous === 'modeles' ? viewModelesMetier() : sous === 'stats' ? viewStats() : sous === 'rapports' ? viewRapports() : viewSupportAdmin())
 : viewSupportAdmin();
 else if(onglet === 'journal') contenu = viewJournal();
 
@@ -1398,6 +1398,7 @@ const nb = (state.modeles || []).length;
 return `
 <div class="sous-menu" role="tablist">
 <button class="${actif === 'demandes' ? 'active' : ''}" data-action="go" data-path="/reglages/support">${iconeNav('inbox', 16)} Demandes clients ${aTraiter ? `<span class="onglet-compteur alerte">${aTraiter}</span>` : ''}</button>
+<button class="${actif === 'rapports' ? 'active' : ''}" data-action="go" data-path="/reglages/support/rapports">${iconeNav('wrench', 16)} Rapport d'intervention</button>
 <button class="${actif === 'stats' ? 'active' : ''}" data-action="go" data-path="/reglages/support/stats">${iconeNav('chart', 16)} Statistiques &amp; export</button>
 <button class="${actif === 'modeles' ? 'active' : ''}" data-action="go" data-path="/reglages/support/modeles">${iconeNav('tag', 16)} Modèles métier <span class="onglet-compteur">${nb}</span></button>
 </div>`;
