@@ -1,132 +1,141 @@
-// Remplacez avec vos clés Supabase
-const SUPABASE_URL = 'https://VOTRE_PROJET.supabase.co';
-const SUPABASE_ANON_KEY = 'VOTRE_CLE_ANON_SUPABASE';
+// Replace with your Supabase keys
+const SUPABASE_URL = 'https://YOUR_PROJECT.supabase.co';
+const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY';
 
-function chargerFormulaireRapport(conteneur) {
-  conteneur.innerHTML = `
-    <div class="card" style="max-w-3xl; margin: 20px auto; padding: 20px;">
-      <h2 style="margin-bottom: 20px;">Rapport d'Intervention</h2>
-      <form id="form-rapport" style="display: flex; flex-direction: column; gap: 15px;">
-        <div style="display: flex; gap: 10px;">
-          <input type="text" id="nomSupport" placeholder="Nom du Support" required style="flex:1; padding: 10px; border: 1px solid #ccc; border-radius: 6px;">
-          <input type="date" id="dateIntervention" required style="flex:1; padding: 10px; border: 1px solid #ccc; border-radius: 6px;">
-        </div>
-        <div style="display: flex; gap: 10px;">
-          <input type="text" id="nomClient" placeholder="Nom du Client" required style="flex:1; padding: 10px; border: 1px solid #ccc; border-radius: 6px;">
-          <input type="email" id="emailClient" placeholder="Email du Client" required style="flex:1; padding: 10px; border: 1px solid #ccc; border-radius: 6px;">
-        </div>
-        <textarea id="raisonIntervention" placeholder="Raison de l'intervention..." rows="3" required style="width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 6px;"></textarea>
-        
-        <div>
-          <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
-            <label><strong>Signature du client</strong></label>
-            <button type="button" id="btn-effacer-sig" style="color: red; background: none; border: none; cursor: pointer;">Effacer</button>
-          </div>
-          <canvas id="canvas-sig" width="600" height="150" style="border: 1px dashed #ccc; background: #fafafa; width: 100%; touch-action: none; cursor: crosshair;"></canvas>
-        </div>
+function loadInterventionReportForm(container) {
+container.innerHTML = `
 
-        <div>
-          <label><strong>Photo (optionnel)</strong></label>
-          <input type="file" id="photoIntervention" accept="image/*" style="display: block; margin-top: 5px;">
-        </div>
 
-        <button type="submit" id="btn-soumettre" class="btn btn-primary" style="padding: 12px; font-weight: bold;">Valider et enregistrer</button>
-      </form>
+Intervention Report
+
+
+
+Support Name
+
+
+jj/mm/aaaa
+
+
+
+Client Name
+
+Client Email
+
+
+Reason for intervention...
+
+    <div>
+      <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+        <label><strong>Client Signature</strong></label>
+        <button type="button" id="btn-clear-sig" style="color: red; background: none; border: none; cursor: pointer;">Clear</button>
+      </div>
+      <canvas id="sig-canvas" width="600" height="150" style="border: 1px dashed #ccc; background: #fafafa; width: 100%; touch-action: none; cursor: crosshair;"></canvas>
     </div>
-  `;
 
-  // Gestion de la signature Canvas
-  const canvas = document.getElementById('canvas-sig');
-  const ctx = canvas.getContext('2d');
-  let estEnDessin = false;
+    <div>
+      <label><strong>Photo (optional)</strong></label>
+      <input type="file" id="interventionPhoto" accept="image/*" style="display: block; margin-top: 5px;">
+    </div>
 
-  ctx.lineWidth = 2;
-  ctx.strokeStyle = '#000000';
+    <button type="submit" id="btn-submit" class="btn btn-primary" style="padding: 12px; font-weight: bold;">Submit and Save</button>
+  </form>
+</div>
+`;
 
-  function obtnCoords(e) {
-    const rect = canvas.getBoundingClientRect();
-    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-    return { x: clientX - rect.left, y: clientY - rect.top };
+// Canvas signature handling
+const canvas = document.getElementById('sig-canvas');
+const ctx = canvas.getContext('2d');
+let isDrawing = false;
+
+ctx.lineWidth = 2;
+ctx.strokeStyle = '#000000';
+
+function getCoords(e) {
+const rect = canvas.getBoundingClientRect();
+const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+return { x: clientX - rect.left, y: clientY - rect.top };
+}
+
+canvas.addEventListener('mousedown', (e) => { isDrawing = true; const p = getCoords(e); ctx.beginPath(); ctx.moveTo(p.x, p.y); });
+canvas.addEventListener('mousemove', (e) => { if (!isDrawing) return; e.preventDefault(); const p = getCoords(e); ctx.lineTo(p.x, p.y); ctx.stroke(); });
+canvas.addEventListener('mouseup', () => isDrawing = false);
+canvas.addEventListener('touchstart', (e) => { isDrawing = true; const p = getCoords(e); ctx.beginPath(); ctx.moveTo(p.x, p.y); });
+canvas.addEventListener('touchmove', (e) => { if (!isDrawing) return; e.preventDefault(); const p = getCoords(e); ctx.lineTo(p.x, p.y); ctx.stroke(); });
+canvas.addEventListener('touchend', () => isDrawing = false);
+
+document.getElementById('btn-clear-sig').addEventListener('click', () => {
+ctx.clearRect(0, 0, canvas.width, canvas.height);
+});
+
+// Form submission
+document.getElementById('report-form').addEventListener('submit', async (e) => {
+e.preventDefault();
+const btn = document.getElementById('btn-submit');
+btn.disabled = true;
+btn.textContent = 'Saving...';
+
+try {
+  const signatureBase64 = canvas.toDataURL('image/png');
+  const photoInput = document.getElementById('interventionPhoto');
+  let photoUrl = null;
+
+  // Upload photo to Supabase Storage if one exists
+  if (photoInput.files.length > 0) {
+    const file = photoInput.files[0];
+    const fileName = `${Date.now()}.${file.name.split('.').pop()}`;
+    const resPhoto = await fetch(`${SUPABASE_URL}/storage/v1/object/interventions-photos/${fileName}`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+        'apikey': SUPABASE_ANON_KEY,
+        'Content-Type': file.type
+      },
+      body: file
+    });
+    if (resPhoto.ok) {
+      photoUrl = `${SUPABASE_URL}/storage/v1/object/public/interventions-photos/${fileName}`;
+    }
   }
 
-  canvas.addEventListener('mousedown', (e) => { estEnDessin = true; const p = obtnCoords(e); ctx.beginPath(); ctx.moveTo(p.x, p.y); });
-  canvas.addEventListener('mousemove', (e) => { if (!estEnDessin) return; e.preventDefault(); const p = obtnCoords(e); ctx.lineTo(p.x, p.y); ctx.stroke(); });
-  canvas.addEventListener('mouseup', () => estEnDessin = false);
-  canvas.addEventListener('touchstart', (e) => { estEnDessin = true; const p = obtnCoords(e); ctx.beginPath(); ctx.moveTo(p.x, p.y); });
-  canvas.addEventListener('touchmove', (e) => { if (!estEnDessin) return; e.preventDefault(); const p = obtnCoords(e); ctx.lineTo(p.x, p.y); ctx.stroke(); });
-  canvas.addEventListener('touchend', () => estEnDessin = false);
-
-  document.getElementById('btn-effacer-sig').addEventListener('click', () => {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+  // Insert into Supabase database
+  const resDb = await fetch(`${SUPABASE_URL}/rest/v1/rapports_intervention`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+      'apikey': SUPABASE_ANON_KEY,
+      'Content-Type': 'application/json',
+      'Prefer': 'return=minimal'
+    },
+    body: JSON.stringify({
+      nom_support: document.getElementById('supportName').value,
+      date_intervention: document.getElementById('interventionDate').value,
+      nom_client: document.getElementById('clientName').value,
+      email_client: document.getElementById('clientEmail').value,
+      raison_intervention: document.getElementById('interventionReason').value,
+      signature_base64: signatureBase64,
+      photo_url: photoUrl
+    })
   });
 
-  // Soumission du formulaire
-  document.getElementById('form-rapport').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const btn = document.getElementById('btn-soumettre');
-    btn.disabled = true;
-    btn.textContent = 'Enregistrement...';
+  if (!resDb.ok) throw new Error("Error saving to database.");
 
-    try {
-      const signatureBase64 = canvas.toDataURL('image/png');
-      const photoInput = document.getElementById('photoIntervention');
-      let photoUrl = null;
+  if (typeof toast === 'function') {
+    toast('Intervention report saved!', 'ok');
+  } else {
+    alert('Report saved successfully!');
+  }
 
-      // Upload de la photo sur Supabase Storage s'il y en a une
-      if (photoInput.files.length > 0) {
-        const file = photoInput.files[0];
-        const fileName = `${Date.now()}.${file.name.split('.').pop()}`;
-        const resPhoto = await fetch(`${SUPABASE_URL}/storage/v1/object/interventions-photos/${fileName}`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-            'apikey': SUPABASE_ANON_KEY,
-            'Content-Type': file.type
-          },
-          body: file
-        });
-        if (resPhoto.ok) {
-          photoUrl = `${SUPABASE_URL}/storage/v1/object/public/interventions-photos/${fileName}`;
-        }
-      }
-
-      // Insertion dans la base de données Supabase
-      const resDb = await fetch(`${SUPABASE_URL}/rest/v1/rapports_intervention`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-          'apikey': SUPABASE_ANON_KEY,
-          'Content-Type': 'application/json',
-          'Prefer': 'return=minimal'
-        },
-        body: JSON.stringify({
-          nom_support: document.getElementById('nomSupport').value,
-          date_intervention: document.getElementById('dateIntervention').value,
-          nom_client: document.getElementById('nomClient').value,
-          email_client: document.getElementById('emailClient').value,
-          raison_intervention: document.getElementById('raisonIntervention').value,
-          signature_base64: signatureBase64,
-          photo_url: photoUrl
-        })
-      });
-
-      if (!resDb.ok) throw new Error("Erreur lors de la sauvegarde dans la base.");
-
-      if (typeof toast === 'function') {
-        toast('Rapport d\'intervention enregistré !', 'ok');
-      } else {
-        alert('Rapport enregistré avec succès !');
-      }
-
-      chargerFormulaireRapport(conteneur); // Réinitialiser le formulaire
-    } catch (err) {
-      console.error(err);
-      if (typeof toast === 'function') toast('Erreur : ' + err.message, 'erreur');
-      else alert('Erreur : ' + err.message);
-    } finally {
-      btn.disabled = false;
-      btn.textContent = 'Valider et enregistrer';
-    }
-  });
+  loadInterventionReportForm(container); // Reset the form
+} catch (err) {
+  console.error(err);
+  if (typeof toast === 'function') toast('Error: ' + err.message, 'error');
+  else alert('Error: ' + err.message);
+} finally {
+  btn.disabled = false;
+  btn.textContent = 'Submit and Save';
 }
+});
+}
+
+Comment utiliser notre tra
