@@ -1,58 +1,2913 @@
-<!DOCTYPE html>
-<html lang="fr">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>WiTracEQUIP — Passeport technique d'équipement</title>
-<link rel="icon" type="image/png" href="assets/icons/favicon-64.png">
-<link rel="manifest" href="manifest.json">
-<meta name="theme-color" content="#0f766e" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#12181a" media="(prefers-color-scheme: dark)">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="WiTracEQUIP">
-<link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png">
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/qrious/4.0.2/qrious.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
-<link rel="stylesheet" href="css/style.css">
-</head>
-<body>
-<div id="app"></div>
-<div id="print-area"></div>
+/* Render root */
+/* ---------------------------------------------------------------------- */
 
-<script src="js/config.js"></script>
-<script src="js/core/icons.js"></script>
-<script src="js/services/offline.js"></script>
-<script src="js/services/data.js"></script>
-  <script src="js/ui.js"></script>
-  <script src="js/réglages.js"></script>
-  <script src="js/app.js"></script>
-  <script src="RapportIntervention.js"></script>
+/* Page key: the arrival animation only plays when changing pages, not on every minor refresh (otherwise everything would flicker). */
+let lastPage = null;
+
+function render(){
+const focus = captureFocus();
+// A background refresh should not close the open menu.
+const menuOpen = !!document.getElementById('user-dropdown')?.classList.contains('open');
+paint();
+if(menuOpen) document.getElementById('user-dropdown')?.classList.add('open');
+const page = location.hash + '|' + !!state.session;
+const main = document.querySelector('#app main');
+if(main && page !== lastPage){
+main.classList.remove('entry'); void main.offsetWidth; main.classList.add('entry');
+if(lastPage !== null) window.scrollTo({ top: 0, behavior: 'instant' });
+}
+lastPage = page;
+restoreFocus(focus);
+}
+
+function paint(){
+const app = document.getElementById('app');
+document.body.dataset.role = state.route.name === 'p' ? '' : roleTheme();
+if(state.loading){
+app.innerHTML = `<div class="center-screen loading"><img src="${LOGO_DATA_URL}" alt=""><div class="spinner"></div></div>`;
+return;
+}
+// Public consultation: the address carried by the QR code stuck on the
+// equipment. No account, no registration — a controller, inspector, or insurer
+// scans and reads the logbook. Read-only: nothing editable, and the database remains closed (only one function is
+// open to visitors, it only returns THIS equipment).
+if(state.route.name === 'p' && state.route.param){
+app.innerHTML = renderPublicRoute(state.route.param);
+return;
+}
+if(state.accessError){
+app.innerHTML = renderAccessSuspended();
+return;
+}
+if(state.session && computerState.mode === 'waiting'){ app.innerHTML = renderComputerWaiting(); drawComputerQr(); return; }
+if(state.session && computerState.mode === 'paused'){ app.innerHTML = renderMobilePaused(); return; }
+if(!state.session){
+// Invitation link: accessible without being logged in.
+if(state.route.name === 'join' && state.route.param){
+app.innerHTML = renderJoin(state.route.param);
+return;
+}
+// Labels printed before the public link was set up: they
+// carry the internal address of the record. A visitor who scans them
+// gets the same read-only consultation, not a login screen. The administrator can cut these old links equipment
+// by equipment with "Change link".
+if(state.route.name === 'equip' && state.route.param){
+app.innerHTML = viewPublicRecord(state.route.param);
+return;
+}
+app.innerHTML = renderAuth();
+return;
+}
+app.innerHTML = renderShell();
+}
+
+/* ---------------------------------------------------------------------- */
+/* Serial number already registered: we warn, we don't block */
+/* ---------------------------------------------------------------------- */
+
+/* Two trucks can legitimately have the same partial chassis number,
+and a press operator should never be stuck by a machine.
+We therefore signal the duplicate without preventing registration.
+Intentionally without render(): refreshing the view would erase the current input. We write directly into the alert area. */
+let serialTimer = null;
+let serialRequest = 0;
+
+function alertZoneSerial(){ return document.getElementById('alerte-serie'); }
+
+function showSerialAlert(html){
+const zone = alertZoneSerial();
+if(!zone) return;
+zone.innerHTML = html || '';
+zone.classList.toggle('empty', !html);
+}
+
+function checkSerial(value, excludeId){
+const v = (value || '').trim();
+clearTimeout(serialTimer);
+
+if(v.length < 3){ showSerialAlert(''); return; }
+
+const request = ++serialRequest;
+serialTimer = setTimeout(async () => {
+try{
+let q = sb.from('equipements')
+.select('id, nom, archived, type_id')
+.eq('serial_value', v)
+.limit(4);
+if(excludeId) q = q.neq('id', excludeId);
+const { data, error } = await q;
+if(error) throw error;
+if(request !== serialRequest) return; // input continued in the meantime
+
+const found = data || [];
+if(!found.length){ showSerialAlert(''); return; }
+
+const lines = found.map(e => {
+const t = state.types.find(x => x.id === e.type_id);
+return `<div>• <a href="#/equip/${e.id}">${esc(e.nom)}</a>`
++ `${t ? ' — ' + esc(t.nom) : ''}`
++ `${e.archived ? ' <em>(retired from service)</em>' : ''}</div>`;
+}).join('');
+
+showSerialAlert(
+`<strong>This number is already registered</strong>${found.length > 1 ? ` (${found.length} records)` : ''} :`
++ lines
++ `<div style="margin-top:4px;">You can still register: this is only a warning.</div>`
+);
+}catch(e){
+// A failed check should never prevent input.
+if(request === serialRequest) showSerialAlert('');
+}
+}, 400);
+}
+
+/* ---------------------------------------------------------------------- */
+/* Public consultation - read-only, no account */
+/* ---------------------------------------------------------------------- */
+
+let publicRecord = { token:null, data:null, loading:false, error:'' };
+
+/* The technician scanning a label often wants to follow up with entering
+their intervention. We retain the label they were looking at to
+bring them back directly to that record once logged in. */
+function connectionFromScan(){
+try{ sessionStorage.setItem('wt_return_scan', publicRecord.token || state.route.param || ''); }catch(e){}
+state.authError = ''; state.authNotice = '';
+nav('/login');
+}
+
+/* ---------------------------------------------------------------------- */
+/* Offline: last known state, kept on the device */
+/* ---------------------------------------------------------------------- */
+/* Profile, types, and equipment list from the last connection, stored
+in the browser's storage under the account name (deleted on logout).
+Without a network, the application starts and displays this last state, clearly
+indicated as such, instead of an error. */
+function isNetworkError(e){
+if(!navigator.onLine) return true;
+return /failed to fetch|networkerror|load failed|network request failed|fetch failed|too long/i.test((e && e.message) || String(e || ''));
+}
+function instantKey(){ return 'wte_hl_' + (state.session?.user?.id || ''); }
+function readInstant(){
+try{ return JSON.parse(localStorage.getItem(instantKey()) || 'null') || {}; }catch(e){ return {}; }
+}
+function saveInstant(addition){
+// Computer open for 45 min: no data copy remains there.
+if(deviceType() === 'computer' && !state.superAdmin) return;
+try{ localStorage.setItem(instantKey(), JSON.stringify({ ...readInstant(), ...addition })); }catch(e){}
+}
+function clearInstants(){
+try{ Object.keys(localStorage).filter(k => k.startsWith('wte_hl_')).forEach(k => localStorage.removeItem(k)); }catch(e){}
+}
+/* Known equipment without network: those pending sending + the last list. */
+async function knownEquipments(){
+const pending = await offlineEquipAsLines();
+const list = (dashboardCache.items && dashboardCache.items.length) ? dashboardCache.items : (readInstant().equipments || []);
+return [...pending, ...list.filter(e => !pending.some(x => x.id === e.id))];
+}
+
+function returnAfterLogin(){
+let t = '';
+try{ t = sessionStorage.getItem('wt_return_scan') || ''; sessionStorage.removeItem('wt_return_scan'); }catch(e){}
+if(t){ nav('/p/' + t); state.route = parseHash(); }
+}
+let resolvePublic = { token:null, busy:false };
+
+/* A person already logged in who scans a label from their inventory does not need
+the public view: they are taken to the full record, where they can enter the intervention. If the token does not correspond to anything they have the right to see, they fall back to the public view like everyone else. */
+function renderPublicRoute(token){
+if(!state.session){ return viewPublicRecord(token); }
+
+if(resolvePublic.token !== token){
+resolvePublic = { token, busy:true };
+sb.from('equipements').select('id').eq('public_token', token).maybeSingle()
+.then(async ({ data, error }) => {
+if(data && data.id){ nav('/equip/' + data.id); return; }
+if(error || !navigator.onLine){
+const known = (await knownEquipments()).find(e => e.public_token === token);
+if(known){ nav('/equip/' + known.id); return; }
+}
+resolvePublic.busy = false; render();
+})
+.catch(() => { resolvePublic.busy = false; render(); });
+}
+if(resolvePublic.busy) return `<div class="center-screen"><div class="spinner"></div></div>`;
+return viewPublicRecord(token);
+}
+
+function viewPublicRecord(token){
+if(publicRecord.token !== token){
+publicRecord = { token, data:null, loading:true, error:'' };
+sb.rpc('public_record', { p_token: token })
+.then(({ data, error }) => {
+if(error) throw error;
+publicRecord.data = data || null;
+publicRecord.loading = false; render();
+})
+.catch(e => {
+publicRecord.error = (e && e.message) ? e.message : String(e);
+publicRecord.loading = false; render();
+});
+}
+
+if(publicRecord.loading) return `<div class="center-screen"><div class="spinner"></div></div>`;
+
+if(publicRecord.error || !publicRecord.data){
+return `
+<div class="pub-page">
+${publicHeader('')}
+<div class="card stack">
+<h2 class="pub-title">Record unavailable</h2>
+<div class="small muted">
+This label does not correspond to any viewable record. It may have been
+replaced, or public viewing has been closed by the equipment owner.
+</div>
+</div>
+${publicFooter()}
+</div>`;
+}
+
+const d = publicRecord.data;
+const fields = Array.isArray(d.fields) ? d.fields : [];
+const values = d.values || {};
+const ivs = Array.isArray(d.interventions) ? d.interventions : [];
+
+const infoRows = fields.map(c => {
+const raw = values[c.key];
+const val = !raw ? '—' : (c.type === 'date' ? fmtDate(raw) : raw);
+return `<tr><td class="muted">${esc(c.label)}</td><td>${esc(val)}</td></tr>`;
+}).join('');
+
+const ivRows = ivs.map(iv => `
+<tr>
+<td class="iv-date">${fmtDate(iv.date)}</td>
+<td data-l="Type">${esc(iv.type)}</td>
+<td data-l="Technician">${esc(iv.technician)}</td>
+<td class="muted" data-l="Description">${esc(iv.description || '—')}</td>
+</tr>
+`).join('');
+
+const last = ivs.length ? fmtDate(ivs[0].date) : null;
+
+return `
+<div class="pub-page">
+${publicHeader(d.organization || '')}
+
+<div class="card stack">
+<div>
+<h2 class="pub-title">${esc(d.nom || '')}</h2>
+<div class="small muted">
+${esc(d.type || '')}${d.serial_value ? ' · ' + esc(d.serial_value) : ''}
+</div>
+</div>
+<div>
+<span class="pub-read-only">🔒 Read-only consultation</span>
+${d.archived ? `<span class="pub-read-only pub-retired">⚠️ Retired from service</span>` : ''}
+</div>
+</div>
+
+<div class="card" style="margin-top:14px;">
+<h3 class="small" style="text-transform:uppercase;letter-spacing:.02em;color:var(--text-dim);">Information</h3>
+<div style="overflow-x:auto;">
+<table>
+<tr><td class="muted">Tracking started</td><td>${fmtDate(d.created_at)}</td></tr>
+${last ? `<tr><td class="muted">Last intervention</td><td>${last}</td></tr>` : ''}
+${infoRows}
+</table>
+</div>
+</div>
+
+<div class="card" style="margin-top:14px;">
+<h3>Intervention history</h3>
+${ivs.length ? `
+<div style="overflow-x:auto;">
+<table class="pub-ivs">
+<thead><tr><th>Date</th><th>Type</th><th>Technician</th><th>Description</th></tr></thead>
+<tbody>${ivRows}</tbody>
+</table>
+</div>
+` : `<div class="empty small">No interventions recorded to date.</div>`}
+</div>
+
+${publicFooter()}
+</div>`;
+}
+
+function publicHeader(org){
+return `
+<div class="pub-header">
+<img src="${LOGO_DATA_URL}" alt="">
+<div>
+<div class="name">WiTracEQUIP</div>
+<div class="by">Equipment technical passport</div>
+</div>
+${org ? `<div class="org">${esc(org)}</div>` : ''}
+<button class="pub-login" data-action="connection-from-scan">Log in</button>
+</div>`;
+}
+
+function publicFooter(){
+return `
+<div class="pub-footer">
+Maintenance log kept with WiTracEQUIP — by WiDIAG MQ.<br>
+This page is a free consultation: it does not allow any modification.<br>
+Technician on the team? "Log in" at the top of the page opens the full record.
+</div>
+${footerSupport()}`;
+}
+
+function renderAccessSuspended(){
+const suspended = state.accessError === 'ACCESS_SUSPENDED';
+return `
+<div class="auth-wrap">
+<div class="auth-logo">
+<h1 style="font-size:20px;">${suspended ? 'Access suspended' : 'Connection impossible'}</h1>
+</div>
+<div class="card stack">
+<div class="alert alert-error" style="margin:0;">
+${suspended
+? "Your access to WiTracEQUIP is currently suspended."
+: esc(state.accessError)}
+</div>
+<div class="small muted">
+${suspended
+? "Contact your organization's administrator to reinstate it."
+: "Try again in a moment, or log in again."}
+</div>
+<button class="btn btn-block" data-action="logout">Log out</button>
+</div>
+${footerSupport()}
+</div>
+`;
+}
+
+/* ---------------------------------------------------------------------- */
+/* Roles: color theme and menus */
+/* ---------------------------------------------------------------------- */
+/* Each role has its color: user blue, manager green, administrator
+   purple, founder night & gold. We know at a glance which profile we are on. */
+function roleTheme(){
+if(!state.session || !state.profile) return '';
+if(isSuperAdmin() || state.profile.founder) return 'founder';
+return state.profile.role || '';
+}
+function roleLabelTheme(){
+if(isSuperAdmin()) return 'Founder · WiDIAG MQ';
+if(state.profile?.founder) return 'Founder';
+return roleLabel(state.profile?.role);
+}
+
+/* Super-admin: works client by client: Home · Clients · Support · Log. */
+function navEntries(r){
+if(isSuperAdmin()){
+const toProcess = (settings.support || []).filter(d => d.status !== 'processed').length;
+const subPage = r.name === 'settings' ? (r.param || 'clients') : '';
+return [
+{ path:'/', icon:'home', label:'Home', active: r.name === 'home' },
+{ path:'/settings/clients', icon:'briefcase', label:'Clients',
+active: subPage === 'clients' || ['equip','equip-new','types','equipements','dashboard'].includes(r.name) },
+{ path:'/settings/profiles', icon:'users', label:'Profiles', active: subPage === 'profiles' },
+{ path:'/settings/support', icon:'inbox', label:'Support', active: subPage === 'support' || r.name === 'support', badge: toProcess || '' },
+{ path:'/settings/log', icon:'log', label:'Log', active: subPage === 'log' },
+];
+}
+const equipmentsActive = ['dashboard','equipements','equip','equip-new'].includes(r.name);
+return [
+{ path:'/', icon:'home', label:'Home', active: r.name === 'home' },
+{ path:'/equipements', icon:'box', label:'Equipments', short:'Equip.', active: equipmentsActive },
+...(canManageTypes() ? [{ path:'/types', icon:'tag', label:"Equipment types", short:'Types', active: r.name === 'types' }] : []),
+{ path:'/log', icon:'log', label:'Log', active: r.name === 'log', badge: unreadActivityCount() || '' },
+...(canManageSettings() ? [{ path:'/settings', icon:'gear', label:'Settings', active: r.name === 'settings' || r.name === 'team' }] : []),
+{ path:'/support', icon:'help', label:'Support', active: r.name === 'support' },
+];
+}
+
+/* Super-admin: an equipment's inventory is its client's record. */
+function inventoryRoute(orgId){ return isSuperAdmin() && orgId ? '/settings/clients/' + orgId : '/equipements'; }
+function clientNameOf(orgId){ return ((settings.clients || []).find(c => c.id === orgId) || {}).nom || ''; }
+function typesFor(orgId){ return isSuperAdmin() ? state.types.filter(t => t.organization_id === orgId) : state.types; }
+function targetOrgTypes(){ return isSuperAdmin() ? state.route.param : state.profile.organization_id; }
+
+/* ---------------------------------------------------------------------- */
+/* Passwords */
+/* ---------------------------------------------------------------------- */
+const MIN_PWD = 8;
+
+function translatePasswordError(m){
+const s = String(m || '').toLowerCase();
+if(s.includes('different from the old')) return "The new password must be different from the old one.";
+if(s.includes('at least') || s.includes('weak') || s.includes('pwned')) return `Password too weak: at least ${MIN_PWD} characters, mixing letters and numbers.`;
+if(s.includes('reauthentication')) return "For security reasons, log out and log back in before changing the password.";
+if(s.includes('failed to fetch') || s.includes('network')) return "No network: try again once connected.";
+return m;
+}
+
+function validateNewPassword(newPassword, confirmation){
+if((newPassword || '').length < MIN_PWD) return `The password must be at least ${MIN_PWD} characters long.`;
+if(!/[A-Za-z]/.test(newPassword) || !/[0-9]/.test(newPassword)) return 'Mix at least letters and numbers.';
+if(newPassword !== confirmation) return 'The two entries for the new password do not match.';
+return null;
+}
+
+async function changeMyPassword(){
+const email = state.session?.user?.email;
+const ok = await openForm({
+title: 'Change my password',
+text: `At least ${MIN_PWD} characters, with letters and numbers.`,
+fields: [
+{ name:'current', label:'Current password', autocomplete:'current-password' },
+{ name:'new', label:'New password', autocomplete:'new-password' },
+{ name:'confirmation', label:'Confirm new', autocomplete:'new-password' },
+],
+ok: 'Save',
+verify: async (v) => {
+if(!v.current) return 'Enter your current password.';
+const pb = validateNewPassword(v.new, v.confirmation);
+if(pb) return pb;
+if(v.new === v.current) return "The new password must be different from the old one.";
+// We verify the current one: someone finding the unlocked phone
+// should not be able to change the password.
+const verify = await sb.auth.signInWithPassword({ email, password: v.current });
+if(verify.error) return /invalid/i.test(verify.error.message) ? 'Incorrect current password.' : translatePasswordError(verify.error.message);
+// New session on the same device: we link it to the device.
+if(await linkDevice() === 'refused'){ setTimeout(refuseDevice, 0); return null; }
+const { error } = await sb.auth.updateUser({ password: v.new });
+if(error) return translatePasswordError(error.message);
+try{ await passwordChangeDone(); }catch(e){}
+return null;
+},
+});
+if(ok) toast('Password changed');
+}
+
+/* After a reset by the founder: the person chooses their own. */
+async function imposeNewPassword(){
+if(!state.profile?.password_to_change) return;
+const ok = await openForm({
+title: 'Choose your password',
+text: `You logged in with a temporary password. Choose yours to continue (at least ${MIN_PWD} characters, letters and numbers).`,
+fields: [
+{ name:'new', label:'New password', autocomplete:'new-password' },
+{ name:'confirmation', label:'Confirm', autocomplete:'new-password' },
+],
+ok: 'Save', cancel: 'Log out',
+verify: async (v) => {
+const pb = validateNewPassword(v.new, v.confirmation);
+if(pb) return pb;
+const { error } = await sb.auth.updateUser({ password: v.new });
+if(error) return translatePasswordError(error.message);
+try{ await passwordChangeDone(); }catch(e){}
+return null;
+},
+});
+if(ok) toast('Password saved');
+else { voluntaryLogout = true; clearInstants(); sb.auth.signOut({ scope:'local' }); }
+}
+
+/* Founder: temporary password for a profile. */
+async function resetMemberPassword(id){
+const m = (settings.members || []).find(x => x.id === id);
+if(!m || !isSuperAdmin()) return;
+const email = settings.emails?.[id]?.email || '';
+const v = await openForm({
+title: `Reset password for ${m.full_name || 'this profile'}`,
+text: `${email ? email + ' — ' : ''}A temporary password is proposed; you can change it. The person will be logged out of their devices and will have to choose their own password on their next login.`,
+fields: [{ name:'password', label:'Temporary password', type:'text', value: generatePassword() }],
+ok: 'Reset',
+verify: async (x) => {
+const pwd = (x.password || '').trim();
+if(pwd.length < MIN_PWD) return `At least ${MIN_PWD} characters.`;
+await resetPassword(id, pwd);
+return null;
+},
+});
+if(!v) return;
+const pwd = v.password.trim();
+let copied = false;
+try{ await navigator.clipboard.writeText(pwd); copied = true; }catch(e){}
+settings.log = null;
+await confirm(`Password reset\n\nProvide to ${m.full_name || 'the person'}:\n${email ? 'Username: ' + email + '\n' : ''}Temporary password: ${pwd}\n\n${copied ? 'The password is copied: you can paste it into an SMS or email.' : ''} They will be asked to choose a new one upon login.`, { ok:'Understood', danger:false, info:true });
+}
+
+async function renameMe(){
+closeMenus();
+const name = await ask("Change my name\n\nFirst name and last name, as they will appear in the application and on your next interventions.",
+{ ok:'Save', placeholder:'First Name Last Name', value: state.profile?.full_name || '' });
+if(name === null) return;
+const clean = name.trim().replace(/\s+/g, ' ');
+if(clean.length < 2){ toast('Indicate at least the first and last name.', 'error'); return; }
+try{
+await renameMember(state.profile.id, clean);
+state.profile.full_name = clean;
+const m = (settings.members || []).find(x => x.id === state.profile.id);
+if(m) m.full_name = clean;
+toast('Name updated');
+render();
+}catch(e){ toast('Error: ' + e.message, 'error'); }
+}
+
+function renderShell(){
+const r = state.route;
+let content = '';
+const sa = isSuperAdmin();
+try{
+if(r.name === 'home') content = sa ? viewFounderHome() : viewHome();
+// Super-admin has no personal inventory: their key figures and clients, at a glance.
+else if(r.name === 'dashboard' || r.name === 'equipements') content = sa ? viewSettings('clients') : viewDashboard();
+else if(r.name === 'types') content = !canManageTypes() ? viewDashboard() : (sa && !r.param ? viewSettings('clients') : viewTypes());
+else if(r.name === 'equip-new') content = viewEquipNew();
+else if(r.name === 'equip') content = viewEquipDetail(r.param);
+else if(r.name === 'settings') content = viewSettings(r.param, r.sub);
+else if(r.name === 'team') content = viewSettings('members'); // old address
+else if(r.name === 'support') content = sa ? viewSettings('support', r.param)
+: !canViewStats() ? viewSupport()
+: supportSubMenu(r.param === 'stats' ? 'stats' : 'requests') + (r.param === 'stats' ? viewStats() : viewSupport());
+else if(r.name === 'log') content = sa ? viewSettings('log') : viewActivity();
+else content = sa ? viewSettings('clients') : viewDashboard();
+}catch(e){
+content = `<div class="alert alert-error">Display error: ${esc(e.message||e)}</div>`;
+}
+
+
+return `
+<div class="shell">
+<aside class="sidebar">
+<div class="sidebar-brand">
+<img class="logo" src="assets/icons/icon-192.png" alt="WiTracEQUIP">
+<div>
+<div class="name">WiTracEQUIP</div>
+<div class="by">by WiDIAG MQ</div>
+</div>
+</div>
+<nav class="sidebar-nav">
+${navEntries(r).map(n => `<div class="sidebar-link ${n.active?'active':''}" data-action="go" data-path="${n.path}">${navIcon(n.icon)}<span>${n.label}</span>${n.badge ? `<span class="nav-badge">${n.badge}</span>` : ''}</div>`).join('')}
+</nav>
+<div class="sidebar-spacer"></div>
+${sa ? `<div class="sidebar-founder">${navIcon('crown', 16)}<div><strong>Founder space</strong><span>${esc(state.orgName || 'WiDIAG MQ')}</span></div></div>` : ''}
+${state.pendingCount > 0 ? `<div class="sidebar-sync" title="${state.pendingCount} entry${state.pendingCount>1?'s':''} pending sending (no network)">${navIcon('clock',15)}<span>${state.pendingCount} pending</span></div>` : ''}
+</aside>
+
+<div class="shell-main">
+<div class="topbar">
+<div class="brand">
+<img class="logo" src="assets/icons/icon-192.png" alt="WiTracEQUIP">
+<div>
+WiTracEQUIP
+<div class="by">by WiDIAG MQ</div>
+</div>
+</div>
+<div class="topbar-spacer"></div>
+${state.pendingCount > 0 ? `<span class="badge-pending" title="${state.pendingCount} entry${state.pendingCount>1?'s':''} pending sending (no network)">⏳ ${state.pendingCount}</span>` : ''}
+<div class="org-pill">${esc(state.orgName || '…')}</div>
+<div class="user-menu">
+<button class="user-btn" data-action="toggle-menu">
+<span class="avatar">${esc(initials(state.profile?.full_name || state.session.user.email))}</span>
+<span class="user-name">${esc((state.profile?.full_name || '').trim() || state.session.user.email)}</span>
+</button>
+<div class="dropdown" id="user-dropdown">
+<div class="dropdown-header">
+<div class="dropdown-name">${esc(state.profile?.full_name || 'No name')}</div>
+<div class="small muted">${esc(state.session.user.email)}</div>
+<div style="margin-top:6px;"><span class="badge badge-role role-${roleTheme()}">${esc(roleLabelTheme())}</span></div>
+</div>
+<button data-action="rename-me">${navIcon('pencil', 15)} Change my name</button>
+<button data-action="change-pwd">${navIcon('key', 15)} Change my password</button>
+${!sa && deviceState.mode === 'mobile' ? `<button data-action="open-on-computer">${navIcon('monitor', 15)} Open on a computer</button>` : ''}
+${!sa ? `<button data-action="go" data-path="/support">${navIcon('help', 15)} Support & requests</button>` : ''}
+<button data-action="logout" class="dropdown-logout">Log out</button>
+</div>
+</div>
+</div>
+<main>${renderComputerBanner()}${content}${footerSupport()}</main>
+</div>
+${renderModal()}
+
+<nav class="bottom-nav">
+${navEntries(r).map(n => `<div class="bottom-nav-item ${n.active?'active':''}" data-action="go" data-path="${n.path}">${navIcon(n.icon,20)}<span>${n.short || n.label}</span>${n.badge ? `<span class="nav-badge">${n.badge}</span>` : ''}</div>`).join('')}
+</nav>
+</div>
+`;
+}
+
+/* ---------------------------------------------------------------------- */
+/* Auth view */
+/* ---------------------------------------------------------------------- */
+
+function renderAuth(){
+// Free registration does not exist: an account can only be created by
+// opening an invitation link (#/join/...). This screen is only for logging in.
+return `
+<div class="auth-wrap">
+<div class="auth-logo">
+<img class="logo brand-logo" src="${LOGO_DATA_URL}" alt="WiTracEQUIP">
+<h1 style="font-size:20px;">WiTracEQUIP</h1>
+<div class="small muted">Your equipment's technical passport — by WiDIAG MQ</div>
+</div>
+
+${state.authError ? `<div class="alert alert-error">${esc(state.authError)}</div>` : ''}
+${state.authNotice ? `<div class="alert alert-success">${esc(state.authNotice)}</div>` : ''}
+
+<form class="card stack" data-action="submit-auth">
+<div class="field">
+<label>Email</label>
+<input type="email" name="email" placeholder="you@example.com" required autocomplete="email">
+</div>
+<div class="field">
+<label>Password</label>
+${passwordField('current-password')}
+</div>
+<button class="btn btn-primary btn-block" type="submit" ${state.authBusy?'disabled':''}>
+${state.authBusy ? '…' : 'Log in'}
+</button>
+</form>
+
+<div class="small muted" style="text-align:center;margin-top:14px;">
+Access to WiTracEQUIP is by invitation only.<br>
+Did you receive an invitation link? Open it to create your account.
+</div>
+${footerSupport()}
+</div>
+`;
+}
+
+async function handleAuthSubmit(form){
+state.authError = ''; state.authNotice = ''; state.authBusy = true; render();
+const fd = new FormData(form);
+const email = fd.get('email').trim();
+const password = fd.get('password');
+try{
+const { error } = await sb.auth.signInWithPassword({ email, password });
+if(error) throw error;
+// onAuthStateChange handles the rest (including device verification)
+}catch(e){
+state.authError = translateAuthError(e.message || String(e));
+}finally{
+state.authBusy = false; render();
+}
+}
+
+function translateAuthError(msg){
+const m = msg.toLowerCase();
+if(m.includes('invalid login credentials')) return "Incorrect email or password.";
+if(m.includes('user already registered') || m.includes('already registered')) return "An account already exists with this email.";
+if(m.includes('email not confirmed')) return "Please confirm your email before logging in (link sent by email).";
+if(m.includes('password should be at least')) return "The password must be at least 6 characters long.";
+if(m.includes('invitation_only_registration'))
+return "Account creation is only possible via an invitation link.";
+if(m.includes('organization_suspended'))
+return "The organization inviting you is currently suspended. Contact WiDIAG MQ.";
+if(m.includes('invalid_invite') || m.includes('database error saving new user'))
+return "This invitation link is no longer valid. Request a new one from your administrator.";
+return msg;
+}
+
+/* ---------------------------------------------------------------------- */
+/* View: Home */
+/* ---------------------------------------------------------------------- */
+
+let homeCache = { figures: null, loading: false, error: '' };
+
+async function loadFigures(){
+const [eq, iv] = await Promise.all([
+sb.from('equipements').select('id, archived'),
+sb.from('interventions').select('date').order('date', { ascending: false }),
+]);
+if(eq.error) throw eq.error;
+if(iv.error) throw iv.error;
+const equipments = eq.data || [];
+const interventions = iv.data || [];
+return {
+active: equipments.filter(e => !e.archived).length,
+interventions: interventions.length,
+last: interventions.length ? interventions[0].date : null,
+};
+}
+
+/* ---------------------------------------------------------------------- */
+/* Founder's Home (super-admin): activity dashboard */
+/* ---------------------------------------------------------------------- */
+/* No personal inventory: their key figures and clients, at a glance. */
+let founderCache = { data:null, loading:false, error:'' };
+
+async function loadFounderDashboard(){
+const startOfMonth = new Date(); startOfMonth.setDate(1);
+const iso = `${startOfMonth.getFullYear()}-${String(startOfMonth.getMonth() + 1).padStart(2, '0')}-01`;
+const iv = await sb.from('interventions').select('id').gte('date', iso);
+if(iv.error) throw iv.error;
+return { interventionsThisMonth: (iv.data || []).length };
+}
+
+function viewFounderHome(){
+loadClients(false);
+loadSupport(false);
+if(founderCache.data === null && !founderCache.loading && !founderCache.error && state.typesLoaded){
+founderCache.loading = true;
+loadFounderDashboard()
+.then(d => { founderCache.data = d; founderCache.error = ''; })
+.catch(e => { founderCache.error = e.message; })
+.finally(() => { founderCache.loading = false; render(); });
+}
+const firstName = (state.profile?.full_name || '').trim().split(/\s+/)[0] || '';
+const clients = (settings.clients || []).filter(c => !c.is_my_organization);
+loadMembers(false);
+const activeProfiles = (settings.members || []).filter(m => m.active && m.id !== state.profile?.id).length;
+const toProcess = (settings.support || []).filter(d => d.status !== 'processed').length;
+const d = founderCache.data;
+const hour = new Date().getHours();
+const greeting = hour < 5 || hour >= 18 ? 'Good evening' : 'Good morning';
+const todayDate = new Date().toLocaleDateString('en-US', { weekday:'long', day:'numeric', month:'long' });
+const figure = (v) => v === null || v === undefined ? '<span class="sq sq-line" style="width:40px;display:inline-block;"></span>' : v;
+
+if(scannerState.open) setTimeout(() => attachScanner(), 0);
+
+
+return `
+<div class="hero-founder">
+<div class="hero-founder-top">
+<div>
+<div class="hero-date">${esc(todayDate)}</div>
+<div class="hero-title">${greeting}${firstName ? ', ' + esc(firstName) : ''}</div>
+<div class="hero-sub">${navIcon('crown', 14)} Founder · ${esc(state.orgName || 'WiDIAG MQ')}</div>
+</div>
+<img src="${LOGO_DATA_URL}" alt="" class="hero-logo">
+</div>
+<div class="kpis">
+<div class="kpi" data-action="go" data-path="/settings/clients"><div class="kpi-val">${figure(settings.clients ? clients.length : null)}</div><div class="kpi-lib">Clients</div></div>
+<div class="kpi" data-action="go" data-path="/settings/profiles"><div class="kpi-val">${figure(settings.members ? activeProfiles : null)}</div><div class="kpi-lib">Active profiles</div></div>
+<div class="kpi"><div class="kpi-val">${figure(d ? d.interventionsThisMonth : null)}</div><div class="kpi-lib">Interventions this month</div></div>
+<div class="kpi ${toProcess ? 'kpi-alert' : ''}" data-action="go" data-path="/settings/support"><div class="kpi-val">${figure(settings.support ? toProcess : null)}</div><div class="kpi-lib">Requests to process</div></div>
+</div>
+</div>
+
+<div class="card">
+<div class="row between wrap"><h3 style="margin:0;">Your clients</h3>
+<button class="btn btn-sm" data-action="go" data-path="/settings/clients">All clients</button></div>
+<div style="margin-top:8px;">
+${settings.clients === null ? skeletonList(4).replace('card list-select', 'list-select')
+: clients.length ? [...clients].sort((a, b) => (b.created_at || '').localeCompare(a.created_at || '')).slice(0, 8).map(c => `
+<div class="line-select clickable" data-action="go" data-path="/settings/clients/${c.id}">
+<div class="client-avatar" style="--teinte:${clientTeinte(c.nom)};">${esc(initials(c.nom))}</div>
+<div class="line-body">
+<div class="line-title">${esc(c.nom)}</div>
+<div class="small muted">No. ${esc(c.client_code)} · ${c.nb_equipements} equipment${c.nb_equipements > 1 ? 's' : ''}</div>
+</div>
+<span class="chevron">›</span>
+</div>`).join('')
+: `<div class="empty small">No clients. <a href="#/settings/clients">Create the first one</a></div>`}
+</div>
+</div>
+
+<div class="scanner-card">
+<div class="scanner-card-icon">${navIcon('scan', 26)}</div>
+<div class="scanner-card-text">
+<div class="scanner-card-title">In the field</div>
+<p>Scan an equipment label at any of your clients: its record opens directly.</p>
+</div>
+<button class="btn btn-primary" data-action="open-scanner">Scan QR code</button>
+</div>
+${scannerState.open ? renderScannerOverlay() : ''}
+`;
+}
+
+function viewHome(){
+if(homeCache.figures === null && !homeCache.loading && !homeCache.error){
+homeCache.loading = true;
+loadFigures()
+.then(c => { homeCache.figures = c; homeCache.loading = false; render(); })
+.catch(e => {
+// Without network, home remains usable (figures will return with network).
+if(isNetworkError(e)) homeCache.figures = {}; else homeCache.error = e.message;
+homeCache.loading = false; render();
+});
+}
+
+const firstName = (state.profile?.full_name || '').trim().split(/\s+/)[0] || '';
+const c = homeCache.figures;
+const inventoryEmpty = c && c.active === 0;
+
+const steps = [
+{ n:'1', title:'Create',
+text:"Add an equipment and fill in its record. Its QR code is generated automatically.",
+link:'/equip-new', button:'Add equipment' },
+{ n:'2', title:'Fill in',
+text:"At each visit, scan the QR code and log the intervention: date, nature, technician.",
+link:'/equipements', button:'View inventory' },
+{ n:'3', title:'Print',
+text:"Print the label and stick it on the equipment. The logbook is accessible in two seconds.",
+link:'/equipements', button:'View inventory' },
+];
+
+// The <video> is recreated on each render (innerHTML): we reattach the
+// existing stream and (re)start the decoding loop right after, like
+// the drawQr() on the equipment record further down this file.
+if(scannerState.open) setTimeout(() => attachScanner(), 0);
+
+return `
+<div class="home-hero">
+<div class="home-brand">
+<img src="${LOGO_DATA_URL}" alt="">
+<div>
+<div class="home-title">Welcome${firstName ? ', ' + esc(firstName) : ''}</div>
+<div class="home-org">${esc(state.orgName || '')}</div>
+</div>
+</div>
+<p class="home-phrase">
+Thank you for choosing WiTracEQUIP to track your equipment. Each machine,
+vehicle, or device now carries its complete maintenance log —
+viewable and up-to-date, with a simple scan.
+</p>
+</div>
+
+<div class="home-section-title">Your solution in three steps</div>
+<div class="home-steps">
+${steps.map((e, i) => `
+<div class="home-step ${(inventoryEmpty && i === 0) ? 'highlight' : ''}">
+<div class="home-step-num">${e.n}</div>
+<div class="home-step-title">${e.title}</div>
+<p>${e.text}</p>
+<button class="btn btn-sm ${(inventoryEmpty && i === 0) ? 'btn-primary' : ''}"
+data-action="go" data-path="${e.link}">${e.button}</button>
+</div>`).join('')}
+</div>
+
+${homeCache.error
+? `<div class="alert alert-error" style="margin-top:14px;">${esc(homeCache.error)}</div>` : ''}
+
+<div class="scanner-card">
+<div class="scanner-card-icon">${navIcon('scan', 26)}</div>
+<div class="scanner-card-text">
+<div class="scanner-card-title">Scan an equipment</div>
+<p>Open the camera and frame the equipment's QR code to access its record directly — without going through the phone's camera app.</p>
+</div>
+<button class="btn btn-primary" data-action="open-scanner">Scan QR code</button>
+</div>
+
+${inventoryEmpty ? `
+<div class="alert alert-info" style="margin-top:14px;">
+Your inventory is still empty. ${canManageTypes()
+? `Start by creating an equipment type — or start with a <strong>business template</strong> to create everything at once.`
+: `Your administrator must first create equipment types.`}
+</div>` : ''}
+
+${scannerState.open ? renderScannerOverlay() : ''}
+`;
+}
+
+function renderScannerOverlay(){
+return `
+<div class="scanner-overlay">
+<video id="scanner-video" playsinline muted autoplay></video>
+<canvas id="scanner-canvas"></canvas>
+<div class="scanner-frame"></div>
+<button class="scanner-close" data-action="close-scanner" title="Close">✕</button>
+<div class="scanner-instruction">Frame the equipment's QR code</div>
+${scannerState.error ? `<div class="scanner-error">${esc(scannerState.error)}</div>` : ''}
+</div>`;
+}
+
+/* ---------------------------------------------------------------------- */
+/* Integrated QR Scanner (home) — avoids having to open the phone's
+camera app next to the app: the camera opens in a full-screen view,
+each frame is decoded with jsQR, and as soon as a WiTracEQUIP QR is recognized
+we navigate directly to the record (same routing logic as a label scanned
+with the native camera app — see publicLink() / hash-routing
+above). */
+let scannerState = { open:false, busy:false, error:'', stream:null, raf:null };
+
+async function openScanner(){
+if(scannerState.open || scannerState.busy) return;
+
+if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+scannerState.open = true;
+scannerState.error = "Your browser does not allow using the camera here. Scan the label with your phone's camera app instead.";
+render();
+return;
+}
+
+scannerState.busy = true; scannerState.error = ''; scannerState.open = true;
+render();
+
+try{
+const stream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:{ ideal:'environment' } }, audio:false });
+scannerState.busy = false;
+if(!scannerState.open){ stream.getTracks().forEach(t=>t.stop()); return; } // closed during wait
+scannerState.stream = stream;
+render();
+}catch(e){
+scannerState.busy = false;
+if(!scannerState.open) return;
+scannerState.error = /NotAllowedError|Permission denied/i.test(e.name || e.message || '')
+? "Camera access denied. Allow camera for WiTracEQUIP in your browser settings, then try again."
+: "Cannot access camera: " + (e.message || e.name || 'unknown error');
+render();
+}
+}
+
+function closeScanner(){
+if(scannerState.raf) cancelAnimationFrame(scannerState.raf);
+scannerState.raf = null;
+if(scannerState.stream) scannerState.stream.getTracks().forEach(t=>t.stop());
+scannerState.stream = null;
+scannerState.open = false;
+scannerState.busy = false;
+scannerState.error = '';
+render();
+}
+
+// Attaches the video stream (kept in memory) to the <video> element freshly recreated
+// by the render, and starts the decoding loop if it's not already running.
+// Called after each home render as long as the scanner is open —
+// same principle as setTimeout(()=>drawQr(...)) on the equipment record.
+function attachScanner(){
+if(!scannerState.open || !scannerState.stream) return;
+
+if(typeof jsQR === 'undefined'){
+if(!scannerState.error){
+scannerState.error = "The QR code reader could not load. Check your connection and try again.";
+render();
+}
+return;
+}
+
+const video = document.getElementById('scanner-video');
+const canvas = document.getElementById('scanner-canvas');
+if(!video || !canvas) return;
+
+if(video.srcObject !== scannerState.stream){
+video.srcObject = scannerState.stream;
+video.play().catch(()=>{});
+}
+
+if(scannerState.raf) return; // the decoding loop is already running
+
+const ctx = canvas.getContext('2d', { willReadFrequently:true });
+
+function loop(){
+if(!scannerState.open || !scannerState.stream){ scannerState.raf = null; return; }
+
+if(video.readyState >= video.HAVE_ENOUGH_DATA && video.videoWidth){
+canvas.width = video.videoWidth;
+canvas.height = video.videoHeight;
+ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+let result = null;
+try{
+const image = ctx.getImageData(0, 0, canvas.width, canvas.height);
+result = jsQR(image.data, image.width, image.height, { inversionAttempts:'dontInvert' });
+}catch(e){ /* image unreadable, try again next loop */ }
+if(result && result.data){
+scannerState.raf = null;
+processScanResult(result.data);
+return;
+}
+}
+scannerState.raf = requestAnimationFrame(loop);
+}
+scannerState.raf = requestAnimationFrame(loop);
+}
+
+// A WiTracEQUIP QR always encodes .../#/p/<token> (or less often
+// .../#/equip/<id>) — see publicLink()/equipmentLink(). We only keep
+// the route fragment and let the usual routing handle the rest
+// (same screen as if the label had been scanned with the native camera app).
+function processScanResult(text){
+const raw = (text || '').trim();
+// QR displayed by a computer requesting access (sql/23).
+if(/^WTE-COMPUTER:[0-9a-f]{20,}$/i.test(raw)){ closeScanner(); authorizeComputerFromScan(raw.slice(9)); return; }
+const idx = raw.indexOf('#');
+const path = idx !== -1 ? raw.slice(idx + 1) : (/^\/(p|equip)\//.test(raw) ? raw : '');
+
+if(!/^\/(p|equip)\//.test(path)){
+scannerState.error = "This QR code does not correspond to a WiTracEQUIP equipment.";
+render();
+setTimeout(() => { if(scannerState.open){ scannerState.error = ''; render(); } }, 1800);
+return;
+}
+
+closeScanner();
+nav(path);
+}
+
+/* ---------------------------------------------------------------------- */
+/* View: Dashboard (equipments) */
+/* ---------------------------------------------------------------------- */
+
+/* Single initial state model: logout reuses it. (v2.14.2: reset forgot `request`, leading to a loop of requests after account change — the list took a long time to display.) */
+function dashboardInitial(request){ return { items: null, search:'', typeId:'', showArchived:false, loading:false, error:'', sel:[], expired:false, request: request || 0 }; }
+let dashboardCache = dashboardInitial();
+
+/* Loads the list. During a reload (search, filter), the old list remains displayed — faded — instead of a blank screen: no jump. */
+function loadEquipments(){
+if(dashboardCache.loading) return;
+dashboardCache.loading = true;
+const n = ++dashboardCache.request;
+// Safety net: a request that never responds should not freeze the list.
+const delay = new Promise((_, rej) => setTimeout(() => rej(new Error('Loading taking too long. Check connection then try again.')), 20000));
+const filter = (list) => {
+const q = (dashboardCache.search || '').trim().toLowerCase();
+return list.filter(e => (!dashboardCache.typeId || e.type_id === dashboardCache.typeId)
+&& (dashboardCache.showArchived || !e.archived)
+&& (!q || (e.nom || '').toLowerCase().includes(q) || (e.serial_value || '').toLowerCase().includes(q)));
+};
+const unfiltered = !dashboardCache.search && !dashboardCache.typeId && !dashboardCache.showArchived;
+Promise.race([listEquipments({ search: dashboardCache.search, typeId: dashboardCache.typeId, showArchived: dashboardCache.showArchived }), delay])
+.then(async items => {
+if(n !== dashboardCache.request) return;
+if(unfiltered && !isSuperAdmin()) saveInstant({ equipments: items, equipmentsLe: new Date().toISOString() });
+const pending = filter(await offlineEquipAsLines()).filter(e => !items.some(x => x.id === e.id));
+dashboardCache.items = [...pending, ...items]; dashboardCache.error = ''; dashboardCache.offlineLe = null;
+dashboardCache.sel = (dashboardCache.sel || []).filter(id => items.some(e => e.id === id));
+})
+.catch(async e => {
+if(n !== dashboardCache.request) return;
+const inst = readInstant();
+if(isNetworkError(e) && (inst.equipments || navigator.onLine === false)){
+// Offline: the last known list + what's pending sending.
+const pending = filter(await offlineEquipAsLines());
+dashboardCache.items = [...pending, ...filter(inst.equipments || []).filter(x => !pending.some(y => y.id === x.id))];
+dashboardCache.offlineLe = inst.equipmentsLe || '';
+dashboardCache.error = '';
+return;
+}
+dashboardCache.error = e.message;
+})
+.finally(() => {
+dashboardCache.loading = false;
+// A filter changed during loading: relaunch with correct criteria.
+if(dashboardCache.expired){ dashboardCache.expired = false; loadEquipments(); }
+render();
+});
+}
+
+function viewDashboard(){
+if(dashboardCache.items === null && !dashboardCache.loading && !dashboardCache.error) loadEquipments();
+
+const typeOptions = state.types.map(t => `<option value="${t.id}" ${dashboardCache.typeId===t.id?'selected':''}>${esc(t.nom)}</option>`).join('');
+
+let list = '';
+if(dashboardCache.error){
+list = `<div class="alert alert-error">${esc(dashboardCache.error)}</div><button class="btn" data-action="dash-reload">Retry</button>`;
+} else if(dashboardCache.items === null){
+list = skeletonList(6);
+} else if(dashboardCache.items.length === 0){
+list = (dashboardCache.search || dashboardCache.typeId)
+? `<div class="card empty"><div class="empty-icon">${navIcon('box', 30)}</div><strong>No results</strong><br><span class="small">No equipment matches "${esc(dashboardCache.search)}". Try the serial number or plate.</span></div>`
+: `<div class="card empty"><div class="empty-icon">${navIcon('box', 30)}</div><strong>No equipment yet</strong><br><span class="small">Add your first equipment to generate its QR code.</span></div>`;
+} else {
+const selection = canDelete();
+const sel = dashboardCache.sel;
+const allChecked = dashboardCache.items.filter(e => !e.pending).every(e => sel.includes(e.id));
+list = `<div class="card list-select ${dashboardCache.loading ? 'refreshing' : ''}">`
++ (selection ? `<label class="select-all">
+<input type="checkbox" data-action="sel-equip-all" ${allChecked ? 'checked' : ''}>
+<span>Select all (${dashboardCache.items.length})</span>
+</label>` : '')
++ dashboardCache.items.map(eq => {
+const t = state.types.find(t=>t.id===eq.type_id);
+const checked = sel.includes(eq.id);
+const pending = !!eq.pending;
+return `
+<div class="line-select clickable ${checked ? 'checked' : ''} ${pending ? 'pending' : ''}">
+${selection ? (pending ? `<span class="case-sel"></span>` : `<input type="checkbox" class="case-sel" data-action="sel-equip" data-id="${eq.id}" ${checked ? 'checked' : ''}>`) : ''}
+<div class="thumb">${esc(initials(eq.nom))}</div>
+<div class="line-body" data-action="go" data-path="/equip/${eq.id}">
+<div class="line-title">${esc(eq.nom)} ${eq.archived?'<span class="badge badge-warn">archived</span>':''}${pending ? `<span class="badge-pending">⏳ pending sending</span>` : ''}</div>
+<div class="small muted">${esc(t?.nom || 'Unknown type')}${eq.serial_value ? ' · S/N ' + esc(eq.serial_value) : ''}</div>
+</div>
+<div class="small muted line-date">${fmtDate(eq.created_at)}</div>
+${isAdmin() && !pending ? `<button class="icon-btn btn-trash" data-action="del-equip-one" data-id="${eq.id}" title="Delete permanently">${navIcon('trash', 17)}</button>` : ''}
+</div>`;
+}).join('') + `</div>`;
+}
+
+const selectedItems = (dashboardCache.items || []).filter(e => dashboardCache.sel.includes(e.id));
+const bar = (canDelete() && selectedItems.length) ? `
+<div class="selection-bar">
+<strong>${selectedItems.length} selected</strong>
+${selectedItems.some(e => !e.archived) ? `<button class="btn btn-sm" data-action="equip-archive-sel">Archive</button>` : ''}
+${selectedItems.some(e => e.archived) ? `<button class="btn btn-sm" data-action="equip-restore-sel">Restore</button>` : ''}
+${isAdmin() ? `<button class="btn btn-sm btn-danger" data-action="equip-delete-sel">Delete permanently</button>` : ''}
+<button class="btn btn-sm btn-link" data-action="equip-deselect">Cancel</button>
+</div>` : '';
+
+return `
+<div class="row between wrap" style="margin-bottom:14px;">
+<h2>Equipments</h2>
+${state.typesLoaded && state.types.length ? `<button class="btn btn-primary" data-action="go" data-path="/equip-new">+ New equipment</button>`
+: (canManageTypes() ? `<button class="btn btn-primary" data-action="go" data-path="/types">Create an equipment type first</button>` : '')}
+</div>
+
+<div class="card" style="margin-bottom:14px;">
+<div class="row wrap" style="gap:10px;">
+<input type="search" placeholder="Name, serial number or plate…" style="flex:2;min-width:180px;" value="${esc(dashboardCache.search)}" data-action="dash-search">
+<select style="flex:1;min-width:140px;" data-action="dash-filter-type">
+<option value="">All types</option>
+${typeOptions}
+</select>
+<label style="display:flex;align-items:center;gap:6px;text-transform:none;font-weight:500;font-size:13.5px;color:var(--text);margin:0;">
+<input type="checkbox" style="width:auto;" ${dashboardCache.showArchived?'checked':''} data-action="dash-archived">
+Show archived
+</label>
+</div>
+</div>
+
+${dashboardCache.offlineLe !== null && dashboardCache.offlineLe !== undefined ? `<div class="alert alert-info banner-hl">${navIcon('clock',16)} <span>No network: list from ${dashboardCache.offlineLe ? ' ' + fmtDateTime(dashboardCache.offlineLe) : 'this phone\'s created equipment'}. You can create equipment and log interventions: everything will be sent upon network return.</span></div>` : ''}
+${bar}
+${list}
+`;
+}
+
+async function restoreSelection(){
+const ids = (dashboardCache.items || []).filter(e => e.archived && dashboardCache.sel.includes(e.id)).map(e => e.id);
+if(!ids.length) return;
+if(!await confirm(`Restore this equipment${ids.length > 1 ? 's' : ''}? It${ids.length > 1 ? ' will reappear' : ' will reappear'} in the active list.`)) return;
+try{
+const { error } = await sb.from('equipements')
+.update({ archived:false, archived_at:null, archived_by:null, archive_reason:null }).in('id', ids);
+if(error) throw error;
+afterEquipmentAction();
+toast(ids.length > 1 ? `${ids.length} equipments restored` : 'Equipment restored');
+}catch(e){ toast('Error: ' + e.message, 'error'); }
+}
+
+function refreshDashboard(){
+dashboardCache.error = '';
+homeCache.figures = null; homeCache.error = ''; // home counters recalculate
+founderCache.data = null; founderCache.error = '';
+if(dashboardCache.items === null){ render(); return; }
+if(dashboardCache.loading) dashboardCache.expired = true; else loadEquipments();
+render();
+}
+
+/* ---------------------------------------------------------------------- */
+/* View: Equipment Types */
+/* ---------------------------------------------------------------------- */
+
+let typeForm = { open:false, id:null, nom:'', fields:[], busy:false, error:'' };
+let templateState = { open:false, busy:false };
+
+async function applyTemplate(key){
+const template = businessTemplates().find(m => m.key === key);
+if(!template) return;
+
+// We don't recreate what already exists: the template complements, it never overwrites.
+const existing = new Set(typesFor(targetOrgTypes()).map(t => (t.nom||'').trim().toLowerCase()));
+const toCreate = template.types.filter(t => !existing.has(t.nom.trim().toLowerCase()));
+
+if(!toCreate.length){
+toast('All types from this template are already present.', 'info');
+return;
+}
+
+const summary = toCreate.map(t => ' • ' + t.nom).join('\n');
+const ignored = template.types.length - toCreate.length;
+if(!await confirm(
+`Add ${toCreate.length} equipment type(s):\n\n${summary}\n\n` +
+(ignored ? `${ignored} type(s) already present will be ignored.\n\n` : '') +
+`You can then rename, add, or remove fields freely.`)) return;
+
+templateState.busy = true; render();
+try{
+const lines = toCreate.map(t => ({
+organization_id: targetOrgTypes(),
+nom: t.nom,
+fields: t.fields.map(c => ({ key: slugify(c.label), label: c.label, type: c.type })),
+}));
+const { error } = await sb.from('equipment_types').insert(lines);
+if(error) throw error;
+await loadTypes(true);
+templateState = { open:false, busy:false };
+dashboardCache.items = null; homeCache.figures = null;
+render();
+}catch(e){
+templateState.busy = false; render();
+toast('Error: ' + e.message, 'error');
+}
+}
+
+function openTypeForm(type){
+typeForm = type
+? { open:true, id:type.id, nom:type.nom,
+// We keep the original key of each field: it's what links
+// the field to the values already entered on existing equipment.
+fields:(type.fields||[]).map(c => ({ key:c.key, label:c.label, type:c.type })),
+busy:false, error:'' }
+: { open:true, id:null, nom:'', fields:[], busy:false, error:'' };
+render();
+// The form appears at the top of the page: we scroll to it, otherwise we would have
+// to scroll manually from the bottom of the list.
+scrollToTop();
+}
+
+function scrollToTop(){
+requestAnimationFrame(() => {
+window.scrollTo({ top: 0, behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+const m = document.querySelector('.shell-main');
+if(m && m.scrollTop) m.scrollTo({ top: 0, behavior: 'smooth' });
+});
+}
+
+function viewTypes(){
+const target = targetOrgTypes();
+const visibleTypes = typesFor(target);
+const rows = visibleTypes.map(t => `
+<div class="list-item">
+<div class="thumb">${navIcon('tag', 18)}</div>
+<div style="flex:1;min-width:0;">
+<div style="font-weight:650;">${esc(t.nom)}</div>
+<div class="small muted">${(t.fields||[]).length} custom field(s)${(t.fields||[]).length ? ' · ' + (t.fields||[]).map(c=>esc(c.label)).join(', ') : ''}</div>
+</div>
+${canManageTypes() ? `<button class="btn btn-sm" data-action="edit-type" data-id="${t.id}">Edit</button>` : ''}
+</div>
+`).join('');
+
+return `
+<div class="row between wrap" style="margin-bottom:14px;">
+${isSuperAdmin() ? `<div class="row" style="gap:10px;"><button class="icon-btn" data-action="go" data-path="/settings/clients/${target}" title="Back">←</button><div><h2>Equipment types</h2><div class="small muted">at <strong>${esc(clientNameOf(target))}</strong></div></div></div>` : `<h2>Equipment types</h2>`}
+${canManageTypes()
+? `<button class="btn btn-primary" data-action="toggle-type-form">${typeForm.open?'Cancel':'+ New type'}</button>`
+: ''}
+</div>
+
+${typeForm.open && canManageTypes() ? renderTypeForm() : ''}
+
+${(canManageTypes() && !typeForm.open) ? `
+<div class="card" style="margin-bottom:14px;">
+<div class="row between wrap" style="gap:10px;">
+<div style="flex:1;min-width:200px;">
+<h3>Start from a business template</h3>
+<div class="hint" style="margin:4px 0 0;">
+Creates the typical equipment inventory for a sector at once, with the fields that matter
+for traceability. Nothing is overwritten, everything remains editable afterwards.
+</div>
+</div>
+<button class="btn btn-sm" data-action="toggle-templates">
+${templateState.open ? 'Hide' : 'Show templates'}
+</button>
+</div>
+${templateState.open ? `
+<div class="templates">
+${businessTemplates().map(m => `
+<div class="template">
+<div class="template-name">${esc(m.nom)}</div>
+<div class="small muted">${esc(m.description)}</div>
+<div class="template-types">${m.types.map(t => esc(t.nom)).join(' · ')}</div>
+<button class="btn btn-sm btn-primary" data-action="apply-template"
+data-key="${m.key}" ${templateState.busy?'disabled':''}>
+${templateState.busy ? 'Creating…' : `Add these ${m.types.length} types`}
+</button>
+</div>`).join('')}
+</div>` : ''}
+</div>` : ''}
+
+<div class="card" style="padding:0 18px;">
+${visibleTypes.length ? rows : `<div class="empty"><div class="empty-icon">${navIcon('tag', 30)}</div>No equipment types.<br><span class="small">${canManageTypes() ? 'Create one (e.g., "Vehicle", "Medical device", "Industrial equipment"…) to start adding equipment.' : 'No types have been assigned to you. Contact your administrator.'}</span></div>`}
+</div>
+`;
+}
+function renderTypeForm(){
+const fieldsRows = typeForm.fields.map((c, i) => `
+<div class="field-row">
+<input type="text" placeholder="Field name (e.g : Mileage)" value="${esc(c.label)}" data-action="field-label" data-i="${i}">
+<select data-action="field-type" data-i="${i}">
+${FIELD_TYPES.map(ct=>`<option value="${ct.v}" ${ct.v===c.type?'selected':''}>${ct.l}</option>`).join('')}
+</select>
+<button type="button" class="icon-btn" data-action="field-remove" data-i="${i}" title="Remove">✕</button>
+</div>
+`).join('');
+
+const modification = !!typeForm.id;
+
+return `
+<div class="card" style="margin-bottom:14px;">
+<h3>${modification ? 'Edit type' : 'New type'}</h3>
+${typeForm.error ? `<div class="alert alert-error">${esc(typeForm.error)}</div>` : ''}
+<div class="field" style="margin-top:12px;">
+<label>Type name</label>
+<input type="text" placeholder="Ex : Vehicle" id="type-name-input" value="${esc(typeForm.nom)}" data-action="type-name">
+</div>
+<label>Custom fields (optional)</label>
+<div style="margin-bottom:8px;">${fieldsRows}</div>
+<button type="button" class="btn btn-sm" data-action="field-add">+ Add field</button>
+<div class="hint">These fields will appear in the equipment addition form for this type (e.g., make, model, capacity, mileage…).</div>
+${modification ? `
+<div class="hint">
+Adding a field is risk-free: existing equipment will display it, empty,
+until it is filled in. Removing a field makes it disappear from records
+but erases nothing: putting it back with the same name will make the values reappear.
+</div>` : ''}
+<div class="row wrap" style="margin-top:14px;">
+<button class="btn btn-primary" data-action="save-type" ${typeForm.busy?'disabled':''}>${typeForm.busy?'Saving…':(modification ? 'Save changes' : 'Save type')}</button>
+<button class="btn" type="button" data-action="toggle-type-form">Cancel</button>
+</div>
+</div>
+`;
+}
+
+async function saveType(){
+typeForm.error = '';
+const nom = typeForm.nom.trim();
+if(!nom){ typeForm.error = 'Type name is mandatory.'; render(); return; }
+const fields = typeForm.fields
+.filter(c => c.label.trim())
+// c.key already exists for a previously created field: we keep it, otherwise
+// renaming a label would detach the field from values already entered.
+.map(c => ({ key: c.key || slugify(c.label), label: c.label.trim(), type: c.type }));
+typeForm.busy = true; render();
+try{
+if(typeForm.id){
+const { error } = await sb.from('equipment_types')
+.update({ nom, fields }).eq('id', typeForm.id);
+if(error) throw error;
+} else {
+const { error } = await sb.from('equipment_types').insert({
+organization_id: targetOrgTypes(),
+nom, fields
+});
+if(error) throw error;
+}
+const modified = !!typeForm.id;
+typeForm = { open:false, id:null, nom:'', fields:[], busy:false, error:'' };
+await loadTypes(true);
+dashboardCache.items = null; homeCache.figures = null;
+toast(modified ? 'Type updated' : "Equipment type created");
+render();
+}catch(e){
+typeForm.busy = false; typeForm.error = e.message; render();
+}
+}
+
+function slugify(s){
+return s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]+/g,'_').replace(/^_+|_+$/g,'') || ('field_' + Math.random().toString(36).slice(2,6));
+}
+
+/* ---------------------------------------------------------------------- */
+/* Member and invitation management: see js/settings.js */
+/* ---------------------------------------------------------------------- */
+
+function viewUnauthorized(){
+return `<div class="alert alert-error">This section is reserved for the administrator.</div>`;
+}
+
+/* ---------------------------------------------------------------------- */
+/* View: Join via invitation link (without being logged in) */
+/* ---------------------------------------------------------------------- */
+
+let joinState = { token:null, loading:false, preview:null, error:'', busy:false, notice:'' };
+
+function renderJoin(token){
+if(joinState.token !== token){
+joinState = { token, loading:true, preview:null, error:'', busy:false, notice:'' };
+sb.rpc('invite_preview', { p_token: token })
+.then(({ data, error }) => {
+if(error) throw error;
+joinState.preview = (data && data[0]) || null;
+joinState.loading = false; render();
+})
+.catch(e => { joinState.error = e.message; joinState.loading = false; render(); });
+}
+
+if(joinState.loading) return `<div class="center-screen"><div class="spinner"></div></div>`;
+
+const p = joinState.preview;
+const invalid = !p || !p.valid;
+
+return `
+<div class="auth-wrap">
+<div class="auth-logo">
+<img class="logo" src="${LOGO_DATA_URL}" alt="WiTracEQUIP">
+<h1 style="font-size:20px;">WiTracEQUIP</h1>
+</div>
+
+${invalid ? `
+<div class="card">
+<div class="alert alert-error" style="margin:0;">
+This invitation link is no longer valid: it has already been used, it has expired, or it has been cancelled.
+</div>
+<div class="small muted" style="margin-top:12px;">
+Request a new link from your organization's administrator.
+</div>
+<button class="btn btn-block" style="margin-top:14px;" data-action="go" data-path="/">
+Back to login
+</button>
+</div>
+` : `
+<div class="alert alert-info">
+${p.invite_role === 'admin'
+? `You will create the organization <strong>${esc(p.organization_name)}</strong>
+and become its <strong>administrator</strong>.`
+: `You are invited to join <strong>${esc(p.organization_name)}</strong>
+as a <strong>${esc(roleLabel(p.invite_role))}</strong>.`}
+</div>
+${joinState.error ? `<div class="alert alert-error">${esc(joinState.error)}</div>` : ''}
+${joinState.notice ? `<div class="alert alert-success">${esc(joinState.notice)}</div>` : ''}
+<form class="card stack" data-action="submit-join">
+<div class="field">
+<label>Your full name</label>
+<input type="text" name="full_name" placeholder="First Name Last Name" required>
+</div>
+<div class="field">
+<label>Email</label>
+<input type="email" name="email" placeholder="you@example.com" required autocomplete="email">
+</div>
+<div class="field">
+<label>Password</label>
+${passwordField('new-password')}
+</div>
+<button class="btn btn-primary btn-block" type="submit" ${joinState.busy?'disabled':''}>
+${joinState.busy ? '…' : 'Create my account'}
+</button>
+</form>
+`}
+${footerSupport()}
+</div>
+`;
+}
+
+async function handleJoinSubmit(form){
+joinState.error = ''; joinState.notice = ''; joinState.busy = true; render();
+const fd = new FormData(form);
+try{
+const { data, error } = await sb.auth.signUp({
+email: fd.get('email').trim(),
+password: fd.get('password'),
+options: { data: { full_name: fd.get('full_name').trim(), invite_token: joinState.token } }
+});
+if(error) throw error;
+if(!data.session){
+joinState.notice = "Account created! Check your email to confirm your address, then log in.";
+}
+}catch(e){
+joinState.error = translateAuthError(e.message || String(e));
+}finally{
+joinState.busy = false; render();
+}
+}
+
+/* ---------------------------------------------------------------------- */
+/* View: New Equipment */
+/* ---------------------------------------------------------------------- */
+
+let equipForm = { typeId:'', orgId:'', nom:'', serial_value:'', values:{}, busy:false, error:'' };
+
+function viewEquipNew(){
+// Super-admin: equipment is created for the client from which we came.
+if(isSuperAdmin() && !equipForm.orgId) return viewSettings('clients');
+const types = typesFor(equipForm.orgId);
+if(!types.some(t => t.id === equipForm.typeId)) equipForm.typeId = types[0]?.id || '';
+const type = types.find(t=>t.id===equipForm.typeId);
+const fields = type?.fields || [];
+const back = inventoryRoute(equipForm.orgId);
+
+return `
+<div class="row" style="margin-bottom:14px;gap:10px;">
+<button class="icon-btn" data-action="go" data-path="${back}" title="Back">←</button>
+<div><h2>New equipment</h2>${isSuperAdmin() ? `<div class="small muted">at <strong>${esc(clientNameOf(equipForm.orgId))}</strong></div>` : ''}</div>
+</div>
+<div class="card">
+${equipForm.error ? `<div class="alert alert-error">${esc(equipForm.error)}</div>` : ''}
+<div class="grid-2">
+<div class="field">
+<label>Equipment type</label>
+<select data-action="equip-type">
+${types.map(t=>`<option value="${t.id}" ${t.id===equipForm.typeId?'selected':''}>${esc(t.nom)}</option>`).join('')}
+</select>
+</div>
+<div class="field">
+<label>Name / designation</label>
+<input type="text" placeholder="Ex : Renault Kangoo — WD-12" value="${esc(equipForm.nom)}" data-action="equip-name">
+</div>
+</div>
+<div class="field">
+<label>Serial number / registration (optional)</label>
+<input type="text" placeholder="Ex : AB-123-CD" value="${esc(equipForm.serial_value)}" data-action="equip-serial">
+<div class="serial-alert empty" id="alerte-serie"></div>
+</div>
+${fields.length ? `<label style="margin-top:6px;">Type-specific information</label>` : ''}
+<div class="grid-2">
+${fields.map(c => `
+<div class="field">
+<label style="text-transform:none;font-weight:600;color:var(--text);">${esc(c.label)}</label>
+${c.type==='textarea'
+? `<textarea data-action="equip-value">${esc(equipForm.values[c.key]||'')}</textarea>`
+: `<input type="${c.type==='number'?'number':(c.type==='date'?'date':'text')}" value="${esc(equipForm.values[c.key]||'')}" data-action="equip-value" data-key="${c.key}">`}
+</div>
+`).join('')}
+</div>
+<div class="row" style="margin-top:8px;">
+<button class="btn btn-primary" data-action="save-equip" ${equipForm.busy?'disabled':''}>${equipForm.busy?'Saving…':"Create equipment"}</button>
+<button class="btn" data-action="go" data-path="${back}">Cancel</button>
+</div>
+</div>
+`;
+}
+
+async function saveEquip(){
+equipForm.error = '';
+const nom = equipForm.nom.trim();
+if(!nom){ equipForm.error = 'Name is mandatory.'; render(); return; }
+if(!equipForm.typeId){ equipForm.error = "Choose an equipment type."; render(); return; }
+equipForm.busy = true; render();
+// ID and QR link created here: offline, the equipment already exists
+// on the phone (printable label, interventions possible).
+const data = {
+id: randomId(),
+public_token: randomId(),
+organization_id: isSuperAdmin() ? equipForm.orgId : state.profile.organization_id,
+type_id: equipForm.typeId,
+nom,
+serial_value: equipForm.serial_value.trim() || null,
+values: { ...equipForm.values },
+archived: false
+};
+const pending = async () => {
+await offlineEquipPending(data);
+state.pendingCount = await offlineCountPending();
+equipForm = { typeId:'', orgId:'', nom:'', serial_value:'', values:{}, busy:false, error:'' };
+settings.inventories = {};
+if(dashboardCache.items) dashboardCache.items = [...(await offlineEquipAsLines()).filter(e => e.id === data.id), ...dashboardCache.items];
+toast("No network: equipment saved on phone. It will be sent as soon as network returns.");
+nav('/equip/' + data.id);
+};
+if(!navigator.onLine){
+try{ await pending(); }catch(e){ equipForm.busy = false; equipForm.error = "Offline saving impossible: " + e.message; render(); }
+return;
+}
+try{
+const { data, error } = await sb.from('equipements').insert(data).select('id').single();
+if(error) throw error;
+equipForm = { typeId:'', orgId:'', nom:'', serial_value:'', values:{}, busy:false, error:'' };
+settings.inventories = {};
+refreshDashboard();
+toast('Equipment created — its QR code is ready'); loadActivity(true);
+nav('/equip/' + data.id);
+}catch(e){
+if(isNetworkError(e)){
+try{ await pending(); return; }catch(err){}
+}
+equipForm.busy = false; equipForm.error = e.message; render();
+}
+}
+
+/* ---------------------------------------------------------------------- */
+/* View: Equipment Detail (QR + history) */
+/* ---------------------------------------------------------------------- */
+
+let equipDetail = { id:null, item:null, interventions:null, loading:false, error:'',
+showIvForm:false, ivBusy:false, ivError:'', ivNotice:'',
+showEditForm:false, editBusy:false, editError:'',
+editIvId:null, editIvBusy:false, editIvError:'',
+newPhotos:[], editPhotos:[], photoUrls:{}, photoViewer:null, photosBusy:false,
+draft:{}, draftEdit:null };
+
+function viewEquipDetail(id){
+if(isSuperAdmin()) loadClients(false); // to display client name
+if(equipDetail.id !== id){
+equipDetail = { id, item:null, interventions:null, loading:true, error:'',
+showIvForm:false, ivBusy:false, ivError:'', ivNotice:'',
+showEditForm:false, editBusy:false, editError:'',
+editIvId:null, editIvBusy:false, editIvError:'',
+newPhotos:[], editPhotos:[], photoUrls:{}, photoViewer:null, photosBusy:false,
+draft:{}, draftEdit:null };
+loadPendingIv();
+Promise.all([getEquipment(id), listInterventions(id)])
+.then(async ([item, ivs]) => {
+if(!item){
+// Not yet on server: created offline, pending sending?
+item = (await offlineEquipAsLines()).find(e => e.id === id) || null;
+}
+equipDetail.item = item; equipDetail.interventions = ivs; equipDetail.loading = false; render();
+loadPhotoUrls();
+if(item) setTimeout(()=>drawQr(publicLink(item.public_token)), 30);
+})
+.catch(async e => {
+if(isNetworkError(e)){
+const known = (await knownEquipments()).find(x => x.id === id);
+if(known && equipDetail.id === id){
+equipDetail.item = known; equipDetail.interventions = []; equipDetail.offline = true;
+equipDetail.loading = false; render();
+return;
+}
+}
+equipDetail.error = e.message; equipDetail.loading = false; render();
+});
+}
+
+if(equipDetail.loading) return skeletonRecord((dashboardCache.items || []).find(e => e.id === id)?.nom);
+if(equipDetail.error) return `<div class="alert alert-error">${esc(equipDetail.error)}</div>`;
+if(!equipDetail.item) return `<div class="empty">Equipment not found.</div>`;
+
+const eq = equipDetail.item;
+const type = state.types.find(t=>t.id===eq.type_id);
+const fields = type?.fields || [];
+const url = publicLink(eq.public_token);
+const onServer = !eq.pending && !equipDetail.offline;
+
+const infoRows = fields.map(c => {
+const raw = eq.values?.[c.key];
+const val = !raw ? '—' : (c.type === 'date' ? fmtDate(raw) : raw);
+return `<tr><td class="muted">${esc(c.label)}</td><td>${esc(val)}</td></tr>`;
+}).join('');
+
+const ivRows = (equipDetail.interventions||[]).map(iv => equipDetail.editIvId === iv.id ? `
+<tr class="iv-editing"><td colspan="5">${renderIvForm(iv)}</td></tr>` : `
+<tr>
+<td class="iv-date">${fmtDate(iv.date)}</td>
+<td data-l="Type">${esc(iv.type)}</td>
+<td data-l="Technician">${esc(iv.technician)}</td>
+<td class="muted" data-l="Description">${esc(iv.description||'—')}
+${iv.modified_at ? `<div class="iv-modified">Modified on ${fmtDateTime(iv.modified_at)}${iv.modified_by ? ' by ' + esc(iv.modified_by) : ''}</div>` : ''}
+${ivThumbnails(iv)}
+</td>
+<td class="iv-actions">
+<button class="btn btn-sm" data-action="iv-edit" data-id="${iv.id}">Edit</button>
+${isAdmin() ? `<button class="btn btn-sm btn-danger" data-action="iv-delete" data-id="${iv.id}">Delete</button>` : ''}
+</td>
+</tr>
+`).join('');
+
+// QR is drawn in a <canvas> that is recreated empty on each re-render.
+// So we redraw it after EVERY render of the record, otherwise opening a
+// form erases the QR — and "Print label" would output a blank label.
+setTimeout(() => drawQr(url), 0);
+
+return `
+<div class="record-header">
+<button class="icon-btn" data-action="go" data-path="${inventoryRoute(eq.organization_id)}" title="Back">←</button>
+<div class="title">
+<h2>${esc(eq.nom)} ${eq.archived?'<span class="badge badge-warn">archived</span>':''}</h2>
+<div class="small muted">${isSuperAdmin() && clientNameOf(eq.organization_id) ? `<a href="#/settings/clients/${eq.organization_id}">${esc(clientNameOf(eq.organization_id))}</a> · ` : ''}${esc(type?.nom || '')}${eq.serial_value ? ' · S/N ' + esc(eq.serial_value) : ''}</div>
+</div>
+<div class="actions" ${onServer ? '' : 'style="display:none"'}>
+${!eq.archived ? `<button class="btn btn-sm" data-action="toggle-edit-record">${equipDetail.showEditForm ? 'Cancel' : 'Edit'}</button>` : ''}
+${!eq.archived && canDelete() ? `<button class="btn btn-sm" data-action="archive-equip">Archive</button>` : ''}
+${eq.archived && canDelete() ? `<button class="btn btn-sm" data-action="restore-equip">Restore</button>` : ''}
+${isAdmin() ? `<button class="btn btn-danger btn-sm" data-action="del-equip-one" data-id="${eq.id}">Delete</button>` : ''}
+</div>
+</div>
+
+${eq.pending ? `<div class="alert alert-info banner-hl">${navIcon('clock',16)} <span><strong>Created offline, pending sending.</strong> It will be registered automatically upon network return. Its QR code is already final: you can print the label and log interventions.${eq.last_error && navigator.onLine ? `<br><em>Last attempt failed: ${esc(eq.last_error)}</em>` : ''}</span></div>
+<div class="row" style="margin:-4px 0 14px;"><button class="btn btn-sm btn-link" data-action="abandon-equip-pending" data-id="${eq.id}">Abandon this equipment (not sent)</button></div>`
+: (equipDetail.offline ? `<div class="alert alert-info banner-hl">${navIcon('clock',16)} <span>No network: record from last consultation. You can log an intervention, it will be sent upon network return. Full history will appear upon reconnection.</span></div>` : '')}
+${equipDetail.showEditForm && !eq.archived && onServer ? renderEditEquipForm(eq, fields) : ''}
+${renderPhotoViewer()}
+
+<div class="grid-2" style="align-items:start;">
+<div class="card">
+<h3 class="small" style="text-transform:uppercase;letter-spacing:.02em;color:var(--text-dim);">QR Code</h3>
+<div class="qr-box">
+<canvas id="qr-canvas"></canvas>
+<div class="small muted" style="word-break:break-all;text-align:center;">${esc(url)}</div>
+
+<div class="small" style="text-align:center;line-height:1.55;${eq.public_sharing ? '' : 'color:var(--text-dim);'}">
+${eq.public_sharing
+? "Anyone scanning this label reads the maintenance log: controller, inspector, insurer, buyer. No account and no registration — and nothing editable."
+: "Public consultation closed: scanning the label shows nothing anymore."}
+</div>
+
+${canDelete() && onServer ? `
+<div class="row" style="gap:8px;flex-wrap:wrap;justify-content:center;">
+<button class="btn btn-sm" data-action="toggle-public-sharing">
+${eq.public_sharing ? 'Close public consultation' : 'Reopen public consultation'}
+</button>
+${isAdmin() ? `<button class="btn btn-sm" data-action="regen-token">Change link</button>` : ''}
+</div>` : ''}
+${(!definitiveAddress() && isAdmin()) ? `
+<div class="alert alert-info small" style="margin:0;">
+Temporary address: this QR code points to the application's current address.
+Do not print labels in bulk before the definitive domain is in place.
+</div>` : ''}
+<button class="btn btn-primary btn-block" data-action="print-qr">🖨️ Print label</button>
+</div>
+</div>
+
+<div class="card">
+<h3 class="small" style="text-transform:uppercase;letter-spacing:.02em;color:var(--text-dim);">Information</h3>
+<table>
+<tr><td class="muted">Created on</td><td>${fmtDateTime(eq.created_at)}</td></tr>
+${eq.archived ? `<tr><td class="muted">Retired on</td><td>${fmtDateTime(eq.archived_at)}${eq.archived_by ? ' by ' + esc(eq.archived_by) : ''}</td></tr>` : ''}
+${eq.archived && eq.archive_reason ? `<tr><td class="muted">Reason for retirement</td><td>${esc(eq.archive_reason)}</td></tr>` : ''}
+${infoRows}
+</table>
+</div>
+</div>
+
+<div class="card" style="margin-top:14px;">
+<div class="row between">
+<h3>Intervention history</h3>
+<button class="btn btn-sm" data-action="toggle-iv-form">${equipDetail.showIvForm?'Cancel':'+ Add'}</button>
+</div>
+
+${equipDetail.showIvForm ? renderIvForm(null) : ''}
+${equipDetail.ivNotice ? `<div class="alert alert-info" style="margin-top:10px;">${esc(equipDetail.ivNotice)}</div>` : ''}
+
+${(equipDetail.pendingIv || []).length ? `
+<div class="iv-pending-list">
+${equipDetail.pendingIv.map(iv => `<div class="iv-pending">
+<div><strong>${fmtDate(iv.date)} · ${esc(iv.type)}</strong> <span class="badge-pending">⏳ pending sending</span></div>
+<div class="small muted">${esc(iv.technician)}${iv.description ? ' — ' + esc(iv.description) : ''}</div>
+</div>`).join('')}
+</div>` : ''}
+${equipDetail.interventions && equipDetail.interventions.length ? `
+<div style="overflow-x:auto;">
+<table class="table-iv">
+<thead><tr><th>Date</th><th>Type</th><th>Technician</th><th>Description</th><th></th></tr></thead>
+<tbody>${ivRows}</tbody>
+</table>
+</div>
+` : ((equipDetail.pendingIv || []).length ? '' : `<div class="empty small">${equipDetail.offline ? 'History unavailable without network.' : 'No interventions recorded.'}</div>`)}
+</div>
+
+`;
+}
+
+function renderEditEquipForm(eq, fields){
+return `
+<form class="card" style="margin-bottom:14px;" data-action="submit-edit-record">
+<h3 class="small" style="text-transform:uppercase;letter-spacing:.02em;color:var(--text-dim);">Edit record</h3>
+${equipDetail.editError ? `<div class="alert alert-error">${esc(equipDetail.editError)}</div>` : ''}
+<div class="grid-2">
+<div class="field">
+<label>Name / designation</label>
+<input type="text" name="nom" value="${esc(eq.nom || '')}" required>
+</div>
+<div class="field">
+<label>Serial number / registration</label>
+<input type="text" name="serial_value" value="${esc(eq.serial_value || '')}"
+data-action="edit-serial" data-exclude="${eq.id}">
+<div class="serial-alert empty" id="alerte-serie"></div>
+</div>
+</div>
+${fields.length ? `<label style="margin-top:6px;">Type-specific information</label>` : ''}
+<div class="grid-2">
+${fields.map(c => {
+const val = eq.values?.[c.key] ?? '';
+return `
+<div class="field">
+<label style="text-transform:none;font-weight:600;color:var(--text);">${esc(c.label)}</label>
+${c.type==='textarea'
+? `<textarea name="field__${esc(c.key)}">${esc(val)}</textarea>`
+: `<input type="${c.type==='number'?'number':(c.type==='date'?'date':'text')}" name="field__${esc(c.key)}" value="${esc(val)}">`}
+</div>`;
+}).join('')}
+</div>
+<div class="row wrap" style="margin-top:8px;">
+<button class="btn btn-primary" type="submit" ${equipDetail.editBusy?'disabled':''}>
+${equipDetail.editBusy ? 'Saving…' : 'Save changes'}
+</button>
+<button class="btn" type="button" data-action="toggle-edit-record">Cancel</button>
+</div>
+</form>
+`;
+}
+
+async function submitEditEquip(form){
+const fd = new FormData(form);
+const nom = (fd.get('nom') || '').trim();
+if(!nom){ equipDetail.editError = 'Name is mandatory.'; render(); return; }
+const serial = (fd.get('serial_value') || '').trim();
+const values = Object.assign({}, equipDetail.item?.values || {});
+for(const [k, v] of fd.entries()){
+if(k.startsWith('field__')) values[k.slice(7)] = v;
+}
+
+equipDetail.editError = ''; equipDetail.editBusy = true; render();
+try{
+const { error } = await sb.from('equipements')
+.update({ nom, serial_value: serial || null, values })
+.eq('id', equipDetail.id);
+if(error) throw error;
+equipDetail.item = await getEquipment(equipDetail.id);
+equipDetail.showEditForm = false;
+refreshDashboard();
+toast('Record saved');
+}catch(e){
+equipDetail.editError = e.message;
+}finally{
+equipDetail.editBusy = false; render();
+}
+}
+
+async function restoreEquipement(){
+if(!await confirm("Restore this equipment? It will reappear in the active list.")) return;
+try{
+const { error } = await sb.from('equipements')
+.update({ archived:false, archived_at:null, archived_by:null, archive_reason:null })
+.eq('id', equipDetail.id);
+if(error) throw error;
+equipDetail.item = await getEquipment(equipDetail.id);
+dashboardCache.items = null; homeCache.figures = null;
+render();
+}catch(e){ toast('Error: ' + e.message, 'error'); }
+}
+
+function drawQr(url){
+const canvas = document.getElementById('qr-canvas');
+if(!canvas || typeof QRious === 'undefined' || !url) return;
+new QRious({ element: canvas, value: url, size: 200, background: 'white', foreground: '#141b1e', level: 'M' });
+}
+
+function renderIvForm(iv){
+// iv provided = modification of an existing intervention; otherwise, new entry.
+// Today's date in LOCAL time (toISOString would give UTC date: next day in the Antilles).
+const d = new Date();
+const today = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+const modifying = !!iv;
+const err = modifying ? equipDetail.editIvError : equipDetail.ivError;
+// Draft: what was typed survives a re-render (adding a photo…).
+const b = modifying ? (equipDetail.draftEdit && equipDetail.draftEdit.id === iv.id ? equipDetail.draftEdit : {}) : (equipDetail.draft || {});
+const v = (key, defaultValue) => b[key] !== undefined ? b[key] : defaultValue;
+return `
+<form class="card" style="background:var(--surface-2);margin:12px 0;" data-action="${modifying ? 'submit-iv-edit' : 'submit-iv'}" ${modifying ? `data-id="${iv.id}"` : ''}>
+${modifying ? `<div style="font-weight:650;margin-bottom:8px;">Edit intervention</div>` : ''}
+${err ? `<div class="alert alert-error">${esc(err)}</div>` : ''}
+<div class="grid-2">
+<div class="field">
+<label>Date <span class="required">required</span></label>
+<input type="date" name="date" value="${esc(v('date', modifying ? iv.date : today))}" required>
+</div>
+<div class="field">
+<label>Intervention type <span class="required">required</span></label>
+<input type="text" name="type" value="${esc(v('type', modifying ? iv.type : ''))}" placeholder="Ex : Maintenance, Repair, Inspection…" required>
+</div>
+</div>
+<div class="field">
+<label>Technician <span class="required">required</span></label>
+<input type="text" name="technician" value="${esc(v('technician', modifying ? iv.technician : (state.profile?.full_name||'')))}" required
+placeholder="Name of the person who intervened">
+<div class="hint">Name of the person who performed the intervention. This is who will appear
+on the logbook in case of inspection — pre-filled with yours, editable if you
+are entering for a colleague.</div>
+</div>
+<div class="field"><label>Description</label><textarea name="description" placeholder="Intervention details…">${esc(v('description', modifying ? (iv.description || '') : ''))}</textarea></div>
+${renderFieldPhotos(iv)}
+${modifying ? `
+<div class="hint" style="margin-bottom:10px;">Modification is timestamped with your name and the old version is kept in the log.</div>
+<div class="row wrap">
+<button class="btn btn-primary" type="submit" ${equipDetail.editIvBusy || equipDetail.photosBusy?'disabled':''}>${equipDetail.editIvBusy?'Saving…':'Save changes'}</button>
+<button class="btn" type="button" data-action="iv-cancel-edit">Cancel</button>
+</div>` : `
+<button class="btn btn-primary" type="submit" ${equipDetail.ivBusy || equipDetail.photosBusy?'disabled':''}>${equipDetail.ivBusy?(equipDetail.newPhotos.length ? 'Sending photos…' : 'Saving…'):"Save intervention"}</button>`}
+</form>
+`;
+}
+
+async function submitIntervention(form){
+// Read and validate BEFORE any re-render: an intervention record without
+// technician or date has no proof value, it should not be sent.
+const fd = new FormData(form);
+const date = (fd.get('date') || '').trim();
+const type = (fd.get('type') || '').trim();
+const technician = (fd.get('technician') || '').trim();
+const description = (fd.get('description') || '').trim();
+
+if(!date){
+equipDetail.ivError = "Intervention date is mandatory.";
+render(); return;
+}
+if(!type){
+equipDetail.ivError = "Intervention type is mandatory (maintenance, repair, inspection…).";
+render(); return;
+}
+if(!technician){
+equipDetail.ivError = "Technician's name is mandatory: it is they who commit the record's traceability.";
+render(); return;
+}
+
+equipDetail.ivError = ''; equipDetail.ivBusy = true; render();
+
+const ivData = { equipment_id: equipDetail.id, date, type, technician, description: description || null };
+const blobs = equipDetail.newPhotos.map(p => p.blob);
+const noPhotos = blobs.length ? ` Photos (${blobs.length}) could not be sent: add them using "Edit" once connected.` : '';
+
+// No known network (or equipment not yet sent): queue.
+if(!navigator.onLine || equipDetail.item?.pending || equipDetail.offline){
+await offlineAddPending(ivData);
+state.pendingCount = await offlineCountPending();
+equipDetail.showIvForm = false;
+equipDetail.ivBusy = false;
+equipDetail.ivNotice = "No network: intervention saved offline, it will be sent automatically upon reconnection." + noPhotos;
+clearPhotos('new'); equipDetail.draft = {};
+await loadPendingIv();
+render();
+return;
+}
+
+try{
+// Photos first (intervention ID created here), then the record.
+const ivId = randomId();
+let photos = [];
+if(blobs.length){
+try{ photos = await uploadPhotos(equipDetail.item.organization_id, equipDetail.id, ivId, blobs); }
+catch(e){
+if(/failed to fetch|networkerror|load failed|network request failed/i.test(e.message || '')) throw e;
+equipDetail.ivBusy = false;
+equipDetail.ivError = "Photos could not be sent (" + (e.message || 'error') + "). Remove them or try again.";
+render(); return;
+}
+}
+const { error } = await sb.from('interventions').insert({ id: ivId, ...ivData, photos });
+if(error){ if(photos.length) deletePhotos(photos).catch(()=>{}); throw error; }
+equipDetail.showIvForm = false;
+clearPhotos('new'); equipDetail.draft = {};
+await reloadInterventions();
+equipDetail.ivBusy = false;
+toast(photos.length ? `Intervention saved with ${photos.length} photo${photos.length > 1 ? 's' : ''}` : 'Intervention saved');
+render();
+}catch(e){
+// Network sometimes cuts out between navigator.onLine test and actual send
+// (basement, elevator...) : a real network error (not a business error returned by Supabase/Postgres) also switches to queue
+// rather than making the technician lose their input.
+const networkMessage = /failed to fetch|networkerror|load failed|network request failed/i.test(e.message || '');
+if(networkMessage){
+await offlineAddPending(ivData);
+state.pendingCount = await offlineCountPending();
+equipDetail.showIvForm = false;
+equipDetail.ivBusy = false;
+equipDetail.ivNotice = "Network unavailable: intervention saved offline, it will be sent automatically upon reconnection." + noPhotos;
+clearPhotos('new'); equipDetail.draft = {};
+await loadPendingIv();
+render();
+return;
+}
+equipDetail.ivBusy = false; equipDetail.ivError = e.message; render();
+}
+}
+
+/* Edit intervention: open to all roles, but date and technician name remain mandatory (database also checks). Database timestamps the modification with the author's name and keeps the old version in the log: we can correct an entry, not erase a trace. */
+async function submitEditIntervention(form){
+const id = form.dataset.id;
+const fd = new FormData(form);
+const date = (fd.get('date') || '').trim();
+const type = (fd.get('type') || '').trim();
+const technician = (fd.get('technician') || '').trim();
+const description = (fd.get('description') || '').trim();
+if(!date){ equipDetail.editIvError = "Intervention date is mandatory."; render(); return; }
+if(!type){ equipDetail.editIvError = "Intervention type is mandatory."; render(); return; }
+if(!technician){ equipDetail.editIvError = "Technician's name is mandatory."; render(); return; }
+if(!navigator.onLine){ equipDetail.editIvError = "No network: editing an intervention requires a connection."; render(); return; }
+
+equipDetail.editIvError = ''; equipDetail.editIvBusy = true; render();
+let newPhotos = [];
+try{
+const iv = (equipDetail.interventions || []).find(x => x.id === id) || {};
+const update = { date, type, technician, description: description || null };
+const blobs = equipDetail.editPhotos.map(p => p.blob);
+if(blobs.length){
+newPhotos = await uploadPhotos(equipDetail.item.organization_id, equipDetail.id, id, blobs);
+update.photos = [...(iv.photos || []), ...newPhotos];
+}
+const { error } = await sb.from('interventions').update(update).eq('id', id);
+if(error) throw error;
+newPhotos = [];
+clearPhotos('edit'); equipDetail.draftEdit = null;
+await reloadInterventions();
+equipDetail.editIvId = null;
+settings.log = null;
+toast('Intervention modified');
+}catch(e){
+if(newPhotos.length) deletePhotos(newPhotos).catch(()=>{});
+equipDetail.editIvError = e.message;
+}finally{
+equipDetail.editIvBusy = false; render();
+}
+}
+
+async function deleteIntervention(id){
+const iv = (equipDetail.interventions || []).find(x => x.id === id);
+if(!iv) return;
+if(!await confirm(`Delete the intervention "${iv.type}" from ${fmtDate(iv.date)}?\n\nIt will disappear from this equipment's log. A copy is kept in the log.${(iv.photos||[]).length ? ' Its photos will be deleted.' : ''}`, { danger:true, ok:'Delete' })) return;
+try{
+const { data, error } = await sb.from('interventions').delete().eq('id', id).select('id');
+if(error) throw error;
+if(!data || !data.length) throw new Error("Deletion refused: only an administrator can delete an intervention.");
+if((iv.photos || []).length) deletePhotos(iv.photos).catch(()=>{});
+await reloadInterventions();
+settings.log = null;
+homeCache.figures = null;
+toast('Intervention deleted');
+render();
+}catch(e){ toast('Error: ' + e.message, 'error'); }
+}
+
+/* Interventions entered offline for the open record (displayed at the top). */
+async function loadPendingIv(){
+const id = equipDetail.id;
+try{
+const l = await offlineListPending(id);
+if(equipDetail.id !== id) return;
+equipDetail.pendingIv = l.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+render();
+}catch(e){}
+}
+
+async function abandonEquipPending(id){
+if(!await confirm("Abandon this equipment?\n\nIt was never sent: it will disappear from this phone, along with any interventions logged on it offline.", { danger:true, ok:'Abandon' })) return;
+try{
+await offlineDeleteEquip(id);
+for(const iv of await offlineListPending(id)) await offlineDelete(iv.id);
+state.pendingCount = await offlineCountPending();
+if(dashboardCache.items) dashboardCache.items = dashboardCache.items.filter(e => e.id !== id);
+equipDetail.id = null;
+toast('Equipment abandoned');
+nav('/equipements');
+}catch(e){ toast('Error: ' + e.message, 'error'); }
+}
+
+/* Network return: erroneous loads retry, we reload the actual profile if we started offline, then the queue sends (offline.js). */
+window.addEventListener('online', async () => {
+if(!state.session) return;
+settings.clientsError = ''; settings.membersError = ''; settings.supportError = ''; settings.logError = '';
+Object.keys(settings.inventories || {}).forEach(k => { if(settings.inventories[k]?.error) delete settings.inventories[k]; });
+founderCache.error = ''; homeCache.error = '';
+if(homeCache.figures && !Object.keys(homeCache.figures).length) homeCache.figures = null;
+if(dashboardCache.error || dashboardCache.offlineLe !== null && dashboardCache.offlineLe !== undefined){ dashboardCache.error = ''; refreshDashboard(); }
+if(equipDetail.offline){ equipDetail.id = null; }
+render();
+if(!state.offline) return;
+try{
+await loadProfileAndOrg(); await loadSuperAdminStatus(); await loadTypes(true);
+try{ await loadTemplates(); }catch(err){ console.error('[templates]', err); }
+state.offline = false;
+saveInstant({ profile: state.profile, orgName: state.orgName, superAdmin: state.superAdmin, types: state.types, templates: state.templates });
+dashboardCache.offlineLe = null;
+refreshDashboard();
+}catch(e){}
+});
+
+/* ---------------------------------------------------------------------- */
+/* Intervention Photos (report, replaced part, damage…) */
+/* ---------------------------------------------------------------------- */
+const MAX_IV_PHOTOS = 6;
+const MAX_PHOTO_BYTES = 5 * 1024 * 1024;
+
+async function reloadInterventions(){
+equipDetail.interventions = await listInterventions(equipDetail.id);
+loadActivity(true);
+loadPhotoUrls();
+}
+
+/* Temporary links (1 hr) to photos: storage is private. */
+async function loadPhotoUrls(){
+const id = equipDetail.id;
+const missing = [];
+(equipDetail.interventions || []).forEach(iv => (iv.photos || []).forEach(p => { if(!equipDetail.photoUrls[p]) missing.push(p); }));
+if(!missing.length) return;
+try{
+const urls = await photoUrls(missing);
+if(equipDetail.id !== id) return;
+Object.assign(equipDetail.photoUrls, urls);
+render();
+}catch(e){ /* thumbnails left pending */ }
+}
+
+function clearPhotos(target){
+const key = target === 'edit' ? 'editPhotos' : 'newPhotos';
+(equipDetail[key] || []).forEach(p => URL.revokeObjectURL(p.url));
+equipDetail[key] = [];
+}
+
+function memorizeDraft(form){
+if(!form) return;
+const fd = new FormData(form);
+const b = { date: fd.get('date'), type: fd.get('type'), technician: fd.get('technician'), description: fd.get('description') };
+if(form.dataset.action === 'submit-iv-edit') equipDetail.draftEdit = { id: form.dataset.id, ...b };
+else equipDetail.draft = b;
+}
+
+function loadImage(file){
+return new Promise((ok, ko) => {
+const url = URL.createObjectURL(file);
+const img = new Image();
+img.onload = () => { URL.revokeObjectURL(url); ok(img); };
+img.onerror = () => { URL.revokeObjectURL(url); ko(new Error('Image unreadable')); };
+img.src = url;
+});
+}
+
+/* Reduces photo (1600 px max, JPEG): a phone photo goes from 4–8 MB to ~300 KB, upload remains fast even on weak 4G. */
+async function compressPhoto(file){
+try{
+const img = await loadImage(file);
+const max = 1600;
+const r = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight));
+const c = document.createElement('canvas');
+c.width = Math.round(img.naturalWidth * r); c.height = Math.round(img.naturalHeight * r);
+c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+const blob = await new Promise(ok => c.toBlob(ok, 'image/jpeg', 0.82));
+if(blob && blob.size) return blob;
+throw new Error('compression');
+}catch(e){
+if(file.size <= MAX_PHOTO_BYTES && /^image\/(jpeg|png|webp|heic|heif)$/.test(file.type)) return file;
+throw new Error(`"${file.name}" is not a readable image or exceeds 5 MB.`);
+}
+}
+
+async function addPhotos(input){
+const target = input.dataset.target === 'edit' ? 'edit' : 'new';
+const form = input.closest('form');
+memorizeDraft(form);
+const list = target === 'edit' ? equipDetail.editPhotos : equipDetail.newPhotos;
+const iv = target === 'edit' ? (equipDetail.interventions || []).find(x => x.id === equipDetail.editIvId) : null;
+const existing = (iv?.photos || []).length + list.length;
+let files = [...(input.files || [])];
+input.value = '';
+if(!files.length) return;
+const available = MAX_IV_PHOTOS - existing;
+if(available <= 0){ toast(`${MAX_IV_PHOTOS} photos maximum per intervention`, 'error'); return; }
+if(files.length > available){ toast(`${MAX_IV_PHOTOS} photos maximum: only the first ${available} will be kept`, 'error'); files = files.slice(0, available); }
+equipDetail.photosBusy = true; render();
+for(const f of files){
+try{
+const blob = await compressPhoto(f);
+list.push({ blob, url: URL.createObjectURL(blob) });
+}catch(e){ toast(e.message, 'error'); }
+}
+equipDetail.photosBusy = false; render();
+}
+
+function renderFieldPhotos(iv){
+const target = iv ? 'edit' : 'new';
+const list = iv ? equipDetail.editPhotos : equipDetail.newPhotos;
+const existing = iv ? (iv.photos || []) : [];
+const total = existing.length + list.length;
+return `
+<div class="field">
+<label>Photos (optional)</label>
+${total ? `<div class="iv-previews">
+${existing.map(p => `<span class="iv-preview">${equipDetail.photoUrls[p] ? `<img src="${equipDetail.photoUrls[p]}" alt="">` : ''}</span>`).join('')}
+${list.map((p, i) => `<span class="iv-preview new"><img src="${p.url}" alt="Photo ${i+1}">
+<button type="button" class="iv-preview-x" data-action="iv-photo-remove" data-target="${target}" data-i="${i}" title="Remove" aria-label="Remove photo">×</button></span>`).join('')}
+</div>` : ''}
+${total < MAX_IV_PHOTOS ? `<label class="btn btn-sm iv-photo-btn ${equipDetail.photosBusy ? 'disabled' : ''}">
+<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+${equipDetail.photosBusy ? 'Preparing…' : (total ? 'Add another photo' : 'Attach a photo')}
+<input type="file" accept="image/*" multiple data-action="iv-photos" data-target="${target}" hidden>
+</label>` : ''}
+<div class="hint">Intervention report, replaced part, damage observed… ${MAX_IV_PHOTOS} photos maximum. They serve as proof and remain attached to the intervention.</div>
+</div>`;
+}
+
+function ivThumbnails(iv){
+const ph = iv.photos || [];
+if(!ph.length) return '';
+return `<div class="iv-thumbnails">${ph.map(p => {
+const u = equipDetail.photoUrls[p];
+return u ? `<button type="button" class="iv-thumbnail" data-action="photo-open" data-id="${iv.id}" data-path="${esc(p)}" title="View photo"><img src="${u}" alt="Intervention photo" loading="lazy"></button>`
+: `<span class="iv-thumbnail pending"></span>`;
+}).join('')}</div>`;
+}
+
+function renderPhotoViewer() {
+  const o = equipDetail.photoViewer;
+  if (!o) return '';
+
+  const iv = (equipDetail.interventions || []).find(x => x.id === o?.ivId);
+  const ph = iv?.photos || [];
+  const i = ph.indexOf(o.path);
   
-  <!-- =================================================================
-       Progressive Web App - enregistrement du Service Worker
-  ================================================================== -->
-  <script>
-  if ('serviceWorker' in navigator) {
-    // Quand une nouvelle version prend la main, on recharge UNE fois la page
-    // pour que tout (HTML, CSS, JavaScript) vienne de la même version.
-    let dejaRecharge = false;
-    navigator.serviceWorker.addEventListener('controllerchange', () => {
-      if (dejaRecharge || !navigator.serviceWorker.controller) return;
-      dejaRecharge = true;
-      window.location.reload();
-    });
-    window.addEventListener('load', () => {
-      navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then((reg) => {
-        document.addEventListener('visibilitychange', () => {
-          if (document.visibilityState === 'visible') reg.update().catch(() => {});
-        });
-      }).catch((e) => {
-        console.error('[SW] Échec d\'enregistrement :', e);
-      });
-    });
+  if (!iv || i < 0) return '';
+
+  const u = equipDetail.photoUrls[o.path];
+  const urlEsc = u ? esc(u) : '';
+  const totalPhotos = ph.length;
+
+  return `
+    <div class="photo-viewer" data-action="photo-close" role="dialog" aria-label="Intervention photo">
+      <div class="photo-viewer-top">
+        <div class="small">
+          ${esc(iv.type)} · ${fmtDate(iv.date)}${totalPhotos > 1 ? ` · ${i + 1}/${totalPhotos}` : ''}
+        </div>
+        <button type="button" class="photo-viewer-btn" data-action="photo-close" aria-label="Close">×</button>
+      </div>
+      
+      <div class="photo-viewer-image">
+        ${totalPhotos > 1 ? `<button type="button" class="photo-viewer-nav g" data-action="photo-next" data-direction="-1" aria-label="Previous">‹</button>` : ''}
+        ${u ? `<img src="${urlEsc}" alt="Photo ${i + 1} of ${totalPhotos}">` : ''}
+        ${totalPhotos > 1 ? `<button type="button" class="photo-viewer-nav d" data-action="photo-next" data-direction="1" aria-label="Next">›</button>` : ''}
+      </div>
+      
+      <div class="photo-viewer-bottom">
+        ${u ? `<a class="btn btn-sm" href="${urlEsc}" target="_blank" rel="noopener">Open large</a>` : ''}
+        ${isAdmin() ? `<button type="button" class="btn btn-sm btn-danger" data-action="photo-delete" data-id="${iv.id}" data-path="${esc(o.path)}">Delete this photo</button>` : ''}
+      </div>
+    </div>
+  `;
+}
+
+function changePhoto(direction){
+const o = equipDetail.photoViewer;
+const iv = (equipDetail.interventions || []).find(x => x.id === o?.ivId);
+const ph = iv?.photos || [];
+if(ph.length < 2) return;
+const i = (ph.indexOf(o.path) + direction + ph.length) % ph.length;
+equipDetail.photoViewer = { ivId: iv.id, path: ph[i] };
+render();
+}
+
+async function deleteOpenPhoto(){
+const o = equipDetail.photoViewer;
+const iv = (equipDetail.interventions || []).find(x => x.id === o?.ivId);
+if(!iv) return;
+if(!await confirm("Delete this photo?\n\nIt will no longer serve as proof for this intervention.", { danger:true, ok:'Delete' })) return;
+try{
+const remaining = (iv.photos || []).filter(p => p !== o.path);
+const { error } = await sb.from('interventions').update({ photos: remaining }).eq('id', iv.id);
+if(error) throw error;
+await deletePhotos([o.path]).catch(() => {});
+iv.photos = remaining;
+equipDetail.photoViewer = null;
+toast('Photo deleted');
+render();
+}catch(e){ toast('Error: ' + e.message, 'error'); }
+}
+
+/* Open or close the free consultation of an equipment. Closed, the label
+already stuck shows nothing anymore: the record becomes internal. */
+async function togglePublicSharing(){
+const eq = equipDetail.item;
+if(!eq) return;
+const open = !eq.public_sharing;
+if(!open && !await confirm("Close public consultation? Labels already printed for this equipment will show nothing to those who scan them.")) return;
+try{
+const { error } = await sb.from('equipements')
+.update({ public_sharing: open }).eq('id', eq.id);
+if(error) throw error;
+eq.public_sharing = open;
+render();
+}catch(e){ toast('Error: ' + e.message, 'error'); }
+}
+
+/* Change token: the old label becomes silent, the record and its history
+do not move. Useful if a label goes with a sold vehicle.
+Goes through the RPC regenerate_public_token (rather than a direct update()):
+it re-checks the role and organization on the server side (independently
+of the equipements_guard trigger, which remains a second barrier), and returns the
+new token in a single round trip. The displayed QR is redrawn automatically
+on the next render() (see comment above drawQr:
+it redraws on each record render from eq.public_token). */
+async function actionRegeneratePublicLink(){
+const eq = equipDetail.item;
+if(!eq) return;
+if(!await confirm("Change the public link? All labels already printed for this equipment will stop working: a new one will need to be printed. The record and its history are kept.")) return;
+try{
+const { data: newToken, error } = await sb.rpc('regenerate_public_token', { p_equipment_id: eq.id });
+if(error) throw error;
+eq.public_token = newToken;
+eq.old_link_active = false;
+render();
+}catch(e){ toast('Error: ' + e.message, 'error'); }
+}
+
+function printQr(){
+const eq = equipDetail.item;
+const printArea = document.getElementById('print-area');
+if(!eq || !printArea) return;
+
+const url = publicLink(eq.public_token);
+
+// QR generated specifically for printing, in high definition: a
+// thermal printer prints at ~203 dots per inch, the 200 px QR displayed
+// on screen would come out blurry and hard to scan.
+let source = null;
+if(typeof QRious !== 'undefined'){
+const hd = document.createElement('canvas');
+new QRious({ element:hd, value: url, size: 800, background:'white', foreground:'#000000', level:'M' });
+source = hd;
+} else {
+source = document.getElementById('qr-canvas'); // fallback
+}
+if(!source) return;
+
+const identifier = (eq.serial_value || '').trim();
+const size = LABEL.qr_size_mm;
+
+printArea.innerHTML = `
+<img id="print-qr-img" alt="" style="width:${size}mm;height:${size}mm;">
+${(LABEL.show_identifier && identifier) ? `<div class="label-id">${esc(identifier)}</div>` : ''}
+`;
+
+const img = document.getElementById('print-qr-img');
+// The image is encoded data: we must wait for it to be decoded,
+// otherwise the print job starts before and the label comes out blank.
+img.onload = () => window.print();
+img.onerror = () => window.print();
+img.src = source.toDataURL('image/png');
+}
+
+/* ---------------------------------------------------------------------- */
+/* Event delegation */
+/* ---------------------------------------------------------------------- */
+
+document.addEventListener('click', (e) => {
+const t = e.target.closest('[data-action]');
+if(!t) return;
+const action = t.dataset.action;
+
+if(action === 'go'){ nav(t.dataset.path); closeMenus(); }
+else if(action === 'toggle-menu'){ e.stopPropagation(); document.getElementById('user-dropdown')?.classList.toggle('open'); }
+else if(action === 'logout'){ voluntaryLogout = true; clearInstants(); sb.auth.signOut({ scope:'local' }); }
+else if(action === 'dash-reload'){ dashboardCache.error = ''; dashboardCache.items = null; render(); loadEquipments(); }
+else if(action === 'auth-mode'){ state.authMode = t.dataset.mode; state.authError=''; state.authNotice=''; render(); }
+else if(action === 'toggle-type-form'){ typeForm.open ? (typeForm = { open:false, id:null, nom:'', fields:[], busy:false, error:'' }, render()) : openTypeForm(null); }
+else if(action === 'edit-type'){
+const type = state.types.find(x => x.id === t.dataset.id);
+if(type) openTypeForm(type);
+}
+else if(action === 'field-add'){ typeForm.fields.push({label:'', type:'text'}); render(); }
+else if(action === 'field-remove'){ typeForm.fields.splice(+t.dataset.i, 1); render(); }
+else if(action === 'save-type'){ saveType(); }
+else if(action === 'save-equip'){ saveEquip(); }
+else if(action === 'toggle-iv-form'){
+equipDetail.showIvForm = !equipDetail.showIvForm; equipDetail.editIvId = null; equipDetail.ivNotice = '';
+if(!equipDetail.showIvForm){ clearPhotos('new'); equipDetail.draft = {}; equipDetail.ivError = ''; }
+render();
+}
+else if(action === 'iv-photo-remove'){
+memorizeDraft(t.closest('form'));
+const list = t.dataset.target === 'edit' ? equipDetail.editPhotos : equipDetail.newPhotos;
+const [p] = list.splice(+t.dataset.i, 1);
+if(p) URL.revokeObjectURL(p.url);
+render();
+}
+else if(action === 'photo-open'){ equipDetail.photoViewer = { ivId:t.dataset.id, path:t.dataset.path }; render(); }
+else if(action === 'photo-close'){ if(t.tagName === 'BUTTON' || e.target === t){ equipDetail.photoViewer = null; render(); } }
+else if(action === 'photo-next'){ changePhoto(+t.dataset.direction); }
+else if(action === 'photo-delete'){ deleteOpenPhoto(); }
+else if(action === 'abandon-equip-pending'){ abandonEquipPending(t.dataset.id); }
+else if(action.startsWith('mm-')){ modelAction(action, t); }
+else if(action === 'archive-equip'){ openModalArchive([equipDetail.id]); }
+else if(action === 'del-equip-one'){ openModalDeleteEquip([t.dataset.id]); }
+else if(action === 'equip-archive-sel'){ openModalArchive((dashboardCache.items||[]).filter(e => !e.archived && dashboardCache.sel.includes(e.id)).map(e => e.id)); }
+else if(action === 'equip-delete-sel'){ openModalDeleteEquip([...dashboardCache.sel]); }
+else if(action === 'equip-restore-sel'){ restoreSelection(); }
+else if(action === 'equip-deselect'){ dashboardCache.sel = []; render(); }
+else if(action === 'modal-close'){ closeModal(); }
+else if(action === 'modal-backdrop'){ if(e.target === t) closeModal(); }
+else if(action === 'modal-validate'){ validateModal(); }
+else if(action === 'iv-edit'){ equipDetail.editIvId = t.dataset.id; equipDetail.editIvError = ''; equipDetail.showIvForm = false; clearPhotos('edit'); equipDetail.draftEdit = null; render(); }
+else if(action === 'iv-cancel-edit'){ equipDetail.editIvId = null; equipDetail.editIvError = ''; clearPhotos('edit'); equipDetail.draftEdit = null; render(); }
+else if(action === 'iv-delete'){ deleteIntervention(t.dataset.id); }
+else if(action === 'new-client'){ openClientForm(null); }
+else if(action === 'edit-client'){ const c = (settings.clients||[]).find(x => x.id === t.dataset.id); if(c) openClientForm(c); }
+else if(action === 'close-client-form'){ settings.clientForm = null; render(); }
+else if(action === 'clients-status'){ actionClientsStatus(t.dataset.id ? [t.dataset.id] : [...settings.selClients], t.dataset.active === '1'); }
+else if(action === 'clients-delete'){ actionClientsDelete(t.dataset.id ? [t.dataset.id] : [...settings.selClients]); }
+else if(action === 'clients-deselect'){ settings.selClients = []; render(); }
+else if(action === 'members-active'){ actionMembersActive([...settings.selMembers], t.dataset.active === '1'); }
+else if(action === 'members-delete'){ actionMembersDelete([...settings.selMembers]); }
+else if(action === 'members-deselect'){ settings.selMembers = []; render(); }
+else if(action === 'log-refresh'){ settings.log = null; render(); }
+else if(action === 'log-delete'){ actionDeleteLog(t.dataset.id); }
+else if(action === 'log-clear'){ actionClearLog(); }
+else if(action === 'activity-refresh'){ activity.error = ''; loadActivity(true); }
+else if(action === 'activity-filter'){ activity.filter = t.dataset.filter; render(); }
+else if(action === 'activity-archive'){ toggleActivityArchive(t.dataset.key, t.dataset.archive === '1'); }
+else if(action === 'activity-archive-all'){ archiveAllActivity(); }
+else if(action === 'support-refresh'){ settings.support = null; render(); }
+else if(action === 'support-status'){
+setSupportStatus(t.dataset.id, t.dataset.status)
+.then(() => {
+const d = (settings.support || []).find(x => x.id === t.dataset.id);
+if(d) d.status = t.dataset.status;
+toast(t.dataset.status === 'processed' ? 'Request moved to "Processed"' : (t.dataset.status === 'new' ? 'Request set to process' : 'Request marked in progress'));
+render();
+})
+.catch(err => toast('Error: ' + err.message, 'error'));
+}
+else if(action === 'support-delete'){ actionDeleteSupportRequest(t.dataset.id); }
+else if(action === 'rename-member'){ openRenameForm(t.dataset.id); }
+else if(action === 'rename-me'){ renameMe(); }
+else if(action === 'change-pwd'){ closeMenus(); changeMyPassword(); }
+else if(action === 'reset-pwd'){ resetMemberPassword(t.dataset.id); }
+else if(action === 'liberate-device'){ actionLiberateDevice(t.dataset.id); }
+else if(action === 'new-equip-client'){
+equipForm = { typeId:'', orgId:t.dataset.id, nom:'', serial_value:'', values:{}, busy:false, error:'' };
+nav('/equip-new');
+}
+else if(action === 'rename-cancel'){ settings.rename = null; render(); }
+else if(action === 'support-filter'){ settings.supportFilter = t.dataset.filter; render(); }
+else if(action === 'toggle-invite-client'){ settings.inviteOpen = !settings.inviteOpen; render(); }
+else if(action === 'restore-equip'){ restoreEquipement(); }
+else if(action === 'toggle-edit-record'){ equipDetail.showEditForm = !equipDetail.showEditForm; equipDetail.editError=''; render(); }
+else if(action === 'print-qr'){ printQr(); }
+else if(action === 'open-scanner'){ openScanner(); }
+else if(action === 'open-on-computer'){ actionOpenOnComputer(); }
+else if(action === 'computer-new-code'){ newComputerCode(); }
+else if(action === 'resume-mobile'){ actionResumeMobile(); }
+else if(action === 'take-back-phone'){ actionTakeBackPhone(); }
+else if(action === 'close-scanner'){ closeScanner(); }
+else if(action === 'connection-from-scan'){ connectionFromScan(); }
+else if(action === 'toggle-public-sharing'){ togglePublicSharing(); }
+else if(action === 'regen-token'){ actionRegeneratePublicLink(); }
+else if(action === 'create-invite'){ actionCreateInvite(); }
+else if(action === 'cancel-invite'){ actionCancelInvite(t.dataset.id); }
+else if(action === 'toggle-templates'){ templateState.open = !templateState.open; render(); }
+else if(action === 'apply-template'){ applyTemplate(t.dataset.key); }
+else if(action === 'copy-link'){ copyToClipboard(inviteUrl(t.dataset.token), t); }
+else if(action === 'toggle-pw'){
+// Direct DOM manipulation: absolutely no render(), which would erase the input.
+const input = t.parentElement && t.parentElement.querySelector('input');
+if(input){
+const wasVisible = input.type === 'text';
+input.type = wasVisible ? 'password' : 'text';
+t.innerHTML = wasVisible ? EYE_ICON : EYE_SLASH_ICON;
+const label = wasVisible ? 'Show password' : 'Hide password';
+t.setAttribute('aria-label', label);
+t.setAttribute('title', label);
+input.focus();
+}
+}
+});
+
+document.addEventListener('input', (e) => {
+const t = e.target.closest('[data-action]');
+if(!t) return;
+const action = t.dataset.action;
+if(action === 'dash-search'){ dashboardCache.search = t.value; debounce(refreshDashboard); }
+else if(action === 'dash-filter-type'){ dashboardCache.typeId = t.value; refreshDashboard(); }
+else if(action === 'dash-archived'){ dashboardCache.showArchived = t.checked; refreshDashboard(); }
+else if(action === 'type-name'){ typeForm.nom = t.value; }
+else if(action === 'field-label'){ typeForm.fields[+t.dataset.i].label = t.value; }
+else if(action === 'field-type'){ typeForm.fields[+t.dataset.i].type = t.value; }
+else if(action === 'equip-name'){ equipForm.nom = t.value; }
+else if(action === 'equip-serial'){ equipForm.serial_value = t.value; checkSerial(t.value, null); }
+else if(action === 'edit-serial'){ checkSerial(t.value, t.dataset.exclude || null); }
+else if(action === 'equip-type'){ equipForm.typeId = t.value; render(); }
+else if(action === 'equip-value'){ equipForm.values[t.dataset.key] = t.value; }
+else if(action === 'invite-org'){
+settings.invite = { orgId:t.value, role:settings.invite.role, label:settings.invite.label, allTypes:true, types:[], busy:false, error:'', lastToken:null };
+render();
+}
+else if(action === 'invite-role'){ settings.invite.role = t.value; render(); }
+else if(action === 'invite-label'){ settings.invite.label = t.value; }
+else if(action === 'invite-all-types'){
+settings.invite.allTypes = t.checked;
+if(t.checked) settings.invite.types = [];
+settings.invite.error = ''; render();
+}
+else if(action === 'invite-type'){
+const id = t.dataset.type;
+settings.invite.types = t.checked
+? [...new Set([...settings.invite.types, id])]
+: settings.invite.types.filter(x => x !== id);
+settings.invite.error = ''; render();
+}
+else if(action === 'sel-equip'){ toggle(dashboardCache, 'sel', t.dataset.id, t.checked); render(); }
+else if(action === 'sel-equip-all'){ dashboardCache.sel = t.checked ? (dashboardCache.items||[]).filter(e => !e.pending).map(e => e.id) : []; render(); }
+else if(action === 'sel-client'){ toggle(settings, 'selClients', t.dataset.id, t.checked); render(); }
+else if(action === 'sel-clients-all'){ settings.selClients = t.dataset.ids || ''.split(',').filter(Boolean); render(); }
+else if(action === 'search-client'){ settings.searchClient = t.value; settings.selClients = []; render(); }
+else if(action === 'search-profile'){ settings.searchProfile = t.value; settings.selMembers = []; render(); }
+else if(action === 'sort-clients'){ settings.sortClients = t.value; render(); }
+else if(action === 'search-inventory'){ settings.searchInventory = t.value; render(); }
+else if(action === 'inventory-archives'){ settings.inventoryArchives = t.checked; render(); }
+else if(action === 'sel-member'){ toggle(settings, 'selMembers', t.dataset.id, t.checked); render(); }
+else if(action === 'sel-members-all'){
+const ids = (t.dataset.ids || '').split(',').filter(Boolean);
+settings.selMembers = t.checked ? [...new Set([...settings.selMembers, ...ids])] : settings.selMembers.filter(x => !ids.includes(x));
+render();
+}
+else if(action === 'filter-client-members'){ settings.filterClient = t.value; settings.selMembers = []; render(); }
+else if(action === 'modal-choice'){ modal.choice = t.value; modal.error = ''; render(); }
+else if(action === 'modal-details'){ modal.details = t.value; }
+else if(action === 'client-template'){ settings.clientForm.template = t.value; updateClientFormFromDom(); render(); }
+else if(action === 'member-role'){ actionMemberRole(t.dataset.id, t.value); }
+else if(action === 'move-member'){ actionMoveMember(t.dataset.id, t.value); }
+else if(action === 'access-all'){ actionAccessAll(t.dataset.id, t.checked); }
+else if(action === 'access-type'){ actionAccessType(t.dataset.id, t.dataset.type, t.checked); }
+else if(action.startsWith('mm-')){ draftTemplate(action, t); }
+});
+
+document.addEventListener('submit', (e) => {
+const t = e.target.closest('[data-action]');
+if(!t) return;
+e.preventDefault();
+const action = t.dataset.action;
+if(action === 'submit-auth') handleAuthSubmit(t);
+else if(action === 'submit-iv') submitIntervention(t);
+else if(action === 'submit-join') handleJoinSubmit(t);
+else if(action === 'submit-edit-record') submitEditEquip(t);
+else if(action === 'submit-iv-edit') submitEditIntervention(t);
+else if(action === 'submit-client') submitClientForm(t);
+else if(action === 'submit-support') submitSupport(t);
+else if(action === 'submit-rename') submitRenameForm(t);
+});
+
+document.addEventListener('click', (e) => {
+if(!e.target.closest('.user-menu')) closeMenus();
+});
+function closeMenus(){ document.getElementById('user-dropdown')?.classList.remove('open'); }
+
+/* Adds / removes an ID from a selection list. */
+function toggle(obj, key, id, checked){
+const l = obj[key] || [];
+obj[key] = checked ? [...new Set([...l, id])] : l.filter(x => x !== id);
+}
+
+/* Before re-rendering the client form, copy the current input
+(otherwise changing the template would erase what was just typed). */
+function updateClientFormFromDom(){
+const form = document.querySelector('form[data-action="submit-client"]');
+if(!form || !settings.clientForm) return;
+const fd = new FormData(form);
+for(const k of ['nom','address','phone','email','contact','notes']) settings.clientForm[k] = (fd.get(k) || '').toString();
+}
+
+/* Escape closes the modal window. */
+document.addEventListener('keydown', (e) => {
+if(e.key === 'Escape' && modal && !modal.busy) closeModal();
+else if(e.key === 'Escape' && equipDetail.photoViewer){ equipDetail.photoViewer = null; render(); }
+});
+
+/* Photos chosen (camera or gallery): the "change" event is
+the only reliable one for a file field on all phones. */
+document.addEventListener('change', (e) => {
+const t = e.target;
+if(t && t.dataset && t.dataset.action === 'iv-photos') addPhotos(t);
+});
+
+/* Intervention form input memorized on the fly. */
+document.addEventListener('input', (e) => {
+const f = e.target.form;
+if(f && e.target.name && (f.dataset.action === 'submit-iv' || f.dataset.action === 'submit-iv-edit')) memorizeDraft(f);
+});
+
+let debounceTimer;
+function debounce(fn, ms=250){ clearTimeout(debounceTimer); debounceTimer = setTimeout(fn, ms); }
+
+/* ---------------------------------------------------------------------- */
+/* Auth bootstrap */
+/* ---------------------------------------------------------------------- */
+
+/* IMPORTANT: never await a Supabase call IN this callback.
+supabase-js triggers it while holding its authentication lock; a request
+launched within it waits for the same lock → permanent block of ALL requests
+(symptom: lists not loading after returning to the app, e.g., Equipment tab
+frozen). We just note the session, then work outside the callback (setTimeout 0),
+as recommended by Supabase. */
+sb.auth.onAuthStateChange((event, session) => {
+// Logout not from button: session closed elsewhere
+// (account opened on another device, password reset…).
+if(event === 'SIGNED_OUT' && state.profile && !voluntaryLogout && !state.authError) state.authError = MSG_SESSION_CLOSED;
+if(event === 'SIGNED_OUT') voluntaryLogout = false;
+const sameUser = !!(session && state.session && state.profile && state.profile.id === session.user.id);
+state.session = session;
+// Token refresh, return to foreground: same user, nothing to reload.
+if(session && sameUser && event !== 'INITIAL_SESSION') return;
+setTimeout(() => applySession(session), 0);
+});
+
+/* ---------------------------------------------------------------------- */
+/* An account = one person */
+/* ---------------------------------------------------------------------- */
+/* The last login wins: the device that was connected before
+loses access to data (checked server-side, sql/19) and we inform it. */
+let voluntaryLogout = false;
+const MSG_SESSION_CLOSED = "You have been logged out remotely by WiDIAG MQ. Log in again with your email and password.";
+const MSG_DEVICE_REFUSED = "This account is already in use on another device. One account = one person = one device. To use it on this one, ask WiDIAG MQ to grant access again (widiagmq@gmail.com · +33 6 96 20 93 19).";
+
+/* Identifier for THIS device (browser), created once and kept.
+The database only keeps its fingerprint. See sql/20. */
+function deviceId(){
+let id = null;
+try{ id = localStorage.getItem('wte_device'); }catch(e){}
+if(!id || id.length < 16){
+id = (crypto.randomUUID ? crypto.randomUUID() : String(Math.random()).slice(2) + Date.now()) + '-' + Math.random().toString(36).slice(2, 10);
+try{ localStorage.setItem('wte_device', id); }catch(e){}
+}
+return id;
+}
+function deviceInfo(){
+const ua = navigator.userAgent || '';
+const os = /iPhone/.test(ua) ? 'iPhone' : /iPad/.test(ua) ? 'iPad' : /Android/.test(ua) ? 'Android'
+: /Windows/.test(ua) ? 'Windows' : /Mac OS X/.test(ua) ? 'Mac' : /Linux/.test(ua) ? 'Linux' : 'Device';
+const nav = /Edg\//.test(ua) ? 'Edge' : /SamsungBrowser/.test(ua) ? 'Samsung Internet' : /Firefox|FxiOS/.test(ua) ? 'Firefox'
+: /CriOS|Chrome/.test(ua) ? 'Chrome' : /Safari/.test(ua) ? 'Safari' : 'browser';
+const app = matchMedia('(display-mode: standalone)').matches || navigator.standalone ? ' (installed app)' : '';
+return `${os} · ${nav}${app}`;
+}
+/* 'ok' | 'refused' | null (no response: network) */
+/* Phone/tablet or computer: only used to require the first
+connection (the account's "key") to be on a phone. Security itself
+relies on the database (sql/23), not this test. */
+function deviceType(){
+const ua = navigator.userAgent || '';
+const mobile = /Android|iPhone|iPad|iPod|Mobile/i.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
+return mobile ? 'mobile' : 'computer';
+}
+async function linkDevice(){
+try{
+const { data, error } = await sb.rpc('link_device', { p_device: deviceId(), p_info: deviceInfo(), p_type: deviceType() });
+if(error) return null;
+return data;
+}catch(e){ return null; }
+}
+async function refuseDevice(message){
+state.authError = message || MSG_DEVICE_REFUSED;
+voluntaryLogout = true;
+clearInstants();
+try{ await sb.auth.signOut({ scope:'local' }); }catch(e){}
+nav('/');
+}
+let sessionVerificationInProgress = false;
+
+async function verifySession(){
+if(sessionVerificationInProgress || !state.session || !state.profile || state.superAdmin || !navigator.onLine) return;
+sessionVerificationInProgress = true;
+try{
+const { data, error } = await sb.rpc('my_active_session');
+if(!error && data === false){
+const state = await readComputerState();
+if(state && state.device === 'mobile' && state.computer_expires_at){ pauseComputer(state); }
+else if(state && state.device === 'computer'){ await endComputer("Session on this computer ended. To continue, scan again with your phone."); }
+else if(state && !state.device && computerState.mode === 'computer'){ await endComputer("Phone has regained control: computer session closed."); }
+else await forcedLogout();
+}
+}catch(e){ /* network: will retry */ }
+finally{ sessionVerificationInProgress = false; }
+}
+
+async function forcedLogout(){
+state.authError = MSG_SESSION_CLOSED;
+voluntaryLogout = true; // message already set
+clearInstants();
+if(dialogueOpen) dialogueOpen.close(null);
+try{ await sb.auth.signOut({ scope:'local' }); }catch(e){}
+nav('/');
+}
+
+setInterval(verifySession, 60000);
+// On computer, tighter control: phone takeover is seen quickly.
+setInterval(() => { if(computerState.mode === 'computer') verifySession(); }, 15000);
+document.addEventListener('visibilitychange', () => { if(document.visibilityState === 'visible'){ verifySession(); if(state.profile && !state.superAdmin) loadActivity(true); } });
+window.addEventListener('online', () => setTimeout(verifySession, 1500));
+
+
+/* ---------------------------------------------------------------------- */
+/* Computer authorized by phone (v2.17.5, sql/23) */
+/* ---------------------------------------------------------------------- */
+/* The phone linked to the account is the key. A computer displays a QR code;
+the phone scans it → the computer is opened for 45 minutes and the phone
+goes into pause (computer OR phone, never both). The phone can take back control
+at any time. Everything is verified by the database. */
+const MSG_FIRST_MOBILE = "First connection: use your phone. It will then open the computer by scanning a QR code.";
+function computerStateInitial(){ return { mode:null, code:null, codeLe:0, error:'', message:'', expires_at:null, info:'', offset:0, busy:false, warned:false }; }
+let computerState = computerStateInitial();
+let computerTimers = [];
+function stopComputerTimers(){ computerTimers.forEach(t => clearInterval(t)); computerTimers = []; }
+
+async function readComputerState(){
+try{ const { data, error } = await sb.rpc('computer_state'); return error ? null : data; }catch(e){ return null; }
+}
+function shortTime(iso){
+try{ return new Date(iso).toLocaleTimeString('en-US', { hour:'2-digit', minute:'2-digit' }); }catch(e){ return ''; }
+}
+
+/* --- On computer: waiting for scan --- */
+function enterComputerWaiting(message){
+stopComputerTimers();
+computerState = { ...computerStateInitial(), mode:'waiting', message: message || '' };
+state.loading = false;
+newComputerCode();
+computerTimers.push(setInterval(monitorWaiting, 3000));
+render();
+}
+async function newComputerCode(){
+computerState.busy = true; computerState.error = '';
+try{
+const { data, error } = await sb.rpc('request_computer_access', { p_device: deviceId(), p_info: deviceInfo() });
+if(error) throw error;
+computerState.code = data; computerState.codeLe = Date.now();
+}catch(e){ computerState.code = null; computerState.error = (e && e.message) || String(e); }
+computerState.busy = false;
+render();
+}
+async function monitorWaiting(){
+if(computerState.mode !== 'waiting' || !state.session) return;
+if(!computerState.busy && (!computerState.code || Date.now() - computerState.codeLe > 4.5 * 60000)){ if(computerState.code) newComputerCode(); return; }
+const state = await readComputerState();
+if(computerState.mode === 'waiting' && state && state.valid && state.device === 'computer'){
+stopComputerTimers();
+computerState = { ...computerStateInitial(), mode:'computer' };
+state.loading = true; render();
+applySession(state.session);
+}
+}
+function renderComputerWaiting(){
+const p = computerState;
+return `
+<div class="auth-wrap computer-screen">
+<div class="auth-logo">
+<img class="logo brand-logo" src="${LOGO_DATA_URL}" alt="WiTracEQUIP">
+<h1 style="font-size:20px;">Open on this computer</h1>
+<div class="small muted">One account = one person: the computer opens with your phone.</div>
+</div>
+${p.message ? `<div class="alert alert-info">${esc(p.message)}</div>` : ''}
+<div class="card computer-card">
+<div class="computer-qr">${p.error ? `<div class="alert alert-error" style="margin:0;">${esc(p.error)}</div>`
+: p.code ? `<canvas id="qr-computer" width="220" height="220" aria-label="QR code to scan with your phone"></canvas>` : `<div class="spinner"></div>`}</div>
+<ol class="computer-steps">
+<li>On <b>your phone</b>, open WiTracEQUIP.</li>
+<li>Tap <b>"Scan QR code"</b> and aim at this code.</li>
+<li>Confirm: this computer opens for <b>45 minutes</b>.</li>
+</ol>
+<div class="small muted">During this time, your phone is paused; you can take back control at any time. The code renews itself.</div>
+<div class="row wrap" style="gap:8px;margin-top:14px;">
+<button class="btn" data-action="computer-new-code" ${p.busy ? 'disabled' : ''}>New code</button>
+<button class="btn" data-action="logout">Log out</button>
+</div>
+</div>
+</div>`;
+}
+function drawComputerQr(){
+const c = document.getElementById('qr-computer');
+if(c && computerState.code && typeof QRious !== 'undefined') new QRious({ element:c, value:'WTE-COMPUTER:' + computerState.code, size:220, background:'white', foreground:'#141b1e', level:'M' });
+}
+
+/* --- On computer: session open (45 min) --- */
+async function startComputerTimer(){
+const state = await readComputerState();
+if(state && state.computer_expires_at){
+computerState.expires_at = state.computer_expires_at;
+computerState.offset = state.now ? new Date(state.now).getTime() - Date.now() : 0;
+}
+stopComputerTimers();
+computerTimers.push(setInterval(tickComputer, 1000));
+tickComputer();
+}
+function remainingComputer(){ return computerState.expires_at ? new Date(computerState.expires_at).getTime() - (Date.now() + (computerState.offset || 0)) : null; }
+function computerBannerText(){
+const r = remainingComputer();
+if(r === null) return 'Computer session';
+const min = Math.max(0, Math.ceil(r / 60000));
+return r <= 120000
+? `Session on this computer closes in ${min} min: save your current entry.`
+: `Computer open until ${shortTime(computerState.expires_at)} (${min} min remaining)`;
+}
+function renderComputerBanner(){
+if(computerState.mode !== 'computer') return '';
+const r = remainingComputer();
+return `<div id="computer-banner" class="computer-banner ${r !== null && r <= 120000 ? 'alert' : ''}">
+${navIcon('clock',15)} <span id="computer-banner-text">${esc(computerBannerText())}</span>
+<button class="btn-link-small" data-action="take-back-phone">Take back phone control</button>
+</div>`;
+}
+function tickComputer(){
+if(computerState.mode !== 'computer' || !computerState.expires_at) return;
+const r = remainingComputer();
+const el = document.getElementById('computer-banner');
+if(el){ el.classList.toggle('alert', r <= 120000); const t = document.getElementById('computer-banner-text'); if(t) t.textContent = computerBannerText(); }
+if(r <= 120000 && !computerState.warned){
+computerState.warned = true;
+confirm("Session on this computer closes in 2 minutes.\n\nSave your current entry. To continue afterwards, scan the QR code again with your phone.", { info:true, ok:'Understood' });
+}
+if(r <= 0) endComputer("45 minutes on the computer have elapsed. To continue, scan again with your phone.");
+}
+async function endComputer(message){
+if(computerState.mode === 'waiting') return;
+stopComputerTimers();
+computerState.mode = 'waiting';
+try{ await sb.rpc('close_computer'); }catch(e){}
+if(dialogueOpen) dialogueOpen.close(null);
+clearInstants();
+dashboardCache = dashboardInitial(dashboardCache.request + 1);
+enterComputerWaiting(message);
+}
+async function actionTakeBackPhone(){
+if(!await confirm("Close session on this computer?\n\nYour phone will become active immediately. Remember to save any current entry.", { ok:'Close session', danger:false })) return;
+await endComputer("Session closed: your phone is now active.");
+}
+
+/* --- On phone: authorize, pause, resume --- */
+async function authorizeComputerFromScan(code){
+if(!await confirm("Open your account on this computer?\n\nThe computer can be used for 45 minutes. During this time, this phone is paused; you can take back control at any time.", { ok:"Authorize computer", danger:false })) return;
+try{
+const { error } = await sb.rpc('authorize_computer', { p_code: code });
+if(error) throw error;
+pauseComputer(await readComputerState());
+}catch(e){ toast((e && e.message) || String(e), 'error'); }
+}
+function pauseComputer(state){
+stopComputerTimers();
+computerState = { ...computerStateInitial(), mode:'paused', expires_at: state && state.computer_expires_at || null, info: state && state.computer_info || '' };
+if(dialogueOpen) dialogueOpen.close(null);
+if(scannerState.open) closeScanner();
+state.loading = false;
+computerTimers.push(setInterval(async () => {
+if(computerState.mode !== 'paused' || !navigator.onLine) return;
+const e = await readComputerState();
+if(computerState.mode !== 'paused' || !e) return;
+if(e.valid) resumeAfterPause();
+else if(e.computer_expires_at !== computerState.expires_at){ computerState.expires_at = e.computer_expires_at; render(); }
+}, 20000));
+render();
+}
+function resumeAfterPause(){
+stopComputerTimers();
+computerState = computerStateInitial();
+state.loading = true; render();
+applySession(state.session);
+}
+async function actionResumeMobile(){
+if(!await confirm("Resume on this phone?\n\nThe session open on the computer will close immediately.", { ok:'Resume here', danger:false })) return;
+try{
+const { error } = await sb.rpc('resume_mobile');
+if(error) throw error;
+resumeAfterPause();
+}catch(e){ toast('Error: ' + ((e && e.message) || e), 'error'); }
+}
+function renderMobilePaused(){
+const p = computerState;
+return `
+<div class="auth-wrap computer-screen">
+<div class="auth-logo">
+<img class="logo brand-logo" src="${LOGO_DATA_URL}" alt="WiTracEQUIP">
+<h1 style="font-size:20px;">Account open on a computer</h1>
+</div>
+<div class="card computer-card">
+<div class="computer-pause-icon">${navIcon('smartphone', 34)}</div>
+<p style="margin:0 0 6px;">Your account is used on <b>${esc(p.info || 'a computer')}</b>${p.expires_at ? ` until <b>${esc(shortTime(p.expires_at))}</b>` : ''}.</p>
+<p class="small muted" style="margin:0 0 14px;">This phone is paused: one account can only be used on one device at a time. It will become active again automatically at the end of the computer session.</p>
+<button class="btn btn-primary btn-block" data-action="resume-mobile">Resume on this phone</button>
+<button class="btn btn-block" style="margin-top:8px;" data-action="logout">Log out</button>
+</div>
+</div>`;
+}
+async function actionOpenOnComputer(){
+closeMenus();
+if(!await confirm("Open your account on a computer\n\n1. On the computer, open WiTracEQUIP and log in with your email and password.\n2. A QR code will appear: scan it with this phone.\n\nThe computer will then be open for 45 minutes and this phone will pause.", { ok:'Scan QR code', danger:false })) return;
+openScanner();
+}
+
+async function applySession(session){
+if(session !== state.session) return; // another session arrived in the meantime
+state.accessError = '';
+if(session){
+// One account = one device: we check BEFORE loading anything.
+if(navigator.onLine){
+const link = await linkDevice();
+if(session !== state.session) return;
+if(link === 'refused'){ await refuseDevice(); return; }
+if(link === 'first_mobile'){ await refuseDevice(MSG_FIRST_MOBILE); return; }
+if(link === 'authorization_required'){ enterComputerWaiting(); return; }
+if(link === 'mobile_blocked'){ pauseComputer(await readComputerState()); return; }
+computerState = { ...computerStateInitial(), mode: link === 'computer_ok' ? 'computer' : 'mobile' };
+if(link === 'computer_ok') startComputerTimer();
+}
+try{
+await loadProfileAndOrg();
+await loadSuperAdminStatus();
+await loadTypes(true);
+try{ await loadTemplates(); }catch(err){ console.error('[templates]', err); }
+state.offline = false;
+saveInstant({ profile: state.profile, orgName: state.orgName, superAdmin: state.superAdmin, types: state.types, templates: state.templates });
+setTimeout(verifySession, 2000);
+if(!state.superAdmin) setTimeout(() => loadActivity(true), 1200);
+returnAfterLogin();
+// Preload: equipment list is ready before opening it.
+if(dashboardCache.items === null) setTimeout(() => { if(state.session && dashboardCache.items === null) loadEquipments(); }, 300);
+try{
+state.pendingCount = await offlineCountPending();
+if(navigator.onLine) syncPendingInterventions();
+}catch(e){ console.error('[offline]', e); }
+}catch(e){
+console.error(e);
+const inst = readInstant();
+if(isNetworkError(e) && inst.profile && inst.profile.id === session.user.id && (deviceType() === 'mobile' || inst.superAdmin)){
+// Offline: start with last known state.
+state.profile = inst.profile; state.orgName = inst.orgName || ''; state.superAdmin = !!inst.superAdmin;
+state.types = inst.types || []; state.typesLoaded = true; state.offline = true;
+state.templates = inst.templates || null;
+returnAfterLogin();
+try{ state.pendingCount = await offlineCountPending(); }catch(err){}
+state.loading = false;
+render();
+return;
+}
+state.accessError = (e && e.message) ? e.message : 'Error loading profile.';
+}
+} else {
+state.profile = null; state.orgName = ''; state.superAdmin = false;
+stopComputerTimers(); computerState = computerStateInitial();
+activity = { items:null, loading:false, error:'', filter:'recent' };
+dashboardCache = dashboardInitial(dashboardCache.request + 1); // invalidate any ongoing response
+resetSettings();
+modal = null;
+supportState = { category:'question', subject:'', message:'', email:'', busy:false, error:'', ok:'', myRequests:null };
+homeCache = { figures: null, loading: false, error: '' };
+founderCache = { data:null, loading:false, error:'' };
+joinState = { token:null, loading:false, preview:null, error:'', busy:false, notice:'' };
+state.typesLoaded = false; state.types = [];
+}
+state.loading = false;
+render();
+}
+
+render(); // first render (spinner) while session loads
+// Function to display the Intervention Report page
+function displayInterventionReport() {
+  const app = document.getElementById('app');
+  if (app && typeof loadInterventionForm === 'function') {
+    loadInterventionForm(app);
   }
-  </script>
-</body>
-</html>
+}
