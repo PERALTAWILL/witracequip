@@ -2912,3 +2912,10 @@ render();
 }
 
 render(); // premier rendu (spinner) pendant que la session se charge
+// Fonction pour afficher la page du Rapport d'intervention
+function afficherRapportIntervention() {
+  const app = document.getElementById('app');
+  if (app && typeof chargerFormulaireRapport === 'function') {
+    chargerFormulaireRapport(app);
+  }
+}
