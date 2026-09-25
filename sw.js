@@ -26,7 +26,7 @@
 
 /* Changer ce numéro à chaque déploiement : c'est ce qui déclenche le
    remplacement de l'ancien cache par le nouveau chez tous les utilisateurs. */
-const VERSION = 'wte-v2.17.11';
+const VERSION = 'wte-v2.18.0';
 
 const CACHE_SHELL = `${VERSION}-shell`;
 const CACHE_EXTERNE = `${VERSION}-externe`;
@@ -40,9 +40,12 @@ const FICHIERS_SHELL = [
   'index.html',
   'manifest.json',
   'css/style.css',
+  'css/fondateur.css',
+  'css/horizon.css',
 
   'js/config.js',
   'js/core/icons.js',
+  'js/fondateur-view.js',
   'js/services/offline.js',
   'js/services/data.js',
   'js/ui.js',
@@ -119,15 +122,22 @@ self.addEventListener('fetch', (event) => {
   // Supabase : jamais interceptée (voir l'en-tête de ce fichier).
   if (url.hostname.endsWith('.supabase.co')) return;
 
-  // Navigation : on tente le réseau, on retombe sur la coquille en cache.
-  // Les routes étant portées par le fragment d'URL (#/equip/...), toute
-  // navigation vise index.html — un seul repli suffit donc pour toutes.
+  // Navigation : seul l'accueil de l'application est une coquille à mettre
+  // en cache. Une page autonome (comme l'aperçu Fondateur) ne doit JAMAIS
+  // remplacer index.html dans le cache hors ligne.
   if (req.mode === 'navigate') {
+    const scope = new URL(self.registration.scope).pathname;
+    const appPaths = [scope, scope + 'index.html'];
+    if (!appPaths.includes(url.pathname)) return;
     event.respondWith(
       fetch(req)
         .then((rep) => {
-          const copie = rep.clone();
-          caches.open(CACHE_SHELL).then((c) => c.put('index.html', copie));
+          // Un serveur de prévisualisation peut rediriger / vers l'aperçu.
+          // Dans ce cas, on le montre mais on ne le garde pas comme coquille.
+          if (rep.ok && appPaths.includes(new URL(rep.url).pathname)) {
+            const copie = rep.clone();
+            caches.open(CACHE_SHELL).then((c) => c.put('index.html', copie));
+          }
           return rep;
         })
         .catch(() => caches.match('index.html', { ignoreSearch: true })

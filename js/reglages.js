@@ -85,7 +85,7 @@ let reglages;
 function resetReglages(){
 reglages = {
 clients:null, clientsLoading:false, clientsError:'', selClients:[],
-clientForm:null,
+clientForm:null, clientFormAReveler:false,
 membres:null, emails:{}, acces:null, typesOrgs:null, membresLoading:false, membresError:'',
 selMembres:[], filtreClient:'',
 invites:null,
@@ -160,7 +160,7 @@ else if(onglet === 'journal') contenu = viewJournal();
 if(isSuperAdmin()){
 const titres = { clients:'Clients', support:'Support', journal:'Journal' };
 return `
-${sous && onglet !== 'support' ? '' : `<div class="row between wrap" style="margin-bottom:6px;"><h2>${titres[onglet]}</h2></div>
+${sous && onglet !== 'support' || (onglet === 'clients' && !sous) ? '' : `<div class="row between wrap" style="margin-bottom:6px;"><h2>${titres[onglet]}</h2></div>
 ${courant?.aide ? `<div class="reglages-aide">${esc(courant.aide)}</div>` : ''}`}
 ${contenu}`;
 }
@@ -229,6 +229,8 @@ ${c.modele_metier ? esc(nomModele(c.modele_metier)) : 'Aucun modèle métier'}${
 }).join('');
 
 return `
+<header class="hz-portfolio-hero"><span class="hz-overline">VOTRE PORTEFEUILLE</span><h1>Vos clients.<br><em>À portée de main.</em></h1>
+<p>Retrouvez un dossier, son parc et les personnes qui y travaillent.</p><strong>${tous.length} client${tous.length > 1 ? 's' : ''}</strong></header>
 ${reglages.clientForm && !reglages.clientForm.id ? renderClientForm() : ''}
 <div class="barre-clients">
 <div class="recherche-client">
@@ -273,12 +275,17 @@ for(const ch of String(nom || '')) h = (h * 31 + ch.charCodeAt(0)) % 360;
 return h;
 }
 
+let sequenceBrouillonClient = 0;
 function ouvrirClientForm(client){
 reglages.clientForm = client
 ? { id:client.id, nom:client.nom || '', adresse:client.adresse || '', telephone:client.telephone || '',
 email:client.email || '', referent:client.referent || '', notes:client.notes || '',
 modele:client.modele_metier || '', busy:false, error:'' }
 : { id:null, nom:'', adresse:'', telephone:'', email:'', referent:'', notes:'', modele:'', busy:false, error:'' };
+// Identifie chaque ouverture : l'ancien formulaire encore dans le DOM ne doit
+// jamais recopier sa saisie dans une nouvelle fiche pendant le prochain render().
+reglages.clientForm.brouillonId = ++sequenceBrouillonClient;
+reglages.clientFormAReveler = true;
 render();
 }
 
@@ -287,7 +294,7 @@ const f = reglages.clientForm;
 const modif = !!f.id;
 const modele = modelesMetiers().find(m => m.cle === f.modele);
 return `
-<form class="card" data-action="submit-client" style="margin-bottom:14px;">
+<form class="card" data-action="submit-client" data-brouillon-id="${f.brouillonId}" style="margin-bottom:14px;">
 <h3>${modif ? 'Modifier la fiche client' : 'Nouveau client'}</h3>
 ${f.error ? `<div class="alert alert-error">${esc(f.error)}</div>` : ''}
 <div class="grid-2" style="margin-top:10px;">
@@ -366,28 +373,20 @@ const enEdition = reglages.clientForm && reglages.clientForm.id === c.id;
 chargerParcClient(c.id, false);
 const membres = (reglages.membres || []).filter(m => m.organization_id === c.id);
 const invites = (reglages.invites || []).filter(i => i.organization_id === c.id);
+const nbTypes = state.types.filter(t => t.organization_id === c.id).length;
 // Formulaire d'invitation pré-réglé sur ce client.
 if(reglages.invite.orgId !== c.id){
+reglages.inviteOuvert = false;
 reglages.invite = { orgId:c.id, role:'utilisateur', label:'', tousTypes:true, types:[], busy:false, error:'', dernierToken:null };
 }
 
 return `
-<div class="fiche-entete">
-<button class="icon-btn" data-action="go" data-path="/reglages/clients" title="Retour">←</button>
-<div class="titre">
-<h2>${esc(c.nom)} ${!c.active ? '<span class="badge badge-off">suspendu</span>' : ''}</h2>
-<div class="small muted">N° client <span class="code-client">${esc(c.code_client)}</span> · créé le ${fmtDate(c.created_at)}</div>
-</div>
-<div class="actions">
-${!enEdition ? `<button class="btn btn-sm" data-action="modifier-client" data-id="${c.id}">Modifier</button>` : ''}
-${!c.est_mon_organisation ? `
-<button class="btn btn-sm" data-action="clients-statut" data-id="${c.id}" data-actif="${c.active ? '0' : '1'}">${c.active ? 'Suspendre' : 'Réactiver'}</button>
-<button class="btn btn-sm btn-danger" data-action="clients-supprimer" data-id="${c.id}">Supprimer</button>` : ''}
-</div>
-</div>
-
+<div class="hz-client-detail">
+${renderEnteteClientFondateur(c, nbTypes, reglages.invites === null ? null : invites, enEdition)}
+<section id="hz-client-parc" class="hz-client-area" aria-label="Parc technique">
 ${renderParcClient(c)}
-
+</section>
+<section id="hz-client-fiche" class="hz-client-area" aria-label="Fiche entreprise">
 ${enEdition ? renderClientForm() : `
 <div class="grid-2" style="align-items:start;">
 <div class="card">
@@ -407,7 +406,9 @@ ${c.notes ? `<tr><td class="muted">Notes</td><td>${esc(c.notes)}</td></tr>` : ''
 <div class="hint">Pour changer ou compléter le modèle, cliquez sur « Modifier ».</div>
 </div>
 </div>`}
+</section>
 
+<section id="hz-client-equipe" class="hz-client-area" aria-label="Membres de l’équipe">
 <div class="card">
 <div class="row between wrap">
 <h3>Membres (${membres.length})</h3>
@@ -420,13 +421,18 @@ ${renderInviteForm(false)}
 </div>` : ''}
 ${reglages.membres === null ? '<div class="spinner"></div>' : renderListeMembres(membres, false)}
 </div>
+</section>
 
-${invites.length ? `
+<section id="hz-client-invitations" class="hz-client-area" aria-label="Invitations en attente">
 <div class="card">
-<h3>Invitations en attente (${invites.length})</h3>
-${invites.map(i => renderInvite(i, false)).join('')}
-</div>` : ''}
-`;
+<h3>Invitations en attente (${reglages.invites === null ? '—' : invites.length})</h3>
+${reglages.invites === null ? '<div class="small muted">Chargement des invitations…</div>' : invites.length
+? invites.map(i => renderInvite(i, false)).join('')
+: '<div class="empty small">Aucune invitation en attente.</div>'}
+</div>
+</section>
+${boutonCommandesFondateur(c.id)}
+</div>`;
 }
 
 /* ---- Parc d'un client (vue super-admin) ---- */

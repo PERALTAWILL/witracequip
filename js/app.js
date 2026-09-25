@@ -7,9 +7,16 @@ let dernierePage = null;
 
 function render(){
 const focus = capturerFocus();
+// Une réponse asynchrone du parc/support ne doit pas effacer une fiche client
+// en cours de saisie (les onglets HORIZON sont de simples ancres DOM).
+if(typeof majClientFormDepuisDom === 'function' && reglages.clientForm) majClientFormDepuisDom();
 // Un rafraîchissement en arrière-plan ne doit pas refermer le menu ouvert.
 const menuOuvert = !!document.getElementById('user-dropdown')?.classList.contains('open');
+// Le lecteur QR doit redémarrer sur le NOUVEAU <video> après chaque rendu :
+// l'ancienne boucle gardait une référence au nœud retiré du DOM.
+if(scannerState.raf){ cancelAnimationFrame(scannerState.raf); scannerState.raf = null; }
 peindre();
+if(scannerState.ouvert && document.getElementById('scanner-video')) setTimeout(attacherScanner, 0);
 if(menuOuvert) document.getElementById('user-dropdown')?.classList.add('open');
 const page = location.hash + '|' + !!state.session;
 const main = document.querySelector('#app main');
@@ -19,10 +26,24 @@ if(dernierePage !== null) window.scrollTo({ top: 0, behavior: 'instant' });
 }
 dernierePage = page;
 restaurerFocus(focus);
+// Après une commande « Nouveau client » / « Modifier », dévoiler le vrai
+// formulaire, même s'il est sous le parc ou si une navigation vient d'avoir lieu.
+if(reglages.clientFormAReveler){
+const form = document.querySelector('form[data-action="submit-client"]');
+if(form && form.dataset.brouillonId === String(reglages.clientForm?.brouillonId)){
+reglages.clientFormAReveler = false;
+requestAnimationFrame(() => {
+if(!form.isConnected) return;
+(form.closest('.hz-client-area') || form).scrollIntoView({ block:'start', behavior:'instant' });
+form.querySelector('[name="nom"]')?.focus({ preventScroll:true });
+});
+}
+}
 }
 
 function peindre(){
 const app = document.getElementById('app');
+if(!state.session || !isSuperAdmin()) fermerCommandesFondateur();
 document.body.dataset.role = state.route.name === 'p' ? '' : roleTheme();
 if(state.loading){
 app.innerHTML = `<div class="center-screen demarrage"><img src="${LOGO_DATA_URL}" alt=""><div class="spinner"></div></div>`;
@@ -355,27 +376,32 @@ ${piedSupport()}
    violet, fondateur nuit & or. On sait d'un coup d'œil avec quel profil on est. */
 function roleTheme(){
 if(!state.session || !state.profile) return '';
-if(isSuperAdmin() || state.profile.fondateur) return 'fondateur';
+// « fondateur » dans un profil client n'est pas le super-admin de la plateforme.
+if(isSuperAdmin()) return 'fondateur';
 return state.profile.role || '';
 }
 function libelleRoleTheme(){
 if(isSuperAdmin()) return 'Fondateur · WiDIAG MQ';
-if(state.profile?.fondateur) return 'Fondateur';
 return roleLabel(state.profile?.role);
 }
 
-/* Le super-admin travaille client par client : Accueil · Clients · Support · Journal. */
+/* HORIZON : quatre repères mobiles. Profils, journal, rapports, statistiques et
+   modèles restent nommés dans Outils ; toutes les anciennes routes fonctionnent. */
 function entreesNav(r){
 if(isSuperAdmin()){
 const aTraiter = (reglages.support || []).filter(d => d.statut !== 'traite').length;
 const sousPage = r.name === 'reglages' ? (r.param || 'clients') : '';
+const outils = (r.name === 'fondateur' && r.param === 'outils') || r.name === 'journal' ||
+  ['profils','journal'].includes(sousPage) ||
+  (sousPage === 'support' && ['rapports','stats','modeles'].includes(r.sub)) ||
+  (r.name === 'support' && ['rapports','stats','modeles'].includes(r.param));
 return [
-{ path:'/', icone:'home', label:'Accueil', actif: r.name === 'accueil' },
+{ path:'/', icone:'home', label:'Vue', actif: r.name === 'accueil' },
 { path:'/reglages/clients', icone:'briefcase', label:'Clients',
-actif: sousPage === 'clients' || ['equip','equip-new','types','equipements','dashboard'].includes(r.name) },
-{ path:'/reglages/profils', icone:'users', label:'Profils', actif: sousPage === 'profils' },
-{ path:'/reglages/support', icone:'inbox', label:'Support', actif: sousPage === 'support' || r.name === 'support', badge: aTraiter || '' },
-{ path:'/reglages/journal', icone:'journal', label:'Journal', actif: sousPage === 'journal' },
+actif: ['clients','membres','invitations','equipe'].includes(sousPage) ||
+  ['equip','equip-new','types','equipements','dashboard','equipe'].includes(r.name) },
+{ path:'/reglages/support', icone:'inbox', label:'Support', actif: (sousPage === 'support' || r.name === 'support') && !outils, badge: aTraiter || '' },
+{ path:'/fondateur/outils', icone:'gear', label:'Outils', actif: outils },
 ];
 }
 const equipementsActif = ['dashboard','equipements','equip','equip-new'].includes(r.name);
@@ -519,6 +545,8 @@ let content = '';
 const sa = isSuperAdmin();
 try{
 if(r.name === 'accueil') content = sa ? viewAccueilFondateur() : viewAccueil();
+else if(r.name === 'fondateur' && r.param === 'outils') content = sa ? viewOutilsFondateur()
+: '<div class="alert alert-info">Cet espace est réservé au compte principal Fondateur de WiTracEQUIP.</div>';
 // Le super-admin n'a pas de parc propre : le parc se consulte client par client.
 else if(r.name === 'dashboard' || r.name === 'equipements') content = sa ? viewReglages('clients') : viewDashboard();
 else if(r.name === 'types') content = !peutGererTypes() ? viewDashboard() : (sa && !r.param ? viewReglages('clients') : viewTypes());
@@ -546,9 +574,17 @@ return `
 <div class="by">by WiDIAG MQ</div>
 </div>
 </div>
-<nav class="sidebar-nav">
-${entreesNav(r).map(n => `<div class="sidebar-link ${n.actif?'active':''}" data-action="go" data-path="${n.path}">${iconeNav(n.icone)}<span>${n.label}</span>${n.badge ? `<span class="nav-badge">${n.badge}</span>` : ''}</div>`).join('')}
+${roleTheme() === 'fondateur' ? `<div class="sidebar-tier">${iconeNav('crown', 13)} <span>COMPTE FONDATEUR</span></div><div class="sidebar-nav-caption">NAVIGATION</div>` : ''}
+<nav class="sidebar-nav" aria-label="Navigation principale">
+${entreesNav(r).map(n => sa
+? `<button type="button" class="sidebar-link ${n.actif?'active':''}" data-action="go" data-path="${n.path}" ${n.actif ? 'aria-current="page"' : ''}>${iconeNav(n.icone)}<span>${n.label}</span>${n.badge ? `<span class="nav-badge">${n.badge}</span>` : ''}</button>`
+: `<div class="sidebar-link ${n.actif?'active':''}" data-action="go" data-path="${n.path}">${iconeNav(n.icone)}<span>${n.label}</span>${n.badge ? `<span class="nav-badge">${n.badge}</span>` : ''}</div>`).join('')}
 </nav>
+${sa ? `<div class="hz-sidebar-extras"><span>ACCÈS DIRECT</span>
+<button type="button" data-action="go" data-path="/reglages/profils">${iconeNav('users',16)} Profils & accès</button>
+<button type="button" data-action="go" data-path="/reglages/journal">${iconeNav('journal',16)} Journal d’activité</button>
+<button type="button" data-action="go" data-path="/reglages/support/stats">${iconeNav('chart',16)} Statistiques</button>
+</div>` : ''}
 <div class="sidebar-spacer"></div>
 ${sa ? `<div class="sidebar-fondateur">${iconeNav('crown', 16)}<div><strong>Espace fondateur</strong><span>${esc(state.orgName || 'WiDIAG MQ')}</span></div></div>` : ''}
 ${state.enAttenteCount > 0 ? `<div class="sidebar-sync" title="${state.enAttenteCount} saisie${state.enAttenteCount>1?'s':''} en attente d'envoi (sans réseau)">${iconeNav('clock',15)}<span>${state.enAttenteCount} en attente</span></div>` : ''}
@@ -556,13 +592,13 @@ ${state.enAttenteCount > 0 ? `<div class="sidebar-sync" title="${state.enAttente
 
 <div class="shell-main">
 <div class="topbar">
-<div class="brand">
+${roleTheme() === 'fondateur' ? identiteFondateur() : `<div class="brand">
 <img class="logo" src="assets/icons/icon-192.png" alt="WiTracEQUIP">
 <div>
 WiTracEQUIP
 <div class="by">by WiDIAG MQ</div>
 </div>
-</div>
+</div>`}
 <div class="topbar-spacer"></div>
 ${state.enAttenteCount > 0 ? `<span class="badge-attente" title="${state.enAttenteCount} saisie${state.enAttenteCount>1?'s':''} en attente d'envoi (sans réseau)">⏳ ${state.enAttenteCount}</span>` : ''}
 <div class="org-pill">${esc(state.orgName || '…')}</div>
@@ -585,12 +621,16 @@ ${sa ? '' : `<button data-action="go" data-path="/support">${iconeNav('help', 15
 </div>
 </div>
 </div>
-<main>${renderBandeauOrdi()}${content}${piedSupport()}</main>
+<main>${renderBandeauOrdi()}${sa && (state.horsLigne || !navigator.onLine) ? `<div class="hz-offline-banner" role="status">${iconeNav('clock',16)} Hors connexion : les données peuvent être anciennes. L’administration exige le réseau.</div>` : ''}${content}${sa ? `<div class="founder-footer">WiTracEQUIP <span>✦</span> ESPACE FONDATEUR <span>·</span> by WiDIAG MQ</div>` : piedSupport()}</main>
 </div>
+${sa && (r.name === 'accueil' || (r.name === 'fondateur' && r.param === 'outils') || (r.name === 'reglages' && r.param === 'clients' && r.sub)) ? boutonCommandesFondateur(r.name === 'reglages' ? r.sub : null, true) : ''}
 ${renderModal()}
+${sa && scannerState.ouvert ? renderScannerOverlay() : ''}
 
-<nav class="bottom-nav">
-${entreesNav(r).map(n => `<div class="bottom-nav-item ${n.actif?'active':''}" data-action="go" data-path="${n.path}">${iconeNav(n.icone,20)}<span>${n.court || n.label}</span>${n.badge ? `<span class="nav-badge">${n.badge}</span>` : ''}</div>`).join('')}
+<nav class="bottom-nav" aria-label="Navigation mobile">
+${entreesNav(r).map(n => sa
+? `<button type="button" class="bottom-nav-item ${n.actif?'active':''}" data-action="go" data-path="${n.path}" ${n.actif ? 'aria-current="page"' : ''}>${iconeNav(n.icone,20)}<span>${n.court || n.label}</span>${n.badge ? `<span class="nav-badge">${n.badge}</span>` : ''}</button>`
+: `<div class="bottom-nav-item ${n.actif?'active':''}" data-action="go" data-path="${n.path}">${iconeNav(n.icone,20)}<span>${n.court || n.label}</span>${n.badge ? `<span class="nav-badge">${n.badge}</span>` : ''}</div>`).join('')}
 </nav>
 </div>
 `;
@@ -699,14 +739,17 @@ let fondateurCache = { donnees:null, loading:false, error:'' };
 async function chargerTableauFondateur(){
 const debutMois = new Date(); debutMois.setDate(1);
 const iso = `${debutMois.getFullYear()}-${String(debutMois.getMonth() + 1).padStart(2, '0')}-01`;
-const iv = await sb.from('interventions').select('id').gte('date', iso);
-if(iv.error) throw iv.error;
-return { interventionsMois: (iv.data || []).length };
+// Un comptage côté base évite la limite des lignes renvoyées par Supabase
+// (et ne télécharge pas les interventions pour un simple indicateur).
+const { count, error } = await sb.from('interventions').select('*', { count:'exact', head:true }).gte('date', iso);
+if(error) throw error;
+return { interventionsMois: count ?? 0 };
 }
 
 function viewAccueilFondateur(){
 chargerClients(false);
 chargerSupport(false);
+chargerMembres(false);
 if(fondateurCache.donnees === null && !fondateurCache.loading && !fondateurCache.error && state.typesLoaded){
 fondateurCache.loading = true;
 chargerTableauFondateur()
@@ -714,66 +757,18 @@ chargerTableauFondateur()
 .catch(e => { fondateurCache.error = e.message; })
 .finally(() => { fondateurCache.loading = false; render(); });
 }
-const prenom = (state.profile?.full_name || '').trim().split(/\s+/)[0] || '';
-const clients = (reglages.clients || []).filter(c => !c.est_mon_organisation);
-chargerMembres(false);
-const profilsActifs = (reglages.membres || []).filter(m => m.active && m.id !== state.profile?.id).length;
-const aTraiter = (reglages.support || []).filter(d => d.statut !== 'traite').length;
-const d = fondateurCache.donnees;
-const heure = new Date().getHours();
-const salut = heure < 5 || heure >= 18 ? 'Bonsoir' : 'Bonjour';
-const dateJour = new Date().toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long' });
-const chiffre = (v) => v === null || v === undefined ? '<span class="sq sq-ligne" style="width:40px;display:inline-block;"></span>' : v;
 
-if(scannerState.ouvert) setTimeout(() => attacherScanner(), 0);
-
-
-return `
-<div class="hero-fondateur">
-<div class="hero-fondateur-haut">
-<div>
-<div class="hero-date">${esc(dateJour)}</div>
-<div class="hero-titre">${salut}${prenom ? ', ' + esc(prenom) : ''}</div>
-<div class="hero-sous">${iconeNav('crown', 14)} Fondateur · ${esc(state.orgName || 'WiDIAG MQ')}</div>
-</div>
-<img src="${LOGO_DATA_URL}" alt="" class="hero-logo">
-</div>
-<div class="kpis">
-<div class="kpi" data-action="go" data-path="/reglages/clients"><div class="kpi-val">${chiffre(reglages.clients ? clients.length : null)}</div><div class="kpi-lib">Clients</div></div>
-<div class="kpi" data-action="go" data-path="/reglages/profils"><div class="kpi-val">${chiffre(reglages.membres ? profilsActifs : null)}</div><div class="kpi-lib">Profils actifs</div></div>
-<div class="kpi"><div class="kpi-val">${chiffre(d ? d.interventionsMois : null)}</div><div class="kpi-lib">Interventions ce mois</div></div>
-<div class="kpi ${aTraiter ? 'kpi-alerte' : ''}" data-action="go" data-path="/reglages/support"><div class="kpi-val">${chiffre(reglages.support ? aTraiter : null)}</div><div class="kpi-lib">Demandes à traiter</div></div>
-</div>
-</div>
-
-<div class="card">
-<div class="row between wrap"><h3 style="margin:0;">Vos clients</h3>
-<button class="btn btn-sm" data-action="go" data-path="/reglages/clients">Tous les clients</button></div>
-<div style="margin-top:8px;">
-${reglages.clients === null ? squeletteListe(4).replace('card liste-select', 'liste-select')
-: clients.length ? [...clients].sort((a, b) => (b.created_at || '').localeCompare(a.created_at || '')).slice(0, 8).map(c => `
-<div class="ligne-select cliquable" data-action="go" data-path="/reglages/clients/${c.id}">
-<div class="avatar-client" style="--teinte:${teinteClient(c.nom)};">${esc(initials(c.nom))}</div>
-<div class="ligne-corps">
-<div class="ligne-titre">${esc(c.nom)}</div>
-<div class="small muted">N° ${esc(c.code_client)} · ${c.nb_equipements} équipement${c.nb_equipements > 1 ? 's' : ''}</div>
-</div>
-<span class="chevron">›</span>
-</div>`).join('')
-: `<div class="empty small">Aucun client. <a href="#/reglages/clients">Créer le premier</a></div>`}
-</div>
-</div>
-
-<div class="scanner-carte">
-<div class="scanner-carte-icone">${iconeNav('scan', 26)}</div>
-<div class="scanner-carte-texte">
-<div class="scanner-carte-titre">Sur le terrain</div>
-<p>Scannez l'étiquette d'un équipement chez n'importe lequel de vos clients : sa fiche s'ouvre directement.</p>
-</div>
-<button class="btn btn-primary" data-action="ouvrir-scanner">Scanner un QR code</button>
-</div>
-${scannerState.ouvert ? renderScannerOverlay() : ''}
-`;
+return renderTableauFondateur({
+prenom: (state.profile?.full_name || '').trim().split(/\s+/)[0] || '',
+organisation: state.orgName || 'WiDIAG MQ',
+clients: reglages.clients,
+profilsActifs: reglages.membres ? reglages.membres.filter(m => m.active && m.id !== state.profile?.id).length : null,
+interventionsMois: fondateurCache.donnees?.interventionsMois ?? null,
+aTraiter: reglages.support ? reglages.support.filter(d => d.statut !== 'traite').length : null,
+clientsErreur: reglages.clientsError,
+autresErreurs: !!(reglages.membresError || reglages.supportError || fondateurCache.error),
+horsLigne: !!state.horsLigne || !navigator.onLine,
+});
 }
 
 function viewAccueil(){
@@ -2309,8 +2304,27 @@ document.addEventListener('click', (e) => {
 const t = e.target.closest('[data-action]');
 if(!t) return;
 const action = t.dataset.action;
+// Les confirmations métier doivent s'ouvrir APRÈS la fermeture de la palette
+// modale, sinon elles resteraient cachées derrière elle.
+if(t.closest('#hz-sheet-dialog') && action !== 'fondateur-commandes-fermer') fermerCommandesFondateur();
 
 if(action === 'go'){ nav(t.dataset.path); closeMenus(); }
+else if(action === 'fondateur-commandes' && isSuperAdmin()) ouvrirCommandesFondateur(t.dataset.id || null);
+else if(action === 'fondateur-commandes-fermer') fermerCommandesFondateur();
+else if(action === 'fondateur-section' && isSuperAdmin()) allerSectionClientFondateur(t.dataset.section);
+else if(action === 'fondateur-inviter-client' && isSuperAdmin()) inviterClientFondateur(t.dataset.id);
+else if(action === 'fondateur-nouveau-client' && isSuperAdmin()){
+if(state.horsLigne || !navigator.onLine){ toast('Connexion requise pour créer un client.', 'info'); return; }
+// Le formulaire vit sur la page Clients : depuis l'accueil, on y va d'abord.
+ouvrirClientForm(null);
+nav('/reglages/clients');
+}
+else if(action === 'fondateur-recharger' && isSuperAdmin()){
+reglages.clientsError = ''; reglages.membresError = ''; reglages.supportError = '';
+fondateurCache.donnees = null; fondateurCache.error = '';
+chargerClients(true); chargerMembres(true); chargerSupport(true);
+render();
+}
 else if(action === 'toggle-menu'){ e.stopPropagation(); document.getElementById('user-dropdown')?.classList.toggle('open'); }
 else if(action === 'logout'){ deconnexionVolontaire = true; effacerInstantanes(); sb.auth.signOut({ scope:'local' }); }
 else if(action === 'dash-recharger'){ dashboardCache.error = ''; dashboardCache.items = null; render(); chargerEquipements(); }
@@ -2515,9 +2529,9 @@ obj[cle] = coche ? [...new Set([...l, id])] : l.filter(x => x !== id);
 (sinon changer de modèle métier effacerait ce qui vient d'être tapé). */
 function majClientFormDepuisDom(){
 const form = document.querySelector('form[data-action="submit-client"]');
-if(!form || !reglages.clientForm) return;
+if(!form || !reglages.clientForm || form.dataset.brouillonId !== String(reglages.clientForm.brouillonId)) return;
 const fd = new FormData(form);
-for(const k of ['nom','adresse','telephone','email','referent','notes']) reglages.clientForm[k] = (fd.get(k) || '').toString();
+for(const k of ['nom','adresse','telephone','email','referent','notes','modele']) reglages.clientForm[k] = (fd.get(k) || '').toString();
 }
 
 /* Échap ferme la fenêtre modale. */
