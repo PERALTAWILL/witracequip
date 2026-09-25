@@ -1,6 +1,6 @@
 # Proposition : Tour de contrôle mobile Fondateur — non intégrée
 
-La direction visuelle 02 (bleu nuit, or, listes et cartes de pilotage) est retenue **pour le compte principal Fondateur**. Les comptes utilisateur standard garderaient l'approche claire de la direction 01, adaptée à leurs droits. Les images utilisent des valeurs fictives : elles ne chargent aucun compte ni aucune donnée réelle.
+Cette direction visuelle 02 (bleu nuit, or, listes et cartes de pilotage) avait été retenue initialement pour le compte principal Fondateur. **Depuis la validation du 25 septembre 2026, c'est le langage visuel HORIZON qui est choisi pour le Fondateur** ; la Tour de contrôle reste la référence pour les raccourcis d'action. Les comptes utilisateur standard gardent l'approche claire de la direction 01, adaptée à leurs droits. Les images utilisent des valeurs fictives : elles ne chargent aucun compte ni aucune donnée réelle.
 
 ## Navigation conseillée, sans fonction perdue
 
