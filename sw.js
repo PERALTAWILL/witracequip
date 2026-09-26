@@ -26,7 +26,7 @@
 
 /* Changer ce numéro à chaque déploiement : c'est ce qui déclenche le
    remplacement de l'ancien cache par le nouveau chez tous les utilisateurs. */
-const VERSION = 'wte-v2.18.2';
+const VERSION = 'wte-v2.18.3';
 
 const CACHE_SHELL = `${VERSION}-shell`;
 const CACHE_EXTERNE = `${VERSION}-externe`;
@@ -58,6 +58,7 @@ const FICHIERS_SHELL = [
   'assets/icons/icon-maskable-512.png',
   'assets/icons/apple-touch-icon.png',
   'assets/icons/favicon-64.png',
+  'assets/icons/logo-mark.png',
 ];
 
 /* Bibliothèques servies par un CDN. Elles sont mises en cache au vol, à la
