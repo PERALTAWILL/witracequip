@@ -285,6 +285,7 @@ function nav(path){ location.hash = path; }
 
 window.addEventListener('hashchange', () => {
 state.route = parseHash();
+if(typeof fermerCommandesFondateur === 'function') fermerCommandesFondateur();
 // Ouvrir une fiche force son rechargement, quelle que soit la façon d'y arriver
 // (clic, scan d'un QR code, retour arrière, lien collé) : plusieurs personnes
 // travaillent sur la même base, les données en cache peuvent être périmées.

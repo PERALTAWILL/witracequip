@@ -821,34 +821,12 @@ body[data-role="admin"]{
 --sidebar-bg:linear-gradient(180deg,#3b0f7a 0%,#24094d 100%);
 --bg-glow:radial-gradient(1400px 900px at 92% -12%, rgba(109,40,217,.08), transparent 60%);
 }
-/* Fondateur : bleu nuit profond et or — l'élégance d'un bureau de direction. */
-body[data-role="fondateur"]{
---primary:#9a7208; --primary-dim:#6b4f06; --primary-contrast:#fff;
---or:#d4af37; --or-clair:#f3dc8f; --nuit:#0b1026; --nuit-2:#18214a;
---sidebar-bg:linear-gradient(180deg,#0b1026 0%,#141c40 55%,#1d1a2e 100%);
---sidebar-active:linear-gradient(90deg, rgba(212,175,55,.26), rgba(212,175,55,.06));
---accent:#d4af37;
---bg:#f6f4ee;
---bg-glow:
-radial-gradient(1400px 900px at 92% -12%, rgba(212,175,55,.10), transparent 60%),
-radial-gradient(1100px 850px at -12% 108%, rgba(24,33,74,.06), transparent 55%);
-}
+/* Le thème Fondateur, toujours sombre même en mode clair, est isolé dans
+   css/fondateur.css et ne s'applique qu'aux comptes identifiés comme tels. */
 @media (prefers-color-scheme: dark){
 body[data-role="utilisateur"]{--primary:#60a5fa; --primary-dim:#3b82f6; --primary-contrast:#0b1a33; --sidebar-bg:linear-gradient(180deg,#0f2150,#0a1735);}
 body[data-role="responsable"]{--primary:#4ade80; --primary-dim:#22c55e; --primary-contrast:#052e16; --sidebar-bg:linear-gradient(180deg,#0e3a20,#082614);}
 body[data-role="admin"]{--primary:#a78bfa; --primary-dim:#8b5cf6; --primary-contrast:#1e0b3d; --sidebar-bg:linear-gradient(180deg,#2a0c57,#180734);}
-body[data-role="fondateur"]{--primary:#e6c35c; --primary-dim:#d4a72c; --primary-contrast:#1a1405; --bg:#0c0f1c;
---sidebar-bg:linear-gradient(180deg,#070a18 0%,#10173a 60%,#17142a 100%);}
-}
-body[data-role="fondateur"] .sidebar-link.active{color:var(--or-clair); box-shadow:inset 3px 0 0 var(--or);}
-body[data-role="fondateur"] .sidebar-link.active svg{color:var(--or);}
-body[data-role="fondateur"] .sidebar-brand .name{background:linear-gradient(90deg,#fff,var(--or-clair)); -webkit-background-clip:text; background-clip:text; color:transparent;}
-body[data-role="fondateur"] .avatar{background:linear-gradient(135deg,#f3dc8f,#c9a227 60%,#9a7208); color:#1a1405; border:none; box-shadow:0 0 0 2px rgba(212,175,55,.35);}
-body[data-role="fondateur"] .btn-primary{background:linear-gradient(135deg,#b8900f,#8a6508); border-color:#8a6508;}
-body[data-role="fondateur"] .org-pill{border-color:rgba(212,175,55,.5); color:#8a6508; background:rgba(212,175,55,.08);}
-@media (prefers-color-scheme: dark){
-body[data-role="fondateur"] .btn-primary{background:linear-gradient(135deg,#e6c35c,#c9a227); color:#1a1405; border-color:#c9a227;}
-body[data-role="fondateur"] .org-pill{color:var(--or-clair);}
 }
 
 /* Badges et vignettes de rôle */
@@ -884,32 +862,6 @@ border:1px solid rgba(212,175,55,.35); color:var(--or-clair, #f3dc8f);
 .sidebar-fondateur strong{display:block; font-size:12.5px; color:#fff;}
 .sidebar-fondateur span{display:block; font-size:11px; opacity:.8;}
 
-/* ---- Accueil du fondateur ---- */
-.hero-fondateur{
-position:relative; overflow:hidden; border-radius:16px; padding:22px 22px 18px; margin-bottom:18px; color:#fff;
-background:
-radial-gradient(600px 240px at 100% 0%, rgba(212,175,55,.28), transparent 70%),
-linear-gradient(125deg,#0b1026 0%,#18214a 60%,#2a2413 100%);
-box-shadow:0 10px 30px rgba(11,16,38,.25);
-}
-.hero-fondateur::after{content:""; position:absolute; inset:0; border-radius:16px; border:1px solid rgba(212,175,55,.35); pointer-events:none;}
-.hero-fondateur-haut{display:flex; justify-content:space-between; align-items:flex-start; gap:12px;}
-.hero-date{font-size:12px; letter-spacing:.08em; text-transform:uppercase; color:#f3dc8f; opacity:.9;}
-.hero-titre{font-size:26px; font-weight:780; letter-spacing:-.02em; margin:2px 0;}
-.hero-sous{display:flex; align-items:center; gap:6px; font-size:13px; color:#f3dc8f;}
-.hero-logo{width:46px; height:46px; opacity:.95;}
-.kpis{display:grid; grid-template-columns:repeat(4, 1fr); gap:10px; margin-top:18px;}
-.kpi{
-background:rgba(255,255,255,.07); border:1px solid rgba(255,255,255,.12); border-radius:12px;
-padding:12px 14px; cursor:pointer; transition:background .15s, transform .15s;
-}
-.kpi:hover{background:rgba(255,255,255,.12); transform:translateY(-1px);}
-.kpi-val{font-size:26px; font-weight:800; letter-spacing:-.02em; line-height:1.1;
-background:linear-gradient(90deg,#fff,#f3dc8f); -webkit-background-clip:text; background-clip:text; color:transparent;}
-.kpi-lib{font-size:12px; opacity:.8; margin-top:2px;}
-.kpi-alerte{border-color:rgba(248,113,113,.6); background:rgba(248,113,113,.14);}
-.kpi-alerte .kpi-val{background:none; color:#fecaca;}
-@media(max-width:640px){ .kpis{grid-template-columns:repeat(2, 1fr);} .hero-titre{font-size:22px;} }
 .accueil-deux{display:grid; grid-template-columns:1fr 1fr; gap:14px; align-items:start;}
 .accueil-deux > *{min-width:0;}
 @media(max-width:900px){ .accueil-deux{grid-template-columns:1fr;} }
