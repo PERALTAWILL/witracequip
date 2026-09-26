@@ -20,26 +20,6 @@ const RP_TAILLE_MAX = 10 * 1024 * 1024; // 10 Mo par document
 const RP_EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const RP_JSPDF_URL = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
 
-/* =========================================================================
-   IDENTITÉ DE L'ENTREPRISE — n'apparaît que dans l'en-tête et le pied de
-   page du PDF exporté. Pour mettre à jour vos coordonnées légales (adresse
-   complète, téléphone…), il suffit de modifier les lignes ci-dessous : rien
-   d'autre dans ce fichier n'a besoin d'être touché.
-   ========================================================================= */
-const RP_ENTREPRISE = {
-nom: 'WiDIAG MQ',
-produit: 'WiTracEQUIP',
-accroche: "Passeport technique d'équipement",
-siret: '841 516 800 00031',
-adresse: 'Le Lamentin, Martinique',
-email: SUPPORT_EMAIL,
-};
-
-/* Icône de l'application, encodée en base64 pour être imprimée dans le PDF
-   sans dépendre du réseau (source : assets/icons/witracequip-icon-color.png,
-   redimensionnée à 160x160). */
-const RP_LOGO_PNG = 'data:image/png;base64,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';
-
 function rpAujourdhui(){
 const d = new Date();
 return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
@@ -592,127 +572,56 @@ return String(s == null ? '' : s)
 .replace(/[^\n\x20-\x7E\u00A0-\u00FF]/g, '?');
 }
 
-/* ---------- Palette (reprise du thème de l'application) ---------- */
-const RP_TEAL        = [15, 118, 110];  // #0f766e — theme-color de l'appli
-const RP_TEAL_FONCE   = [10, 77, 64];    // #0a4d40 — teinte foncée de l'icône
-const RP_OR           = [226, 163, 59];  // #e2a33b — teinte or de l'icône
-const RP_FOND_CARTE   = [244, 246, 247]; // #f4f6f7 — background-color de l'appli
-const RP_BORD_CARTE   = [214, 222, 220];
-const RP_GRIS_TEXTE   = [110, 120, 119];
-const RP_TEXTE        = [34, 40, 39];
-
-/* Référence courte et stable, imprimée dans l'en-tête (pas un vrai n° de
-   facture — juste de quoi retrouver le rapport dans un échange de mails). */
-function rpReference(r){
-return 'RI-' + String(r.id || '').replace(/[^a-zA-Z0-9]/g, '').slice(0, 8).toUpperCase() || 'RI-' + (r.date_intervention || '');
-}
-
-/* En-tête aux couleurs de l'appli : bandeau teal, liseré or, logo, titre. */
-function rpEnTete(doc, r){
-doc.setFillColor(...RP_TEAL_FONCE); doc.rect(0, 0, 210, 3, 'F');
-doc.setFillColor(...RP_TEAL); doc.rect(0, 3, 210, 33, 'F');
-doc.setFillColor(...RP_OR); doc.rect(0, 36, 210, 1.3, 'F');
-
-try{ doc.addImage(RP_LOGO_PNG, 'PNG', 18, 8.5, 18, 18); }catch(_){}
-
-doc.setTextColor(255, 255, 255);
-doc.setFont('helvetica', 'bold'); doc.setFontSize(15);
-doc.text(rpTxt(RP_ENTREPRISE.produit), 41, 17.5);
-doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5);
-doc.setTextColor(214, 232, 229);
-doc.text(rpTxt(RP_ENTREPRISE.accroche), 41, 23);
-
-doc.setTextColor(255, 255, 255);
-doc.setFont('helvetica', 'bold'); doc.setFontSize(13);
-doc.text("RAPPORT D'INTERVENTION", 192, 15, { align: 'right' });
-doc.setFont('helvetica', 'normal'); doc.setFontSize(8.7);
-doc.setTextColor(214, 232, 229);
-doc.text('Réf. ' + rpReference(r), 192, 20.6, { align: 'right' });
-doc.text(rpTxt(fmtDate(r.date_intervention)) || '-', 192, 25.4, { align: 'right' });
-
-doc.setTextColor(...RP_TEXTE);
-}
-
-/* Pied de page discret, mêmes coordonnées légales sur chaque page. */
-function rpPiedDePage(doc, page, total){
-doc.setPage(page);
-doc.setDrawColor(...RP_BORD_CARTE); doc.setLineWidth(0.2);
-doc.line(18, 279, 192, 279);
-try{ doc.addImage(RP_LOGO_PNG, 'PNG', 18, 282, 5.2, 5.2); }catch(_){}
-doc.setFont('helvetica', 'bold'); doc.setFontSize(7.3); doc.setTextColor(...RP_TEAL_FONCE);
-doc.text(rpTxt(RP_ENTREPRISE.nom), 25.6, 284.6);
-doc.setFont('helvetica', 'normal'); doc.setFontSize(6.8); doc.setTextColor(...RP_GRIS_TEXTE);
-doc.text(rpTxt(`SIRET ${RP_ENTREPRISE.siret} - ${RP_ENTREPRISE.adresse} - ${RP_ENTREPRISE.email}`), 25.6, 288);
-doc.setFont('helvetica', 'normal'); doc.setFontSize(7.3); doc.setTextColor(...RP_GRIS_TEXTE);
-doc.text(`Page ${page}/${total}`, 192, 284.6, { align: 'right' });
-doc.setFont('helvetica', 'italic'); doc.setFontSize(6.6);
-doc.text('Document généré électroniquement par ' + rpTxt(RP_ENTREPRISE.produit), 192, 288, { align: 'right' });
-}
-
-/* Un champ « étiquette au-dessus / valeur en dessous », dans une carte. */
-function rpChamp(doc, x, y, w, etiquette, valeur){
-doc.setFont('helvetica', 'bold'); doc.setFontSize(7.2);
-doc.setTextColor(...RP_TEAL_FONCE);
-doc.text(rpTxt(etiquette).toUpperCase(), x, y);
-doc.setFont('helvetica', 'normal'); doc.setFontSize(10.3);
-doc.setTextColor(...RP_TEXTE);
-const lignes = doc.splitTextToSize(rpTxt(valeur) || '-', w);
-doc.text(lignes, x, y + 5);
-return y + 5 + (lignes.length - 1) * 5;
-}
-
-/* Titre de section avec petit badge numéroté (écho au motif carré du logo)
-   et liseré or ; retourne l'ordonnée à partir de laquelle écrire la suite. */
-function rpTitreSection(doc, x, y, numero, titre, larg){
-doc.setFillColor(...RP_TEAL);
-doc.roundedRect(x, y - 4.6, 6.4, 6.4, 1.3, 1.3, 'F');
-doc.setTextColor(255, 255, 255); doc.setFont('helvetica', 'bold'); doc.setFontSize(9);
-doc.text(String(numero), x + 3.2, y, { align: 'center' });
-doc.setTextColor(...RP_TEAL_FONCE); doc.setFont('helvetica', 'bold'); doc.setFontSize(11.5);
-doc.text(rpTxt(titre), x + 10.5, y);
-doc.setDrawColor(...RP_OR); doc.setLineWidth(0.7);
-doc.line(x, y + 3, x + larg, y + 3);
-doc.setDrawColor(...RP_BORD_CARTE); doc.setLineWidth(0.2);
-return y + 10;
-}
-
 async function rpConstruirePDF(r){
 const JsPDF = await rpChargerJsPDF();
 const doc = new JsPDF({ unit: 'mm', format: 'a4' });
-const L = 18, LARG = 210 - 2 * L, BAS = 268;
+const L = 18, LARG = 210 - 2 * L, BAS = 285;
 const client = (r.organizations && r.organizations.nom) || 'Client';
 const code = (r.organizations && r.organizations.code_client) || '';
-let y, section = 1;
+let y;
 
-const nouvellePage = () => { doc.addPage(); rpEnTete(doc, r); y = 50; };
+// Bandeau de titre
+doc.setFillColor(15, 118, 110); doc.rect(0, 0, 210, 28, 'F');
+doc.setTextColor(255, 255, 255);
+doc.setFont('helvetica', 'bold'); doc.setFontSize(18);
+doc.text("RAPPORT D'INTERVENTION", L, 17);
+doc.setFont('helvetica', 'normal'); doc.setFontSize(9);
+doc.text('WiTracEQUIP', 210 - L, 17, { align: 'right' });
+doc.setTextColor(34, 34, 34);
+y = 40;
 
-rpEnTete(doc, r);
-y = 48;
-
-/* --- Carte « informations » : client, date, intervenant, destinataire --- */
-const hCarte = code ? 39 : 32;
-doc.setFillColor(...RP_FOND_CARTE); doc.setDrawColor(...RP_BORD_CARTE); doc.setLineWidth(0.25);
-doc.roundedRect(L, y, LARG, hCarte, 2.4, 2.4, 'FD');
-const colG = L + 8, colD = L + LARG / 2 + 4, wCol = LARG / 2 - 12;
-let yg = y + 9, yd = y + 9;
-yg = rpChamp(doc, colG, yg, wCol, 'Client', client) + 8;
-if(code) yg = rpChamp(doc, colG, yg, wCol, 'N° client', code) + 8;
-yd = rpChamp(doc, colD, yd, wCol, "Date de l'intervention", fmtDate(r.date_intervention)) + 8;
-yd = rpChamp(doc, colD, yd, wCol, 'Intervenant', r.nom_support) + 8;
-rpChamp(doc, colG, Math.max(yg, yd), LARG - 16, 'Destinataire du rapport', r.email_destinataire);
-y += hCarte + 12;
-
-/* --- Section 1 : raison / description --- */
-y = rpTitreSection(doc, L, y, section++, "Raison / description de l'intervention", LARG);
-doc.setFont('helvetica', 'normal'); doc.setFontSize(10.3); doc.setTextColor(...RP_TEXTE);
-for(const ligne of doc.splitTextToSize(rpTxt(r.raison) || '-', LARG)){
-if(y > BAS){ nouvellePage(); }
-doc.text(ligne, L, y);
-y += 5.6;
+// Informations
+const infos = [
+['Client', client],
+code ? ['N° client', code] : null,
+['Date', fmtDate(r.date_intervention)],
+['Intervenant', r.nom_support || ''],
+['Destinataire', r.email_destinataire || ''],
+].filter(Boolean);
+doc.setFontSize(10.5);
+for(const [etiquette, valeur] of infos){
+const lignes = doc.splitTextToSize(rpTxt(valeur) || '-', LARG - 34);
+doc.setFont('helvetica', 'bold'); doc.text(rpTxt(etiquette) + ' :', L, y);
+doc.setFont('helvetica', 'normal'); doc.text(lignes, L + 34, y);
+y += 5.6 * lignes.length + 1.6;
 }
-y += 6;
+y += 4;
 
-/* --- Section 2 : signature du client --- */
+// Raison / description (avec sauts de page)
+doc.setFont('helvetica', 'bold'); doc.setFontSize(12);
+doc.text("Raison / description de l'intervention", L, y);
+y += 3;
+doc.setDrawColor(200, 200, 200); doc.line(L, y, L + LARG, y);
+y += 6;
+doc.setFont('helvetica', 'normal'); doc.setFontSize(10.5);
+for(const ligne of doc.splitTextToSize(rpTxt(r.raison) || '-', LARG)){
+if(y > BAS){ doc.addPage(); y = 20; }
+doc.text(ligne, L, y);
+y += 5.4;
+}
+y += 8;
+
+// Signature
 if(r.signature_path){
 let data = null;
 try{
@@ -720,59 +629,56 @@ const { data: blob, error } = await sb.storage.from(BUCKET_RAPPORTS).download(r.
 if(error) throw error;
 data = await rpBlobVersDataUrl(blob);
 }catch(_){ data = null; }
-
-let w = 72, h = 34;
+if(y > BAS - 60){ doc.addPage(); y = 20; }
+doc.setFont('helvetica', 'bold'); doc.setFontSize(12);
+doc.text('Signature du client', L, y);
+y += 5;
 if(data){
+let w = 70, h = 35;
 try{
 const p = doc.getImageProperties(data);
-if(p && p.width && p.height){ h = w * p.height / p.width; if(h > 34){ h = 34; w = h * p.width / p.height; } }
+if(p && p.width && p.height){ h = w * p.height / p.width; if(h > 40){ h = 40; w = h * p.width / p.height; } }
 }catch(_){}
-}
-const hBloc = 8 + h + (r.nom_signataire ? 12 : 6) + 8;
-if(y + hBloc > BAS){ nouvellePage(); }
-y = rpTitreSection(doc, L, y, section++, 'Signature du client', LARG);
-
-doc.setFillColor(255, 255, 255); doc.setDrawColor(...RP_BORD_CARTE); doc.setLineWidth(0.25);
-doc.roundedRect(L, y, LARG, hBloc, 2.4, 2.4, 'FD');
-let yc = y + 8;
-if(data){
-doc.setDrawColor(...RP_BORD_CARTE); doc.rect(L + 8, yc, w, h);
-doc.addImage(data, 'PNG', L + 8, yc, w, h);
+doc.setDrawColor(200, 200, 200); doc.rect(L, y, w, h);
+doc.addImage(data, 'PNG', L, y, w, h);
+y += h + 5;
 }else{
-doc.setFont('helvetica', 'italic'); doc.setFontSize(9.5); doc.setTextColor(...RP_GRIS_TEXTE);
-doc.text('Signature non disponible', L + 8, yc + 6);
+doc.setFont('helvetica', 'italic'); doc.setFontSize(10);
+doc.text('Signature non disponible', L, y + 4);
+y += 10;
 }
-doc.setDrawColor(...RP_BORD_CARTE); doc.setLineWidth(0.2);
-doc.line(L + 8 + w + 10, yc, L + 8 + w + 10, yc + h);
-doc.setFont('helvetica', 'italic'); doc.setFontSize(8); doc.setTextColor(...RP_GRIS_TEXTE);
-doc.text(doc.splitTextToSize('Cette signature atteste de la bonne réalisation de la prestation décrite ci-dessus.', LARG - w - 30), L + 8 + w + 18, yc + 5);
 if(r.nom_signataire){
-doc.setFont('helvetica', 'bold'); doc.setFontSize(7.2); doc.setTextColor(...RP_TEAL_FONCE);
-doc.text('SIGNATAIRE', L + 8, yc + h + 8);
-doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(...RP_TEXTE);
-doc.text(rpTxt(r.nom_signataire), L + 8, yc + h + 13);
+doc.setFont('helvetica', 'normal'); doc.setFontSize(10.5);
+doc.text('Signataire : ' + rpTxt(r.nom_signataire), L, y);
+y += 6;
 }
-y += hBloc + 12;
 }
 
-/* --- Section 3 : documents joints --- */
+// Documents joints (liste)
 const pj = r.pieces_jointes || [];
 if(pj.length){
-if(y + 14 > BAS){ nouvellePage(); }
-y = rpTitreSection(doc, L, y, section++, 'Documents joints', LARG);
-doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(...RP_TEXTE);
+y += 4;
+if(y > BAS - 20){ doc.addPage(); y = 20; }
+doc.setFont('helvetica', 'bold'); doc.setFontSize(11);
+doc.text('Documents joints', L, y);
+y += 6;
+doc.setFont('helvetica', 'normal'); doc.setFontSize(10);
 for(const p of pj){
-const lignes = doc.splitTextToSize(rpTxt(p.nom), LARG - 8);
-if(y > BAS){ nouvellePage(); }
-doc.setFillColor(...RP_OR); doc.rect(L, y - 3, 2.2, 2.2, 'F');
-doc.text(lignes, L + 6, y);
-y += 5.2 * lignes.length;
+for(const ligne of doc.splitTextToSize('- ' + rpTxt(p.nom), LARG)){
+if(y > BAS){ doc.addPage(); y = 20; }
+doc.text(ligne, L, y);
+y += 5;
+}
 }
 }
 
-/* --- Pied de page, sur chaque page --- */
-const total = doc.getNumberOfPages();
-for(let i = 1; i <= total; i++) rpPiedDePage(doc, i, total);
+// Pied de page
+const n = doc.getNumberOfPages();
+for(let i = 1; i <= n; i++){
+doc.setPage(i);
+doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(120, 120, 120);
+doc.text(`Rapport généré par WiTracEQUIP - page ${i}/${n}`, 105, 291, { align: 'center' });
+}
 
 const nom = `Rapport_intervention_${rpNomSur(client)}_${r.date_intervention || 'sans-date'}.pdf`;
 return new File([doc.output('blob')], nom, { type: 'application/pdf' });
