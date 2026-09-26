@@ -4,7 +4,7 @@
 
 function identiteFondateur(){
 return `<div class="hz-identity" aria-label="WiTracEQUIP · Espace Fondateur">
-  <span class="hz-identity-mark" aria-hidden="true">W<small>✦</small></span>
+  <span class="hz-identity-mark" aria-hidden="true"><img src="assets/icons/logo-mark.png" alt=""></span>
   <span class="hz-identity-copy"><strong>WiTracEQUIP</strong><small>ESPACE FONDATEUR</small></span>
 </div>`;
 }

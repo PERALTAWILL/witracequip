@@ -30,8 +30,8 @@ body[data-role="fondateur"] .sidebar-link.active svg{color:#edc786;}
 /* Identité permanente : le W du concept, sans proclamer qu'un admin client
    bénéficie des droits Fondateur. */
 .hz-identity{display:inline-flex;align-items:center;gap:10px;min-width:0;color:#f7f2e8;}
-.hz-identity-mark{position:relative;display:grid;place-items:center;flex:none;width:33px;height:33px;border:1px solid #e8ca90;border-radius:10px;background:linear-gradient(145deg,#f1daa8,#c69356);color:#23272a;font-size:16px;font-weight:850;box-shadow:0 3px 13px rgba(214,160,73,.17);}
-.hz-identity-mark small{position:absolute;right:-5px;top:-9px;color:#f5d398;font-size:9px;}
+.hz-identity-mark{position:relative;display:grid;place-items:center;flex:none;width:33px;height:33px;border-radius:10px;overflow:hidden;box-shadow:0 3px 13px rgba(214,160,73,.17);}
+.hz-identity-mark img{width:100%;height:100%;object-fit:cover;display:block;}
 .hz-identity-copy{display:flex;flex-direction:column;gap:1px;min-width:0;line-height:1.15;}
 .hz-identity-copy strong{font-size:15px;letter-spacing:-.04em;white-space:nowrap;}
 .hz-identity-copy small{font-size:8px;font-weight:780;letter-spacing:.14em;color:#eac387;white-space:nowrap;}
