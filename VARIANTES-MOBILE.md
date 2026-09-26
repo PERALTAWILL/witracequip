@@ -1,9 +1,0 @@
-# Trois pistes mobiles — images de conception uniquement
-
-Références visuelles fournies par l'utilisateur : wireframes mobiles épurés, écran de profil, cartes de synthèse, listes et navigation par icônes. La signature de l'application est conservée : bleu nuit et or. Les chiffres, noms et graphiques sont fictifs.
-
-- **01 · Clarté premium** : fiche claire, résumé bleu nuit, onglets client en haut, barre basse Accueil / Clients / Profils / Plus. « Plus » donnera accès à Support et Journal.
-- **02 · Parc à piloter** : résumé et équipements d'abord ; onglets client sous le résumé, recherche et filtres ; action « + » centrale, *contextuelle* (équipement dans le parc, client dans la liste Clients). Support et Journal resteront dans « Plus ».
-- **03 · Missions** : raccourcis métier visibles dans le client ; menu global en haut (Accueil, Clients, Profils, Support, Journal) et onglets locaux en bas (Fiche, Parc, Équipe, Invitations). Les commandes Suspendre / Supprimer sont rangées dans une zone d'administration distincte.
-
-**Aucun de ces écrans n'est intégré.** Le HTML/CSS de `variantes-mobile.*` ne charge pas l'application, ne se connecte pas à un service et ne déclenche aucune action. Le badge Fondateur est réservé au compte principal. Pour une intégration après validation, conserver le branchement des actions existantes (`PLAN-INTEGRATION.md`), les droits côté serveur, les confirmations et tous les accès aux actions métier, y compris QR, types, invitations et interventions. Les graphiques de l'option 02 ne sont qu'une illustration : ils ne présupposent aucune nouvelle donnée disponible.
