@@ -667,7 +667,7 @@ return `
 ${verrouille
 ? `<span class="case-vide"></span>`
 : `<input type="checkbox" class="case-sel" data-action="sel-membre" data-id="${m.id}" ${coche ? 'checked' : ''}>`}
-<div class="thumb role-${m.fondateur ? 'fondateur' : esc(m.role)}">${esc(initials(m.full_name))}</div>
+<div class="thumb role-${m.fondateur ? 'fondateur' : esc(m.role)}">${m.avatar_url ? `<img src="${esc(m.avatar_url)}" alt="">` : esc(initials(m.full_name))}</div>
 <div class="who">
 ${enRenommage ? renderRenommage() : `
 <div style="font-weight:650;">

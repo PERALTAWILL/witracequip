@@ -3,12 +3,12 @@
 
 async function loadProfileAndOrg(){
 const uid = state.session.user.id;
-const { data: profile, error } = await sb.from('profiles').select('id, organization_id, full_name, role, active, fondateur, mdp_a_changer').eq('id', uid).maybeSingle();
+const { data: profile, error } = await sb.from('profiles').select('id, organization_id, full_name, role, active, fondateur, avatar_url, mdp_a_changer').eq('id', uid).maybeSingle();
 if(error) throw error;
 if(!profile){
 // Le trigger d'inscription n'a pas encore tourné (rare / latence) — on réessaie une fois.
 await new Promise(r=>setTimeout(r, 800));
-const retry = await sb.from('profiles').select('id, organization_id, full_name, role, active, fondateur, mdp_a_changer').eq('id', uid).maybeSingle();
+const retry = await sb.from('profiles').select('id, organization_id, full_name, role, active, fondateur, avatar_url, mdp_a_changer').eq('id', uid).maybeSingle();
 // Profil invisible malgré une session valide = accès coupé côté base
 // (profil suspendu ou organisation suspendue : current_org_id() renvoie NULL).
 if(retry.error || !retry.data) throw new Error('ACCES_SUSPENDU');
@@ -130,11 +130,30 @@ const { error } = await sb.storage.from(BUCKET_PHOTOS).remove(chemins);
 if(error) throw error;
 }
 
+/* --- Photo de profil ---------------------------------------------------
+Bucket public « avatars ». Chemin : profil/fichier.jpg — public car l'avatar
+s'affiche partout (sidebar, topbar, liste équipe) sans avoir à re-signer une
+URL toutes les heures. */
+const BUCKET_AVATARS = 'avatars';
+
+async function televerserAvatar(profileId, blob){
+const chemin = `${profileId}/${idAleatoire()}.jpg`;
+const { error } = await sb.storage.from(BUCKET_AVATARS).upload(chemin, blob, { contentType: 'image/jpeg', upsert:false });
+if(error) throw error;
+const { data } = sb.storage.from(BUCKET_AVATARS).getPublicUrl(chemin);
+return data?.publicUrl || null;
+}
+
+async function definirAvatar(id, url){
+const { error } = await sb.from('profiles').update({ avatar_url: url }).eq('id', id);
+if(error) throw error;
+}
+
 /* --- Gestion des profils (admin uniquement) ------------------------- */
 
 async function listMembers(){
 const { data, error } = await sb.from('profiles')
-.select('id, organization_id, full_name, role, active, acces_tous_types, fondateur, created_at, appareil_info, appareil_lie_le, ordi_info, ordi_expire_le, organizations(nom, code_client, active)')
+.select('id, organization_id, full_name, role, active, acces_tous_types, fondateur, avatar_url, created_at, appareil_info, appareil_lie_le, ordi_info, ordi_expire_le, organizations(nom, code_client, active)')
 .order('created_at');
 if(error) throw error;
 return data || [];

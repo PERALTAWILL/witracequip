@@ -522,6 +522,42 @@ reglages.journal = null;
 await confirmer(`Mot de passe réinitialisé\n\nTransmettez à ${m.full_name || 'la personne'} :\n${email ? 'Identifiant : ' + email + '\n' : ''}Mot de passe provisoire : ${mdp}\n\n${copie ? 'Le mot de passe est copié : vous pouvez le coller dans un SMS ou un mail.' : ''} Il lui sera demandé d'en choisir un nouveau à la connexion.`, { ok:'Compris', danger:false, info:true });
 }
 
+/* --- Photo de profil (menu du compte) -------------------------------- */
+let monAvatarBusy = false;
+
+/* Recadre en carré (centre) et réduit à 480 px : une photo de profil
+reste nette en petit format sans jamais peser lourd. */
+async function compresserAvatar(fichier){
+const img = await chargerImage(fichier);
+const cote = Math.min(img.naturalWidth, img.naturalHeight);
+const sx = (img.naturalWidth - cote) / 2, sy = (img.naturalHeight - cote) / 2;
+const taille = Math.min(480, cote);
+const c = document.createElement('canvas');
+c.width = taille; c.height = taille;
+c.getContext('2d').drawImage(img, sx, sy, cote, cote, 0, 0, taille, taille);
+const blob = await new Promise(ok => c.toBlob(ok, 'image/jpeg', 0.85));
+if(!blob || !blob.size) throw new Error(`« ${fichier.name} » n'est pas une image lisible.`);
+return blob;
+}
+
+async function changerMaPhoto(input){
+closeMenus();
+const fichier = input.files && input.files[0];
+input.value = '';
+if(!fichier) return;
+monAvatarBusy = true; render();
+try{
+const blob = await compresserAvatar(fichier);
+const url = await televerserAvatar(state.profile.id, blob);
+await definirAvatar(state.profile.id, url);
+state.profile.avatar_url = url;
+const m = (reglages.membres || []).find(x => x.id === state.profile.id);
+if(m) m.avatar_url = url;
+toast('Photo de profil mise à jour');
+}catch(e){ toast('Erreur : ' + (e.message || e), 'erreur'); }
+finally{ monAvatarBusy = false; render(); }
+}
+
 async function renommerMoi(){
 closeMenus();
 const nom = await demander("Modifier mon nom\n\nPrénom et nom, tels qu'ils apparaîtront dans l'application et sur vos prochaines interventions.",
@@ -605,7 +641,7 @@ ${state.enAttenteCount > 0 ? `<span class="badge-attente" title="${state.enAtten
 <div class="org-pill">${esc(state.orgName || '…')}</div>
 <div class="user-menu">
 <button class="user-btn" data-action="toggle-menu">
-<span class="avatar">${esc(initials(state.profile?.full_name || state.session.user.email))}</span>
+<span class="avatar">${state.profile?.avatar_url ? `<img src="${esc(state.profile.avatar_url)}" alt="">` : esc(initials(state.profile?.full_name || state.session.user.email))}</span>
 <span class="user-nom">${esc((state.profile?.full_name || '').trim() || state.session.user.email)}</span>
 </button>
 <div class="dropdown" id="user-dropdown">
@@ -615,6 +651,11 @@ ${state.enAttenteCount > 0 ? `<span class="badge-attente" title="${state.enAtten
 <div style="margin-top:6px;"><span class="badge badge-role role-${roleTheme()}">${esc(libelleRoleTheme())}</span></div>
 </div>
 <button data-action="renommer-moi">${iconeNav('pencil', 15)} Modifier mon nom</button>
+<label class="dropdown-fichier ${monAvatarBusy ? 'disabled' : ''}">
+<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+${monAvatarBusy ? 'Envoi en cours…' : 'Modifier ma photo de profil'}
+<input type="file" accept="image/*" data-action="avatar-photo" hidden ${monAvatarBusy ? 'disabled' : ''}>
+</label>
 <button data-action="changer-mdp">${iconeNav('key', 15)} Modifier mon mot de passe</button>
 ${!sa && posteState.mode === 'mobile' ? `<button data-action="ouvrir-sur-ordi">${iconeNav('monitor', 15)} Ouvrir sur un ordinateur</button>` : ''}
 ${sa ? '' : `<button data-action="go" data-path="/support">${iconeNav('help', 15)} Support & réclamations</button>`}
@@ -2603,6 +2644,7 @@ le seul fiable pour un champ fichier sur tous les téléphones. */
 document.addEventListener('change', (e) => {
 const t = e.target;
 if(t && t.dataset && t.dataset.action === 'iv-photos') ajouterPhotos(t);
+else if(t && t.dataset && t.dataset.action === 'avatar-photo') changerMaPhoto(t);
 });
 
 /* Saisie du formulaire d'intervention mémorisée au fil de l'eau. */
