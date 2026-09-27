@@ -88,8 +88,8 @@ body[data-role="fondateur"] .sidebar-link.active svg{color:#edc786;}
 .hz-dial-core span{font-size:9.5px;text-transform:uppercase;letter-spacing:.05em;margin-top:3px;color:#7a5a1e;}
 .hz-dial-toggle{position:absolute;bottom:-4px;right:-4px;width:30px;height:30px;border-radius:50%;border:2px solid #fcf7ec;background:#26343b;color:#f3dcad;font-size:14px;line-height:1;display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:3;box-shadow:0 3px 8px rgba(0,0,0,.25);transition:transform .2s,background .2s;}
 .hz-dial-toggle:hover{background:#3a4c55;}
-.hz-dial-sat{position:absolute;top:35px;left:35px;width:34px;height:34px;border-radius:50%;border:0;display:flex;align-items:center;justify-content:center;background:linear-gradient(160deg,#fffaf0,#f1e0bc);color:#7a5a1e;box-shadow:0 4px 9px rgba(120,80,20,.25),inset 0 1px 1px #fff;opacity:0;transform:scale(.3);pointer-events:none;transition:.3s cubic-bezier(.34,1.56,.64,1);cursor:pointer;}
-.hz-dial.open .hz-dial-sat{opacity:1;pointer-events:auto;}
+.hz-dial-sat{position:absolute;top:35px;left:35px;width:34px;height:34px;border-radius:50%;border:0;display:flex;align-items:center;justify-content:center;background:linear-gradient(160deg,#fffaf0,#f1e0bc);color:#7a5a1e;box-shadow:0 4px 9px rgba(120,80,20,.25),inset 0 1px 1px #fff;opacity:0;visibility:hidden;transform:scale(.3);pointer-events:none;transition:.3s cubic-bezier(.34,1.56,.64,1);cursor:pointer;}
+.hz-dial.open .hz-dial-sat{opacity:1;visibility:visible;pointer-events:auto;}
 .hz-dial.open .hz-dial-sat.s1{transform:translate(-58px,20px) scale(1);}
 .hz-dial.open .hz-dial-sat.s2{transform:translate(0,68px) scale(1);}
 .hz-dial.open .hz-dial-sat.s3{transform:translate(58px,20px) scale(1);}

@@ -91,7 +91,7 @@ selMembres:[], filtreClient:'',
 invites:null,
 invite:{ orgId:'', role:'utilisateur', label:'', tousTypes:true, types:[], busy:false, error:'', dernierToken:null },
 journal:null, journalError:'',
-support:null, supportError:'', supportFiltre:'ouvertes',
+support:null, supportError:'', supportFiltre:'ouvertes', supportRecherche:'', supportCategorie:'toutes',
 inviteOuvert:false,
 renommage:null, // { id, valeur, busy, error } : membre dont on modifie le nom
 };
@@ -1183,48 +1183,93 @@ listDemandesSupport()
 .finally(() => { reglages.supportLoading = false; render(); });
 }
 
+function ageDemandeSupport(iso){
+const date = new Date(iso).getTime();
+if(!Number.isFinite(date)) return '';
+const jours = Math.max(0, Math.floor((Date.now() - date) / 86400000));
+if(jours === 0) return 'Aujourd’hui';
+if(jours === 1) return 'Hier';
+return `Il y a ${jours} jours`;
+}
+
+function vueDemandeSupport(d){
+const categorie = (CATEGORIES_SUPPORT.find(c => c.v === d.categorie) || {}).l || d.categorie;
+const statut = d.statut === 'nouveau' ? 'nouveau' : d.statut === 'en_cours' ? 'en cours' : 'traitée';
+const depuis = ageDemandeSupport(d.created_at);
+const mail = d.auteur_email ? `mailto:${esc(d.auteur_email)}?subject=${encodeURIComponent('Re: ' + (d.sujet || 'Demande WiTracEQUIP'))}` : '';
+return `<article class="support-ticket support-ticket-${d.statut === 'traite' ? 'traite' : d.statut === 'en_cours' ? 'encours' : 'nouveau'}">
+  <div class="support-ticket-body">
+    <div class="support-ticket-kicker"><span class="support-ticket-category">${esc(categorie)}</span>${badgeStatutSupport(d.statut)}<time datetime="${esc(d.created_at || '')}">${fmtDateTime(d.created_at)}${depuis ? ` · ${depuis.toLowerCase()}` : ''}</time></div>
+    <h3>${esc(d.sujet || 'Sans sujet')}</h3>
+    <div class="support-ticket-meta">${esc(d.auteur_nom || 'Demandeur inconnu')}${d.auteur_email ? ` · <a href="mailto:${esc(d.auteur_email)}">${esc(d.auteur_email)}</a>` : ''}${d.organisation_nom ? ` · <strong>${esc(d.organisation_nom)}</strong>` : ''}${d.code_client ? ` · client ${esc(d.code_client)}` : ''}</div>
+    <p class="support-ticket-message">${esc(d.message || '')}</p>
+  </div>
+  <div class="support-ticket-actions">
+    ${d.auteur_email ? `<a class="btn btn-sm support-reply" href="${mail}" aria-label="Répondre à ${esc(d.auteur_nom || d.auteur_email)} par email">${iconeNav('send',15)} Répondre</a>` : ''}
+    ${d.statut === 'nouveau' ? `<button type="button" class="btn btn-sm" data-action="support-statut" data-id="${esc(d.id)}" data-statut="en_cours">${iconeNav('clock',15)} Prendre en charge</button>` : ''}
+    ${d.statut !== 'traite'
+      ? `<button type="button" class="btn btn-sm btn-primary" data-action="support-statut" data-id="${esc(d.id)}" data-statut="traite">${iconeNav('check',15)} Clôturer</button>`
+      : `<button type="button" class="btn btn-sm" data-action="support-statut" data-id="${esc(d.id)}" data-statut="nouveau">${iconeNav('undo',15)} Réouvrir</button>`}
+    <button type="button" class="btn btn-sm btn-danger support-delete" data-action="support-supprimer" data-id="${esc(d.id)}" aria-label="Supprimer la demande « ${esc(d.sujet || '')} »">${iconeNav('trash',15)}</button>
+  </div>
+</article>`;
+}
+
 function viewSupportAdmin(){
 chargerSupport(false);
-if(reglages.supportError) return `<div class="alert alert-error">${esc(reglages.supportError)}</div>`;
-if(reglages.support === null) return squeletteListe(3);
+if(reglages.supportError) return `<section class="support-desk"><header class="support-desk-heading"><div><span class="support-kicker">CENTRE DE PILOTAGE</span><h2>Support clients</h2></div></header><div class="alert alert-error">${esc(reglages.supportError)}</div><button type="button" class="btn btn-primary" data-action="support-rafraichir">${iconeNav('undo',16)} Réessayer</button></section>`;
+if(reglages.support === null) return `<section class="support-desk"><header class="support-desk-heading"><div><span class="support-kicker">CENTRE DE PILOTAGE</span><h2>Support clients</h2><p>Demandes reçues, suivi et résolution au même endroit.</p></div></header>${squeletteListe(4)}</section>`;
 
-const ouvertes = reglages.support.filter(d => d.statut !== 'traite');
-const traitees = reglages.support.filter(d => d.statut === 'traite');
+const toutes = reglages.support || [];
+const ouvertes = toutes.filter(d => d.statut !== 'traite');
+const nouvelles = ouvertes.filter(d => d.statut === 'nouveau');
+const encours = ouvertes.filter(d => d.statut === 'en_cours');
+const traitees = toutes.filter(d => d.statut === 'traite');
 const filtre = reglages.supportFiltre === 'traitees' ? 'traitees' : 'ouvertes';
-const liste = filtre === 'traitees' ? traitees : ouvertes;
-
+const categorie = reglages.supportCategorie || 'toutes';
+const recherche = (reglages.supportRecherche || '').trim();
+const normaliser = texte => String(texte || '').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLocaleLowerCase('fr');
+const ordre = filtre === 'ouvertes'
+  ? [...ouvertes].sort((a,b) => (a.statut === 'nouveau' ? 0 : 1) - (b.statut === 'nouveau' ? 0 : 1) || new Date(a.created_at) - new Date(b.created_at))
+  : [...traitees].sort((a,b) => new Date(b.created_at) - new Date(a.created_at));
+const liste = ordre.filter(d => {
+  if(categorie !== 'toutes' && d.categorie !== categorie) return false;
+  if(!recherche) return true;
+  const texte = [d.sujet,d.message,d.auteur_nom,d.auteur_email,d.organisation_nom,d.code_client,d.categorie].join(' ');
+  return normaliser(texte).includes(normaliser(recherche));
+});
+const categories = [['toutes','Toutes'],...CATEGORIES_SUPPORT.map(c => [c.v,c.l])];
 return `
-<div class="row between wrap" style="margin-bottom:12px;gap:10px;">
-<div class="segment">
-<button class="${filtre === 'ouvertes' ? 'active' : ''}" data-action="support-filtre" data-filtre="ouvertes">À traiter <span class="onglet-compteur ${ouvertes.length ? 'alerte' : ''}">${ouvertes.length}</span></button>
-<button class="${filtre === 'traitees' ? 'active' : ''}" data-action="support-filtre" data-filtre="traitees">Traitées <span class="onglet-compteur">${traitees.length}</span></button>
-</div>
-<button class="btn btn-sm" data-action="support-rafraichir">Actualiser</button>
-</div>
-<div class="card">
-${liste.length ? liste.map(d => `
-<div class="journal-ligne">
-<div class="journal-date">${fmtDateTime(d.created_at)}</div>
-<div class="journal-corps">
-<div><strong>${esc(d.sujet)}</strong> ${badgeStatutSupport(d.statut)}</div>
-<div class="small muted">
-${esc((CATEGORIES_SUPPORT.find(c => c.v === d.categorie) || {}).l || d.categorie)}
-· ${esc(d.auteur_nom || '')}${d.auteur_email ? ` (<a href="mailto:${esc(d.auteur_email)}">${esc(d.auteur_email)}</a>)` : ''}
-${d.organisation_nom ? ' · ' + esc(d.organisation_nom) : ''}${d.code_client ? ' (n° ' + esc(d.code_client) + ')' : ''}
-${d.traite_le && d.statut === 'traite' ? ' · traitée le ' + fmtDate(d.traite_le) : ''}
-</div>
-<div class="support-message">${esc(d.message)}</div>
-<div class="row wrap" style="gap:6px;margin-top:6px;">
-${d.auteur_email ? `<a class="btn btn-sm" href="mailto:${esc(d.auteur_email)}?subject=${encodeURIComponent('Re: ' + d.sujet)}">Répondre</a>` : ''}
-${d.statut === 'nouveau' ? `<button class="btn btn-sm" data-action="support-statut" data-id="${d.id}" data-statut="en_cours">En cours</button>` : ''}
-${d.statut !== 'traite'
-? `<button class="btn btn-sm btn-primary" data-action="support-statut" data-id="${d.id}" data-statut="traite">Traitée → archiver</button>`
-: `<button class="btn btn-sm" data-action="support-statut" data-id="${d.id}" data-statut="nouveau">Remettre à traiter</button>`}
-<button class="btn btn-sm btn-danger" data-action="support-supprimer" data-id="${d.id}">Supprimer</button>
-</div>
-</div>
-</div>`).join('') : `<div class="empty small">${filtre === 'traitees' ? 'Aucune demande traitée pour l\'instant.' : 'Rien à traiter 🎉'}</div>`}
-</div>`;
+<section class="support-desk" aria-labelledby="support-desk-title">
+  <header class="support-desk-heading">
+    <div><span class="support-kicker">CENTRE DE PILOTAGE</span><h2 id="support-desk-title">Support clients</h2><p>Priorisez les demandes, répondez et clôturez sans changer d’écran.</p></div>
+    <button type="button" class="btn support-refresh" data-action="support-rafraichir" ${reglages.supportLoading ? 'disabled' : ''} aria-label="Actualiser les demandes">${iconeNav('undo',16)} ${reglages.supportLoading ? 'Actualisation…' : 'Actualiser'}</button>
+  </header>
+
+  <div class="support-kpis" aria-label="Résumé du support">
+    <button type="button" class="support-kpi ${filtre === 'ouvertes' ? 'selected' : ''}" data-action="support-filtre" data-filtre="ouvertes"><span class="support-kpi-icon">${iconeNav('inbox',17)}</span><span><small>À traiter</small><strong>${ouvertes.length}</strong></span></button>
+    <div class="support-kpi support-kpi-new"><span class="support-kpi-icon">${iconeNav('clock',17)}</span><span><small>Nouvelles</small><strong>${nouvelles.length}</strong></span></div>
+    <div class="support-kpi support-kpi-progress"><span class="support-kpi-icon">${iconeNav('wrench',17)}</span><span><small>En cours</small><strong>${encours.length}</strong></span></div>
+    <button type="button" class="support-kpi ${filtre === 'traitees' ? 'selected' : ''}" data-action="support-filtre" data-filtre="traitees"><span class="support-kpi-icon">${iconeNav('check',17)}</span><span><small>Traitées</small><strong>${traitees.length}</strong></span></button>
+  </div>
+
+  <div class="support-controls">
+    <label class="support-search"><span aria-hidden="true">${iconeNav('search',17)}</span><input type="search" data-action="support-recherche" value="${esc(reglages.supportRecherche || '')}" placeholder="Rechercher : sujet, client, email…" aria-label="Rechercher une demande de support"><kbd>Ctrl/⌘ F</kbd></label>
+    <div class="support-queue-tabs" role="group" aria-label="Filtrer par état">
+      <button type="button" class="${filtre === 'ouvertes' ? 'active' : ''}" data-action="support-filtre" data-filtre="ouvertes" aria-pressed="${filtre === 'ouvertes'}">À traiter <span>${ouvertes.length}</span></button>
+      <button type="button" class="${filtre === 'traitees' ? 'active' : ''}" data-action="support-filtre" data-filtre="traitees" aria-pressed="${filtre === 'traitees'}">Traitées <span>${traitees.length}</span></button>
+    </div>
+  </div>
+  <div class="support-categories" role="group" aria-label="Filtrer par catégorie">
+    ${categories.map(([valeur,label]) => `<button type="button" class="${categorie === valeur ? 'active' : ''}" data-action="support-categorie" data-categorie="${esc(valeur)}" aria-pressed="${categorie === valeur}">${esc(label)}</button>`).join('')}
+  </div>
+
+  <div class="support-results-head"><strong>${liste.length} demande${liste.length === 1 ? '' : 's'}</strong><span>${filtre === 'ouvertes' ? 'Nouvelles prioritaires · plus anciennes d’abord' : 'Demandes clôturées · plus récentes d’abord'}</span></div>
+  <div class="support-ticket-list" aria-live="polite">
+    ${liste.length ? liste.map(vueDemandeSupport).join('') : `<div class="support-empty"><span>${iconeNav('inbox',25)}</span><strong>${recherche || categorie !== 'toutes' ? 'Aucun résultat pour ces filtres' : filtre === 'traitees' ? 'Aucune demande clôturée' : 'Tout est à jour'}</strong><p>${recherche || categorie !== 'toutes' ? 'Modifiez la recherche ou les catégories sélectionnées.' : 'Les nouvelles demandes apparaîtront ici dès leur réception.'}</p>${recherche || categorie !== 'toutes' ? '<button type="button" class="btn btn-sm" data-action="support-filtres-effacer">Effacer les filtres</button>' : ''}</div>`}
+  </div>
+  <p class="support-desk-foot">${toutes.length >= 200 ? 'Les 200 demandes les plus récentes sont chargées.' : `${toutes.length} demande${toutes.length === 1 ? '' : 's'} au total.`} · Les réponses s’ouvrent dans votre application email.</p>
+</section>`;
 }
 
 async function actionSupprimerJournal(id){

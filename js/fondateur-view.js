@@ -10,7 +10,10 @@ return `<div class="hz-identity" aria-label="WiTracEQUIP · Espace Fondateur">
 }
 
 function boutonCommandesFondateur(clientId, flottant = false){
-return `<button type="button" class="hz-command-trigger ${flottant ? 'hz-command-floating' : ''}" data-action="fondateur-commandes" ${clientId ? `data-id="${esc(clientId)}"` : ''} aria-haspopup="dialog">✦ &nbsp; ${clientId ? 'Autres actions' : 'Ouvrir les commandes'} ${iconeNav('chevron',18)}</button>`;
+const titre = clientId ? 'Actions du client' : 'Applications & actions';
+return `<button type="button" class="hz-command-trigger ${flottant ? 'hz-command-floating' : ''}" data-action="fondateur-commandes" ${clientId ? `data-id="${esc(clientId)}"` : ''} aria-haspopup="dialog" aria-expanded="false" aria-label="Ouvrir le tiroir ${esc(titre)}" title="${esc(titre)} · raccourci Ctrl/⌘ K">
+  <span class="hz-launcher-mark" aria-hidden="true">✦</span><span class="hz-launcher-label">${clientId ? 'Actions du client' : 'Applications'}</span><span class="hz-launcher-shortcut" aria-hidden="true">Ctrl/⌘ K</span>${iconeNav('chevron',17)}
+</button>`;
 }
 
 function chiffreFondateur(valeur){
@@ -46,13 +49,13 @@ return `
     <div class="hz-priority-kicker"><span>✦ &nbsp; VOTRE PRIORITÉ</span><span class="hz-priority-dot" aria-hidden="true"></span></div>
     <div class="hz-dial" role="group" aria-label="Support">
       <span class="hz-dial-ring" aria-hidden="true"></span>
-      <button type="button" class="hz-dial-core" data-action="go" data-path="/reglages/support" title="Ouvrir les demandes clients">
+      <button type="button" class="hz-dial-core" data-action="go" data-path="/reglages/support" title="Ouvrir les demandes clients" aria-label="Ouvrir les demandes clients et demandes à traiter">
         <strong>${chiffreFondateur(aTraiter)}</strong><span>Demandes</span>
       </button>
-      <button type="button" class="hz-dial-toggle" data-action="toggle-dial" aria-haspopup="true" aria-expanded="false" aria-label="Autres outils du support">⋯</button>
-      <button type="button" class="hz-dial-sat s1" data-action="go" data-path="/reglages/support/rapports" title="Rapports d'intervention">${iconeNav('wrench',18)}</button>
-      <button type="button" class="hz-dial-sat s2" data-action="go" data-path="/reglages/support/stats" title="Statistiques & export">${iconeNav('chart',18)}</button>
-      <button type="button" class="hz-dial-sat s3" data-action="go" data-path="/reglages/support/modeles" title="Modèles métier">${iconeNav('tag',18)}</button>
+      <button type="button" class="hz-dial-toggle" data-action="toggle-dial" aria-haspopup="true" aria-expanded="false" aria-label="Afficher ou masquer les outils satellites du support">⋯</button>
+      <button type="button" tabindex="-1" class="hz-dial-sat s1" data-action="go" data-path="/reglages/support/rapports" title="Rapports d'intervention" aria-label="Ouvrir les rapports d’intervention">${iconeNav('wrench',18)}</button>
+      <button type="button" tabindex="-1" class="hz-dial-sat s2" data-action="go" data-path="/reglages/support/stats" title="Statistiques & export" aria-label="Ouvrir les statistiques et l’export">${iconeNav('chart',18)}</button>
+      <button type="button" tabindex="-1" class="hz-dial-sat s3" data-action="go" data-path="/reglages/support/modeles" title="Modèles métier" aria-label="Ouvrir les modèles métier">${iconeNav('tag',18)}</button>
     </div>
   </section>
 
@@ -64,9 +67,14 @@ return `
   </div>
 
   <div class="hz-section-heading"><span>ACCÈS DIRECT</span><h2>Avancer sans détour</h2></div>
-  <div class="hz-shortcuts">
-    <button type="button" data-action="go" data-path="/reglages/clients"><span>${iconeNav('briefcase',18)}</span><strong>Portefeuille clients</strong>${iconeNav('chevron',16)}</button>
-    <button type="button" data-action="ouvrir-scanner"><span>${iconeNav('scan',18)}</span><strong>Scanner un QR code</strong>${iconeNav('chevron',16)}</button>
+  <div class="hz-shortcuts" aria-label="Applications et accès rapides">
+    <button type="button" data-action="go" data-path="/reglages/clients"><span>${iconeNav('briefcase',20)}</span><strong>Portefeuille clients</strong>${iconeNav('chevron',16)}</button>
+    <button type="button" data-action="go" data-path="/reglages/support"><span>${iconeNav('inbox',20)}</span><strong>Demandes de support</strong>${iconeNav('chevron',16)}</button>
+    <button type="button" data-action="ouvrir-scanner"><span>${iconeNav('scan',20)}</span><strong>Scanner un QR code</strong>${iconeNav('chevron',16)}</button>
+    <button type="button" data-action="go" data-path="/reglages/support/rapports"><span>${iconeNav('wrench',20)}</span><strong>Rapports d’intervention</strong>${iconeNav('chevron',16)}</button>
+    <button type="button" data-action="go" data-path="/reglages/support/stats"><span>${iconeNav('chart',20)}</span><strong>Statistiques & export</strong>${iconeNav('chevron',16)}</button>
+    <button type="button" data-action="go" data-path="/reglages/profils"><span>${iconeNav('users',20)}</span><strong>Profils & accès</strong>${iconeNav('chevron',16)}</button>
+    <button type="button" data-action="go" data-path="/reglages/journal"><span>${iconeNav('journal',20)}</span><strong>Journal d’activité</strong>${iconeNav('chevron',16)}</button>
   </div>
   ${clientsErreur ? '' : liste === null ? '<div class="hz-recent hz-recent-loading" aria-label="Clients en cours de chargement">Chargement des clients…</div>'
     : recents.length ? `<div class="hz-recent-list" aria-label="Clients récents">${recents.map(c => `
@@ -76,8 +84,6 @@ return `
         ${iconeNav('chevron',15)}
       </button>`).join('')}</div>`
     : '<div class="hz-recent hz-recent-loading">Aucun client dans le portefeuille.</div>'}
-
-  ${boutonCommandesFondateur()}
 </div>`;
 }
 
@@ -102,7 +108,6 @@ return `<div class="hz-tools-page">
     </section>
   </div>
   <div class="hz-tools-scan">${ligneOutilFondateur('scan','Scanner un QR code','Ouvrir une fiche équipement',null,'ouvrir-scanner')}</div>
-  ${boutonCommandesFondateur()}
 </div>`;
 }
 
@@ -137,24 +142,35 @@ function paletteFondateur(client){
 const enLigne = !state.horsLigne && navigator.onLine;
 const row = (icone, nom, aide, action, opts = '') => `<button type="button" class="hz-sheet-row" data-action="${action}" ${opts}>
   <span>${iconeNav(icone,19)}</span><span><strong>${nom}</strong><small>${aide}</small></span>${iconeNav('chevron',17)}</button>`;
+const carte = (icone, nom, aide, action, opts = '') => `<button type="button" class="hz-drawer-card" data-action="${action}" ${opts}>
+  <span class="hz-drawer-icon">${iconeNav(icone,18)}</span><span><strong>${nom}</strong><small>${aide}</small></span></button>`;
 return `<div class="hz-sheet-handle" aria-hidden="true"></div>
-  <div class="hz-sheet-head"><div><span>VOTRE ${client ? 'CLIENT' : 'ESPACE'} <b aria-hidden="true">✦</b> ${esc(client ? `${client.nom} · N° ${client.code_client || '—'}` : 'FONDATEUR')}</span>
-    <h2 id="hz-sheet-title">${client ? 'Plus d’actions.' : 'Vos commandes.'}</h2><p>${client ? 'Équipement et invitation sont directs sur la fiche.' : 'Les commandes essentielles, au même endroit.'}</p></div>
-    <button type="button" class="hz-sheet-close" data-action="fondateur-commandes-fermer" aria-label="Fermer les commandes">✕</button></div>
-  <div class="hz-sheet-label">${client ? 'GESTION DU DOSSIER' : 'ACTIONS COURANTES'}</div>
+  <div class="hz-sheet-head"><div><span>WiTracEQUIP <b aria-hidden="true">✦</b> ${esc(client ? `CLIENT · ${client.nom}` : 'ESPACE FONDATEUR')}</span>
+    <h2 id="hz-sheet-title">${client ? 'Raccourcis client' : 'Votre espace de travail'}</h2><p>${client ? 'Les actions sont liées à cette organisation.' : 'Un tiroir unique pour vos outils de pilotage.'}</p></div>
+    <button type="button" class="hz-sheet-close" data-action="fondateur-commandes-fermer" aria-label="Fermer le tiroir">✕</button></div>
   ${client ? `
+    <div class="hz-sheet-label">GESTION DE L’ORGANISATION</div>
     ${row('tag','Gérer les types','Catégories d’équipement','go',`data-path="/types/${esc(client.id)}"`)}
     ${row('pencil','Modifier la fiche','Coordonnées et modèle métier','modifier-client',`data-id="${esc(client.id)}" ${enLigne ? '' : 'disabled title="Connexion requise"'}`)}
     ${!client.est_mon_organisation ? `<div class="hz-sheet-label hz-sheet-label-safety">ACCÈS & SÉCURITÉ</div>
       ${row('archive', client.active ? 'Suspendre le client' : 'Réactiver le client','Confirmation et droits existants','clients-statut',`data-id="${esc(client.id)}" data-actif="${client.active ? '0' : '1'}" ${enLigne ? '' : 'disabled title="Connexion requise"'}`)}
       ${row('trash','Supprimer définitivement','Confirmation par saisie obligatoire','clients-supprimer',`data-id="${esc(client.id)}" ${enLigne ? '' : 'disabled title="Connexion requise"'}`)}` : ''}` : `
-    ${row('plus','Nouveau client','Créer une organisation','fondateur-nouveau-client',enLigne ? '' : 'disabled title="Connexion requise"')}
-    ${row('briefcase','Portefeuille clients','Rechercher et gérer les dossiers','go','data-path="/reglages/clients"')}
-    ${row('scan','Scanner un QR code','Ouvrir un équipement','ouvrir-scanner')}
-    <div class="hz-sheet-label hz-sheet-label-safety">ÉQUIPES & HISTORIQUE</div>
-    ${row('users','Profils & accès','Membres et rôles','go','data-path="/reglages/profils"')}
-    ${row('journal','Journal d’activité','Suivi des opérations','go','data-path="/reglages/journal"')}`}
-  <p class="hz-sheet-foot">${enLigne ? 'Les autorisations, confirmations et journaux restent inchangés.' : 'Hors connexion : administration indisponible ; lecture et scanner possibles.'}</p>`;
+    <div class="hz-sheet-label">CRÉER & EXPLORER</div>
+    <div class="hz-drawer-grid">
+      ${carte('plus','Nouveau client','Créer une organisation','fondateur-nouveau-client',enLigne ? '' : 'disabled title="Connexion requise"')}
+      ${carte('briefcase','Portefeuille clients','Rechercher et gérer les dossiers','go','data-path="/reglages/clients"')}
+      ${carte('scan','Scanner un QR code','Accéder directement à une fiche','ouvrir-scanner')}
+      ${carte('inbox','Demandes de support','À traiter et demandes archivées','go','data-path="/reglages/support"')}
+    </div>
+    <div class="hz-sheet-label hz-sheet-label-safety">ANALYSER & ADMINISTRER</div>
+    <div class="hz-drawer-grid">
+      ${carte('wrench','Rapports d’intervention','Rapports des parcs clients','go','data-path="/reglages/support/rapports"')}
+      ${carte('chart','Statistiques & export','Mesures et exports de parc','go','data-path="/reglages/support/stats"')}
+      ${carte('tag','Modèles métier','Préparer les secteurs clients','go','data-path="/reglages/support/modeles"')}
+      ${carte('users','Profils & accès','Comptes, rôles et accès','go','data-path="/reglages/profils"')}
+      ${carte('journal','Journal d’activité','Historique des opérations','go','data-path="/reglages/journal"')}
+    </div>`}
+  <p class="hz-sheet-foot">${enLigne ? 'Les raccourcis respectent les permissions et confirmations de l’application.' : 'Hors connexion : les fonctions d’administration sont indisponibles.'}</p>`;
 }
 
 /* <dialog> conserve le focus et rend l'arrière-plan inerte. La palette vit
@@ -171,10 +187,14 @@ dialogue.id = 'hz-sheet-dialog';
 dialogue.className = 'hz-sheet-dialog';
 dialogue.setAttribute('aria-labelledby','hz-sheet-title');
 dialogue.innerHTML = paletteFondateur(client);
-dialogue.addEventListener('close', () => dialogue.remove(), { once:true });
+dialogue.addEventListener('close', () => {
+if(!document.querySelector('.hz-sheet-dialog[open]')) document.querySelectorAll('[data-action="fondateur-commandes"]').forEach(b => b.setAttribute('aria-expanded','false'));
+dialogue.remove();
+}, { once:true });
 dialogue.addEventListener('click', e => { if(e.target === dialogue) dialogue.close(); });
 document.body.appendChild(dialogue);
 dialogue.showModal();
+document.querySelectorAll('[data-action="fondateur-commandes"]').forEach(b => b.setAttribute('aria-expanded','true'));
 dialogue.querySelector('.hz-sheet-close')?.focus();
 }
 

@@ -544,7 +544,7 @@ const r = state.route;
 let content = '';
 const sa = isSuperAdmin();
 try{
-if(r.name === 'accueil') content = sa ? viewAccueilFondateur() : viewAccueil();
+if(r.name === 'accueil') content = sa ? viewAccueilFondateur() : isAdmin() ? viewAccueilAdmin() : viewAccueil();
 else if(r.name === 'fondateur' && r.param === 'outils') content = sa ? viewOutilsFondateur()
 : '<div class="alert alert-info">Cet espace est réservé au compte principal Fondateur de WiTracEQUIP.</div>';
 // Le super-admin n'a pas de parc propre : le parc se consulte client par client.
@@ -574,11 +574,9 @@ return `
 <div class="by">by WiDIAG MQ</div>
 </div>
 </div>
-${roleTheme() === 'fondateur' ? `<div class="sidebar-tier">${iconeNav('crown', 13)} <span>COMPTE FONDATEUR</span></div><div class="sidebar-nav-caption">NAVIGATION</div>` : ''}
+${roleTheme() === 'fondateur' ? `<div class="sidebar-tier">${iconeNav('crown', 13)} <span>COMPTE FONDATEUR</span></div><div class="sidebar-nav-caption">NAVIGATION</div>` : isAdmin() ? `<div class="sidebar-tier-admin">${iconeNav('briefcase', 13)} <span>ADMINISTRATION</span></div>` : ''}
 <nav class="sidebar-nav" aria-label="Navigation principale">
-${entreesNav(r).map(n => sa
-? `<button type="button" class="sidebar-link ${n.actif?'active':''}" data-action="go" data-path="${n.path}" ${n.actif ? 'aria-current="page"' : ''}>${iconeNav(n.icone)}<span>${n.label}</span>${n.badge ? `<span class="nav-badge">${n.badge}</span>` : ''}</button>`
-: `<div class="sidebar-link ${n.actif?'active':''}" data-action="go" data-path="${n.path}">${iconeNav(n.icone)}<span>${n.label}</span>${n.badge ? `<span class="nav-badge">${n.badge}</span>` : ''}</div>`).join('')}
+${entreesNav(r).map(n => `<button type="button" class="sidebar-link ${n.actif?'active':''}" data-action="go" data-path="${n.path}" ${n.actif ? 'aria-current="page"' : ''}>${iconeNav(n.icone)}<span>${n.label}</span>${n.badge ? `<span class="nav-badge">${n.badge}</span>` : ''}</button>`).join('')}
 </nav>
 ${sa ? `<div class="hz-sidebar-extras"><span>ACCÈS DIRECT</span>
 <button type="button" data-action="go" data-path="/reglages/profils">${iconeNav('users',16)} Profils & accès</button>
@@ -592,7 +590,10 @@ ${state.enAttenteCount > 0 ? `<div class="sidebar-sync" title="${state.enAttente
 
 <div class="shell-main">
 <div class="topbar">
-${roleTheme() === 'fondateur' ? identiteFondateur() : `<div class="brand">
+${roleTheme() === 'fondateur' ? identiteFondateur() : isAdmin() ? `<div class="admin-identity">
+<span class="admin-mark"><img src="assets/icons/logo-mark.png" alt=""></span>
+<span class="admin-identity-copy"><strong>WiTracEQUIP</strong><small>ESPACE ADMINISTRATION</small></span>
+</div>` : `<div class="brand">
 <img class="logo" src="assets/icons/icon-192.png" alt="WiTracEQUIP">
 <div>
 WiTracEQUIP
@@ -621,16 +622,14 @@ ${sa ? '' : `<button data-action="go" data-path="/support">${iconeNav('help', 15
 </div>
 </div>
 </div>
-<main>${renderBandeauOrdi()}${sa && (state.horsLigne || !navigator.onLine) ? `<div class="hz-offline-banner" role="status">${iconeNav('clock',16)} Hors connexion : les données peuvent être anciennes. L’administration exige le réseau.</div>` : ''}${content}${sa ? `<div class="founder-footer">WiTracEQUIP <span>✦</span> ESPACE FONDATEUR <span>·</span> by WiDIAG MQ</div>` : piedSupport()}</main>
+<main>${renderBandeauOrdi()}${sa && (state.horsLigne || !navigator.onLine) ? `<div class="hz-offline-banner" role="status">${iconeNav('clock',16)} Hors connexion : les données peuvent être anciennes. L’administration exige le réseau.</div>` : ''}${content}${sa ? `<div class="founder-footer">WiTracEQUIP <span>✦</span> ESPACE FONDATEUR <span>·</span> by WiDIAG MQ</div>` : isAdmin() ? `<div class="admin-footer"><span>WiTracEQUIP</span><span>·</span> ESPACE ADMINISTRATION <span>·</span> ${esc(state.orgName || '')}</div>` : piedSupport()}</main>
 </div>
-${sa && (r.name === 'accueil' || (r.name === 'fondateur' && r.param === 'outils') || (r.name === 'reglages' && r.param === 'clients' && r.sub)) ? boutonCommandesFondateur(r.name === 'reglages' ? r.sub : null, true) : ''}
+${sa ? boutonCommandesFondateur(null, true) : ''}
 ${renderModal()}
 ${sa && scannerState.ouvert ? renderScannerOverlay() : ''}
 
 <nav class="bottom-nav" aria-label="Navigation mobile">
-${entreesNav(r).map(n => sa
-? `<button type="button" class="bottom-nav-item ${n.actif?'active':''}" data-action="go" data-path="${n.path}" ${n.actif ? 'aria-current="page"' : ''}>${iconeNav(n.icone,20)}<span>${n.court || n.label}</span>${n.badge ? `<span class="nav-badge">${n.badge}</span>` : ''}</button>`
-: `<div class="bottom-nav-item ${n.actif?'active':''}" data-action="go" data-path="${n.path}">${iconeNav(n.icone,20)}<span>${n.court || n.label}</span>${n.badge ? `<span class="nav-badge">${n.badge}</span>` : ''}</div>`).join('')}
+${entreesNav(r).map(n => `<button type="button" class="bottom-nav-item ${n.actif?'active':''}" data-action="go" data-path="${n.path}" ${n.actif ? 'aria-current="page"' : ''}>${iconeNav(n.icone,20)}<span>${n.court || n.label}</span>${n.badge ? `<span class="nav-badge">${n.badge}</span>` : ''}</button>`).join('')}
 </nav>
 </div>
 `;
@@ -716,17 +715,18 @@ let accueilCache = { chiffres: null, loading: false, error: '' };
 
 async function chargerChiffres(){
 const [eq, iv] = await Promise.all([
-sb.from('equipements').select('id, archived'),
-sb.from('interventions').select('date').order('date', { ascending: false }),
+// Comptage exact côté serveur : pas de téléchargement de tout le parc ni de
+// troncature silencieuse quand l'organisation dépasse la limite Supabase.
+sb.from('equipements').select('id', { count:'exact', head:true }).eq('archived', false),
+// La page d'accueil n'utilise que la dernière intervention connue.
+sb.from('interventions').select('date,equipement_id').order('date', { ascending:false }).limit(1).maybeSingle(),
 ]);
 if(eq.error) throw eq.error;
 if(iv.error) throw iv.error;
-const equipements = eq.data || [];
-const interventions = iv.data || [];
 return {
-actifs: equipements.filter(e => !e.archived).length,
-interventions: interventions.length,
-derniere: interventions.length ? interventions[0].date : null,
+actifs: eq.count ?? 0,
+derniere: iv.data?.date || null,
+derniereEquipementId: iv.data?.equipement_id || null,
 };
 }
 
@@ -771,88 +771,132 @@ horsLigne: !!state.horsLigne || !navigator.onLine,
 });
 }
 
+function viewAccueilAdmin(){
+if(accueilCache.chiffres === null && !accueilCache.loading && !accueilCache.error){
+accueilCache.loading = true;
+chargerChiffres()
+.then(c => { accueilCache.chiffres = c; accueilCache.loading = false; render(); })
+.catch(e => {
+if(estErreurReseau(e)) accueilCache.chiffres = {}; else accueilCache.error = e.message;
+accueilCache.loading = false; render();
+});
+}
+const prenom = (state.profile?.full_name || '').trim().split(/\s+/)[0] || '';
+const c = accueilCache.chiffres || {};
+const actifs = c.actifs === undefined ? '—' : Number(c.actifs).toLocaleString('fr-FR');
+const derniere = c.derniere ? fmtDate(c.derniere) : 'Aucune activité';
+const types = state.typesLoaded ? state.types.length.toLocaleString('fr-FR') : '—';
+return `
+<div class="dashboard-workspace dashboard-admin">
+  <header class="dashboard-heading">
+    <div><span class="dashboard-eyebrow">ADMINISTRATION <i>·</i> ${esc(state.orgName || 'ORGANISATION')}</span>
+      <h1>Bonjour${prenom ? ', ' + esc(prenom) : ''}.</h1>
+      <p>Votre organisation, ses équipements et son équipe — au même endroit.</p>
+    </div>
+    <button type="button" class="dashboard-refresh" data-action="accueil-recharger" aria-label="Actualiser le tableau de bord" title="Actualiser">${iconeNav('undo',17)}</button>
+  </header>
+
+  <section class="dashboard-hero admin-hero" aria-label="Synthèse du parc">
+    <div class="dashboard-hero-copy">
+      <span class="hero-kicker">VOTRE ORGANISATION <b>✦</b></span>
+      <h2>Un parc clair.<br><em>Une équipe en mouvement.</em></h2>
+      <p>Gardez la maintenance et les accès sous contrôle.</p>
+      <div class="hero-actions">
+        <button type="button" class="btn hero-cta" data-action="go" data-path="/equip-new">${iconeNav('plus',17)} Ajouter un équipement</button>
+        <button type="button" class="btn hero-secondary" data-action="ouvrir-scanner">${iconeNav('scan',17)} Scanner un QR</button>
+      </div>
+    </div>
+    <div class="hero-stat-card" aria-label="${actifs} équipements actifs">
+      <span class="hero-stat-label">ÉQUIPEMENTS ACTIFS</span>
+      <strong>${actifs}</strong>
+      <span class="hero-stat-caption">dans ${esc(state.orgName || 'votre organisation')}</span>
+      <div class="hero-stat-line" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+    </div>
+    <div class="hero-orbit" aria-hidden="true"><i></i><i></i><i></i><span>W</span></div>
+  </section>
+
+  <section class="dashboard-stats" aria-label="Indicateurs de gestion">
+    <button type="button" class="dashboard-stat" data-action="go" data-path="/equipements"><span class="stat-icon">${iconeNav('box',18)}</span><span class="stat-copy"><small>Équipements actifs</small><strong>${actifs}</strong></span>${iconeNav('chevron',16)}</button>
+    <button type="button" class="dashboard-stat" data-action="go" data-path="${c.derniereEquipementId ? '/equip/' + esc(c.derniereEquipementId) : '/equipements'}"><span class="stat-icon">${iconeNav('journal',18)}</span><span class="stat-copy"><small>Dernière intervention</small><strong class="stat-date">${esc(derniere)}</strong></span>${iconeNav('chevron',16)}</button>
+    <button type="button" class="dashboard-stat" data-action="go" data-path="/types"><span class="stat-icon">${iconeNav('tag',18)}</span><span class="stat-copy"><small>Types configurés</small><strong>${types}</strong></span>${iconeNav('chevron',16)}</button>
+  </section>
+
+  <div class="dashboard-section-title"><div><span>ESPACE DE TRAVAIL</span><h2>Raccourcis utiles</h2></div><small>Les actions de gestion, à portée de main</small></div>
+  <section class="dashboard-quick-actions" aria-label="Actions d’administration">
+    <button type="button" class="quick-action" data-action="go" data-path="/reglages/equipe"><span class="quick-action-icon">${iconeNav('users',19)}</span><span><strong>Équipe & accès</strong><small>Inviter et gérer les rôles</small></span>${iconeNav('chevron',16)}</button>
+    <button type="button" class="quick-action" data-action="go" data-path="/types"><span class="quick-action-icon">${iconeNav('tag',19)}</span><span><strong>Types d’équipement</strong><small>Adapter les fiches à votre activité</small></span>${iconeNav('chevron',16)}</button>
+    <button type="button" class="quick-action" data-action="go" data-path="/support/stats"><span class="quick-action-icon">${iconeNav('chart',19)}</span><span><strong>Rapports & statistiques</strong><small>Analyser votre parc</small></span>${iconeNav('chevron',16)}</button>
+    <button type="button" class="quick-action" data-action="ouvrir-scanner"><span class="quick-action-icon">${iconeNav('scan',19)}</span><span><strong>Scanner un équipement</strong><small>Accéder à une fiche en un geste</small></span>${iconeNav('chevron',16)}</button>
+  </section>
+  ${accueilCache.error ? `<div class="alert alert-error dashboard-error">Les indicateurs n’ont pas pu être chargés. ${esc(accueilCache.error)}</div>` : ''}
+  <p class="dashboard-trust">Vos autorisations s’appliquent à chaque action, dans l’interface comme dans la base de données.</p>
+  ${scannerState.ouvert ? renderScannerOverlay() : ''}
+</div>`;
+}
+
 function viewAccueil(){
 if(accueilCache.chiffres === null && !accueilCache.loading && !accueilCache.error){
 accueilCache.loading = true;
 chargerChiffres()
 .then(c => { accueilCache.chiffres = c; accueilCache.loading = false; render(); })
 .catch(e => {
-// Sans réseau, l'accueil reste utilisable (les chiffres reviendront avec le réseau).
 if(estErreurReseau(e)) accueilCache.chiffres = {}; else accueilCache.error = e.message;
 accueilCache.loading = false; render();
 });
 }
-
 const prenom = (state.profile?.full_name || '').trim().split(/\s+/)[0] || '';
-const c = accueilCache.chiffres;
-const parcVide = c && c.actifs === 0;
-
-const etapes = [
-{ n:'1', titre:'Créer',
-texte:"Ajoutez un équipement et renseignez sa fiche. Son QR code est généré automatiquement.",
-lien:'/equip-new', bouton:'Ajouter un équipement' },
-{ n:'2', titre:'Renseigner',
-texte:"À chaque passage, scannez le QR code et consignez l'intervention : date, nature, intervenant.",
-lien:'/equipements', bouton:'Voir le parc' },
-{ n:'3', titre:'Imprimer',
-texte:"Imprimez l'étiquette et collez-la sur l'équipement. Le carnet est accessible en deux secondes.",
-lien:'/equipements', bouton:'Voir le parc' },
-];
-
-// Le <video> est recréé à chaque rendu (innerHTML) : on rattache le flux
-// existant et on (re)démarre la boucle de décodage juste après, comme le
-// drawQr() de la fiche équipement plus bas dans ce fichier.
+const c = accueilCache.chiffres || {};
+const actifs = c.actifs === undefined ? '—' : Number(c.actifs).toLocaleString('fr-FR');
+const derniere = c.derniere ? fmtDate(c.derniere) : 'Aucune activité';
+const nbTypes = state.typesLoaded ? state.types.length.toLocaleString('fr-FR') : '—';
 if(scannerState.ouvert) setTimeout(() => attacherScanner(), 0);
-
 return `
-<div class="accueil-hero">
-<div class="accueil-marque">
-<img src="${LOGO_DATA_URL}" alt="">
-<div>
-<div class="accueil-titre">Bienvenue${prenom ? ', ' + esc(prenom) : ''}</div>
-<div class="accueil-org">${esc(state.orgName || '')}</div>
-</div>
-</div>
-<p class="accueil-phrase">
-Merci d'avoir choisi WiTracEQUIP pour suivre vos équipements. Chaque machine,
-véhicule ou appareil porte désormais son carnet d'entretien complet —
-consultable et à jour, sur un simple scan.
-</p>
-</div>
+<div class="dashboard-workspace dashboard-client">
+  <header class="dashboard-heading">
+    <div><span class="dashboard-eyebrow">CARNET TECHNIQUE <i>·</i> ${esc(state.orgName || '')}</span>
+      <h1>Bonjour${prenom ? ', ' + esc(prenom) : ''}.</h1>
+      <p>Tout ce qui fait tourner votre parc, réuni au même endroit.</p>
+    </div>
+    <button type="button" class="dashboard-refresh" data-action="accueil-recharger" aria-label="Actualiser le tableau de bord" title="Actualiser">${iconeNav('undo',17)}</button>
+  </header>
 
-<div class="accueil-section-titre">Votre solution en trois étapes</div>
-<div class="etapes-accueil">
-${etapes.map((e, i) => `
-<div class="etape-accueil ${(parcVide && i === 0) ? 'mise-en-avant' : ''}">
-<div class="etape-num">${e.n}</div>
-<div class="etape-titre">${e.titre}</div>
-<p>${e.texte}</p>
-<button class="btn btn-sm ${(parcVide && i === 0) ? 'btn-primary' : ''}"
-data-action="go" data-path="${e.lien}">${e.bouton}</button>
-</div>`).join('')}
-</div>
+  <section class="dashboard-hero client-hero" aria-label="Résumé du parc d’équipements">
+    <div class="dashboard-hero-copy">
+      <span class="hero-kicker">VOTRE PARC <b>✦</b> TOUJOURS À JOUR</span>
+      <h2>Vos équipements.<br><em>Leur histoire, sans détour.</em></h2>
+      <p>Fiches, QR codes et interventions réunis dans un carnet simple à retrouver.</p>
+      <div class="hero-actions">
+        <button type="button" class="btn hero-cta" data-action="go" data-path="/equip-new">${iconeNav('plus',17)} Ajouter un équipement</button>
+        <button type="button" class="btn hero-secondary" data-action="ouvrir-scanner">${iconeNav('scan',17)} Scanner un QR</button>
+      </div>
+    </div>
+    <div class="hero-stat-card" aria-label="${actifs} équipements actifs">
+      <span class="hero-stat-label">ÉQUIPEMENTS ACTIFS</span>
+      <strong>${actifs}</strong>
+      <span class="hero-stat-caption">dans votre parc</span>
+      <div class="hero-stat-line" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+    </div>
+    <div class="hero-orbit" aria-hidden="true"><i></i><i></i><i></i><span>W</span></div>
+  </section>
 
-${accueilCache.error
-? `<div class="alert alert-error" style="margin-top:14px;">${esc(accueilCache.error)}</div>` : ''}
+  <section class="dashboard-stats" aria-label="Indicateurs du parc">
+    <button type="button" class="dashboard-stat" data-action="go" data-path="/equipements"><span class="stat-icon">${iconeNav('box',18)}</span><span class="stat-copy"><small>Équipements actifs</small><strong>${actifs}</strong></span>${iconeNav('chevron',16)}</button>
+    <button type="button" class="dashboard-stat" data-action="go" data-path="${c.derniereEquipementId ? '/equip/' + esc(c.derniereEquipementId) : '/equipements'}"><span class="stat-icon">${iconeNav('journal',18)}</span><span class="stat-copy"><small>Dernière intervention</small><strong class="stat-date">${esc(derniere)}</strong></span>${iconeNav('chevron',16)}</button>
+    <button type="button" class="dashboard-stat" data-action="go" data-path="${peutGererTypes() ? '/types' : '/equipements'}"><span class="stat-icon">${iconeNav('tag',18)}</span><span class="stat-copy"><small>Types disponibles</small><strong>${nbTypes}</strong></span>${iconeNav('chevron',16)}</button>
+  </section>
 
-<div class="scanner-carte">
-<div class="scanner-carte-icone">${iconeNav('scan', 26)}</div>
-<div class="scanner-carte-texte">
-<div class="scanner-carte-titre">Scanner un équipement</div>
-<p>Ouvrez la caméra et cadrez le QR code collé sur l'équipement pour accéder directement à sa fiche — sans passer par l'appareil photo du téléphone.</p>
-</div>
-<button class="btn btn-primary" data-action="ouvrir-scanner">Scanner un QR code</button>
-</div>
-
-${parcVide ? `
-<div class="alert alert-info" style="margin-top:14px;">
-Votre parc est encore vide. ${peutGererTypes()
-? `Commencez par créer un type d'équipement — ou partez d'un <strong>modèle métier</strong> pour tout créer d'un coup.`
-: `Votre administrateur doit d'abord créer les types d'équipement.`}
-</div>` : ''}
-
-${scannerState.ouvert ? renderScannerOverlay() : ''}
-`;
+  <div class="dashboard-section-title"><div><span>POUR ALLER PLUS VITE</span><h2>Actions rapides</h2></div><small>Vos outils du quotidien</small></div>
+  <section class="dashboard-quick-actions" aria-label="Actions rapides">
+    <button type="button" class="quick-action" data-action="go" data-path="/equipements"><span class="quick-action-icon">${iconeNav('box',19)}</span><span><strong>Parcourir le parc</strong><small>Retrouver une fiche équipement</small></span>${iconeNav('chevron',16)}</button>
+    <button type="button" class="quick-action" data-action="ouvrir-scanner"><span class="quick-action-icon">${iconeNav('scan',19)}</span><span><strong>Scanner un QR code</strong><small>Ouvrir une fiche avec la caméra</small></span>${iconeNav('chevron',16)}</button>
+    ${peutGererTypes() ? `<button type="button" class="quick-action" data-action="go" data-path="/types"><span class="quick-action-icon">${iconeNav('tag',19)}</span><span><strong>Types d’équipement</strong><small>Gérer les modèles de fiche</small></span>${iconeNav('chevron',16)}</button>` : ''}
+    <button type="button" class="quick-action" data-action="go" data-path="/journal"><span class="quick-action-icon">${iconeNav('journal',19)}</span><span><strong>Historique</strong><small>Suivre les opérations du parc</small></span>${iconeNav('chevron',16)}</button>
+  </section>
+  ${accueilCache.error ? `<div class="alert alert-error dashboard-error">Les indicateurs n’ont pas pu être chargés. ${esc(accueilCache.error)}</div>` : ''}
+  ${c.actifs === 0 ? `<div class="dashboard-empty-note">Votre parc est prêt à démarrer. ${peutGererTypes() ? 'Créez un équipement ou préparez d’abord un type de fiche.' : 'Votre administrateur peut préparer les types de fiches.'}</div>` : ''}
+  <p class="dashboard-trust">Les données sensibles restent protégées par vos droits d’accès, même hors de cette interface.</p>
+  ${scannerState.ouvert ? renderScannerOverlay() : ''}
+</div>`;
 }
 
 function renderScannerOverlay(){
@@ -2331,8 +2375,10 @@ e.stopPropagation();
 const dial = t.closest('.hz-dial');
 const ouvert = dial?.classList.toggle('open');
 t.setAttribute('aria-expanded', ouvert ? 'true' : 'false');
+dial?.querySelectorAll('.hz-dial-sat').forEach(b => { b.tabIndex = ouvert ? 0 : -1; });
 }
 else if(action === 'logout'){ deconnexionVolontaire = true; effacerInstantanes(); sb.auth.signOut({ scope:'local' }); }
+else if(action === 'accueil-recharger'){ if(accueilCache.loading) return; accueilCache.chiffres = null; accueilCache.error = ''; render(); }
 else if(action === 'dash-recharger'){ dashboardCache.error = ''; dashboardCache.items = null; render(); chargerEquipements(); }
 else if(action === 'auth-mode'){ state.authMode = t.dataset.mode; state.authError=''; state.authNotice=''; render(); }
 else if(action === 'toggle-type-form'){ typeForm.open ? (typeForm = { open:false, id:null, nom:'', champs:[], busy:false, error:'' }, render()) : ouvrirTypeForm(null); }
@@ -2390,7 +2436,9 @@ else if(action === 'activite-rafraichir'){ activite.error = ''; chargerActivite(
 else if(action === 'activite-filtre'){ activite.filtre = t.dataset.filtre; render(); }
 else if(action === 'activite-archiver'){ basculerArchiveActivite(t.dataset.cle, t.dataset.archiver === '1'); }
 else if(action === 'activite-tout-archiver'){ archiverToutActivite(); }
-else if(action === 'support-rafraichir'){ reglages.support = null; render(); }
+else if(action === 'support-rafraichir'){ reglages.support = null; reglages.supportError = ''; chargerSupport(true); render(); }
+else if(action === 'support-categorie'){ reglages.supportCategorie = t.dataset.categorie || 'toutes'; render(); }
+else if(action === 'support-filtres-effacer'){ reglages.supportRecherche = ''; reglages.supportCategorie = 'toutes'; render(); }
 else if(action === 'support-statut'){
 setStatutDemande(t.dataset.id, t.dataset.statut)
 .then(() => {
@@ -2450,7 +2498,17 @@ document.addEventListener('input', (e) => {
 const t = e.target.closest('[data-action]');
 if(!t) return;
 const action = t.dataset.action;
-if(action === 'dash-search'){ dashboardCache.search = t.value; debounce(refreshDashboard); }
+if(action === 'support-recherche'){
+reglages.supportRecherche = t.value;
+const debut = t.selectionStart, fin = t.selectionEnd;
+debounce(() => {
+if(!document.querySelector('.support-desk')) return;
+render();
+const suivant = document.querySelector('[data-action="support-recherche"]');
+if(suivant){ suivant.focus(); try{ suivant.setSelectionRange(debut,fin); }catch(_){} }
+}, 180);
+}
+else if(action === 'dash-search'){ dashboardCache.search = t.value; debounce(refreshDashboard); }
 else if(action === 'dash-filter-type'){ dashboardCache.typeId = t.value; refreshDashboard(); }
 else if(action === 'dash-archived'){ dashboardCache.showArchived = t.checked; refreshDashboard(); }
 else if(action === 'type-nom'){ typeForm.nom = t.value; }
@@ -2543,7 +2601,16 @@ for(const k of ['nom','adresse','telephone','email','referent','notes','modele']
 
 /* Échap ferme la fenêtre modale. */
 document.addEventListener('keydown', (e) => {
-if(e.key === 'Escape' && modal && !modal.busy) fermerModal();
+const edition = /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName || '') || document.activeElement?.isContentEditable;
+if((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k' && isSuperAdmin() && !edition){
+e.preventDefault();
+const tiroir = document.getElementById('hz-sheet-dialog');
+if(tiroir?.open) fermerCommandesFondateur(); else ouvrirCommandesFondateur();
+}
+else if((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'f' && document.querySelector('[data-action="support-recherche"]')){
+e.preventDefault(); document.querySelector('[data-action="support-recherche"]')?.focus();
+}
+else if(e.key === 'Escape' && modal && !modal.busy) fermerModal();
 else if(e.key === 'Escape' && equipDetail.photoOuverte){ equipDetail.photoOuverte = null; render(); }
 });
 
