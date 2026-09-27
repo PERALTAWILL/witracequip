@@ -65,6 +65,7 @@ border:1px solid var(--border); overflow:hidden;
 .dropdown-fichier{
 display:flex; align-items:center; gap:8px; width:100%; text-align:left; background:none; border:none;
 padding:8px 10px; border-radius:6px; cursor:pointer; color:var(--text); font-size:inherit;
+-webkit-text-size-adjust:100%; text-size-adjust:100%;
 }
 .dropdown-fichier:hover{background:var(--surface-2);}
 .dropdown-fichier.disabled{opacity:.6; cursor:default; pointer-events:none;}

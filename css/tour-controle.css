@@ -42,9 +42,9 @@ body:is([data-role="utilisateur"],[data-role="responsable"],[data-role="admin"],
 body:is([data-role="utilisateur"],[data-role="responsable"],[data-role="admin"],[data-role="fondateur"]) .admin-identity .admin-mark{border:1px solid #dfd0d5;border-radius:11px;background:#f3e9e9;box-shadow:0 3px 12px rgba(77,52,67,.1);}
 body:is([data-role="utilisateur"],[data-role="responsable"],[data-role="admin"],[data-role="fondateur"]) .admin-identity-copy small{color:#805d78;}
 body:is([data-role="utilisateur"],[data-role="responsable"],[data-role="admin"],[data-role="fondateur"]) .badge-role.role-utilisateur,
-body:is([data-role="utilisateur"],[data-role="responsable"],[data-role="admin"],[data-role="fondateur"]) .thumb.role-utilisateur{background:#fbe4d4;color:#9c4c22;border-color:#eec9ae;}
+body:is([data-role="utilisateur"],[data-role="responsable"],[data-role="admin"],[data-role="fondateur"]) .thumb.role-utilisateur{background:#dce8fd;color:#1f4fb8;border-color:#b9d0fa;}
 body:is([data-role="utilisateur"],[data-role="responsable"],[data-role="admin"],[data-role="fondateur"]) .badge-role.role-responsable,
-body:is([data-role="utilisateur"],[data-role="responsable"],[data-role="admin"],[data-role="fondateur"]) .thumb.role-responsable{background:#e8eee5;color:#526a53;border-color:#cedac9;}
+body:is([data-role="utilisateur"],[data-role="responsable"],[data-role="admin"],[data-role="fondateur"]) .thumb.role-responsable{background:#d3f3e7;color:#0b6e54;border-color:#a9e4cd;}
 body:is([data-role="utilisateur"],[data-role="responsable"],[data-role="admin"],[data-role="fondateur"]) .badge-role.role-admin,
 body:is([data-role="utilisateur"],[data-role="responsable"],[data-role="admin"],[data-role="fondateur"]) .badge-role.role-fondateur{background:#f1e4db;color:#795743;border-color:#e2cec0;}
 body:is([data-role="utilisateur"],[data-role="responsable"],[data-role="admin"],[data-role="fondateur"]) .card{border-color:var(--border);border-radius:17px;background:var(--surface);box-shadow:var(--shadow);color:var(--text);}
