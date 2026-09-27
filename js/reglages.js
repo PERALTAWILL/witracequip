@@ -657,17 +657,22 @@ ${acces.some(a => a.profile_id === m.id && a.type_id === t.id) ? 'checked' : ''}
 : `<div class="small muted" style="margin-left:24px;">Aucun type d'équipement chez ce client.</div>`)}
 </div>`;
 
+// Se renommer soi-même se fait déjà depuis le menu du compte (« Modifier mon
+// nom »), présent sur toutes les pages : pas besoin d'un second crayon ici.
+const enRenommage = peutRenommer(m) && reglages.renommage?.id === m.id;
+
 return `
 <div class="member ${coche ? 'cochee' : ''}">
+<div class="membre-head">
 ${verrouille
 ? `<span class="case-vide"></span>`
 : `<input type="checkbox" class="case-sel" data-action="sel-membre" data-id="${m.id}" ${coche ? 'checked' : ''}>`}
 <div class="thumb role-${m.fondateur ? 'fondateur' : esc(m.role)}">${esc(initials(m.full_name))}</div>
 <div class="who">
-${peutRenommer(m) && reglages.renommage?.id === m.id ? renderRenommage() : `
+${enRenommage ? renderRenommage() : `
 <div style="font-weight:650;">
 ${esc(m.full_name || 'Sans nom')}
-${peutRenommer(m) ? `<button class="btn-crayon" data-action="renommer-membre" data-id="${m.id}" title="Modifier le nom et le prénom">✎</button>` : ''}
+${!estMoi && peutRenommer(m) ? `<button class="btn-crayon" data-action="renommer-membre" data-id="${m.id}" title="Modifier le nom et le prénom">✎</button>` : ''}
 ${estMoi ? '<span class="small muted">(vous)</span>' : ''}
 ${m.fondateur ? '<span class="badge badge-neutral">fondateur</span>' : ''}
 ${!m.active ? '<span class="badge badge-off">suspendu</span>' : ''}
@@ -680,21 +685,29 @@ ${email ? esc(email) + ' · ' : ''}membre depuis le ${fmtDate(m.created_at)}
 ${avecClient && m.organizations ? ` · <a href="#/reglages/clients/${m.organization_id}">${esc(m.organizations.nom)}</a>` : ''}
 </div>
 </div>
+</div>
+<div class="membre-role-acces">
+<div class="membre-role-ligne">
 ${verrouille
 ? `<span class="badge badge-role role-${m.fondateur ? 'fondateur' : esc(m.role)}">${esc(m.fondateur ? 'Fondateur' : roleLabel(m.role))}</span>`
 : `<select data-action="member-role" data-id="${m.id}">
 ${ROLES_ASSIGNABLES.map(r => `<option value="${r}" ${r === m.role ? 'selected' : ''}>${esc(roleLabel(r))}</option>`).join('')}
 </select>`}
-${isSuperAdmin() && !estMoi ? `<button class="btn btn-sm btn-mdp" data-action="reset-mdp" data-id="${m.id}" title="Donner un mot de passe provisoire">${iconeNav('key', 15)} Mot de passe</button>
+</div>
+${blocAcces}
+</div>
+${isSuperAdmin() && (!estMoi || !verrouille) ? `
+<div class="membre-actions">
+${!estMoi ? `<button class="btn btn-sm btn-mdp" data-action="reset-mdp" data-id="${m.id}" title="Donner un mot de passe provisoire">${iconeNav('key', 15)} Mot de passe</button>
 <button class="btn btn-sm btn-mdp btn-deco" data-action="liberer-appareil" data-id="${m.id}" title="Téléphone perdu, volé ou remplacé : déconnecter cette personne partout et lui permettre de se reconnecter sur un nouvel appareil">${iconeNav('logout', 15)} Déconnecter</button>` : ''}
-${isSuperAdmin() && !verrouille ? `
+${!verrouille ? `
 <label class="choix-client">
 <span>Client</span>
 <select data-action="deplacer-membre" data-id="${m.id}">
 ${[...(reglages.clients || [])].sort((a, b) => a.nom.localeCompare(b.nom, 'fr')).map(c => `<option value="${c.id}" ${c.id === m.organization_id ? 'selected' : ''}>${esc(c.nom)}${c.est_mon_organisation ? ' (votre entreprise)' : ''}</option>`).join('')}
 </select>
 </label>` : ''}
-${blocAcces}
+</div>` : ''}
 </div>`;
 }
 
@@ -937,7 +950,8 @@ function renderInvite(i, avecClient){
 const typesOrg = (reglages.typesOrgs || []).filter(t => t.organization_id === i.organization_id);
 const orgNom = i.organizations?.nom || '';
 return `
-<div class="member">
+<div class="member member-invite">
+<div class="membre-head">
 <div class="who">
 <div style="font-weight:650;">
 ${esc(i.label || 'Invitation')}
@@ -952,7 +966,10 @@ ${i.role === 'admin' || i.acces_tous_types
 </div>
 ${renderLienInvite(i.token, orgNom)}
 </div>
+</div>
+<div class="membre-actions">
 <button class="btn btn-sm btn-danger" data-action="annuler-invite" data-id="${i.id}">Annuler</button>
+</div>
 </div>`;
 }
 

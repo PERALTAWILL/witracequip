@@ -194,14 +194,25 @@ background:none; color:var(--text-dim); cursor:pointer;
 .pw-toggle:hover{color:var(--text); background:var(--surface-2);}
 .pw-toggle:focus-visible{outline:2px solid var(--primary); outline-offset:1px;}
 
-/* ---- equipe ---- */
-.member{display:flex; align-items:center; gap:10px; padding:12px 0; border-bottom:1px solid var(--border); flex-wrap:wrap;}
-.member:last-child{border-bottom:none;}
-.member .who{flex:1; min-width:150px;}
-.member select{width:auto; min-width:130px; padding:6px 8px;}
+/* ---- equipe : une carte par personne, avec des sections nettes (identité /
+   rôle & accès / actions) au lieu d'une seule ligne qui s'empile en vrac. ---- */
+.member{
+display:flex; flex-direction:column;
+margin:0 0 10px; border:1px solid var(--border); border-radius:12px;
+background:var(--surface); overflow:hidden;
+}
+.member:last-child{margin-bottom:0;}
+.member.cochee{border-color:var(--primary); box-shadow:0 0 0 1px var(--primary);}
+.member-invite{border-style:dashed;}
+.membre-head{display:flex; align-items:flex-start; gap:11px; padding:13px 14px;}
+.membre-head .who{flex:1; min-width:0;}
+.membre-role-acces{display:flex; flex-direction:column; gap:10px; padding:11px 14px; border-top:1px solid var(--border);}
+.membre-role-ligne{display:flex; align-items:center; flex-wrap:wrap; gap:10px;}
+.membre-role-ligne select{width:auto; min-width:130px; padding:6px 8px;}
+.membre-actions{display:flex; flex-wrap:wrap; align-items:center; gap:8px; padding:11px 14px; border-top:1px solid var(--border);}
 /* Cloisonnement par métier : quels types un profil a le droit de voir */
 .acces{
-width:100%; margin-top:2px; padding:10px 12px;
+width:100%; margin-top:0; padding:10px 12px;
 background:var(--surface-2); border:1px solid var(--border); border-radius:8px;
 }
 .acces .case{
@@ -563,7 +574,7 @@ border:1px solid var(--border);
 .ligne-date{flex-shrink:0;}
 .cochee{background:color-mix(in srgb, var(--primary) 6%, transparent);
 margin:0 -18px; padding-left:18px; padding-right:18px;}
-.member.cochee{margin:0; padding-left:8px; padding-right:8px; border-radius:8px;}
+.member.cochee{margin:0 0 10px;}
 .btn-poubelle{color:var(--text-dim); border-radius:7px; padding:6px; display:flex;}
 .btn-poubelle:hover{color:var(--danger); background:var(--danger-bg);}
 @media(max-width:520px){
