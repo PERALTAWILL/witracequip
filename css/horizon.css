@@ -83,13 +83,10 @@ body[data-role="fondateur"] .sidebar-link.active svg{color:#edc786;}
 .hz-priority-focus-text strong{font-size:27px;line-height:1;font-weight:780;letter-spacing:-.03em;}
 .hz-priority-focus-text small{margin-top:4px;font-size:11.5px;font-weight:650;color:#73532e;}
 .hz-priority-focus-go{display:flex;flex:none;color:#a5875f;}
-.hz-priority-links{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;padding-top:12px;border-top:1px solid #d7c8ad;}
-.hz-priority-links button{display:flex;flex-direction:column;align-items:center;gap:6px;padding:10px 4px;border:1px solid #e2d2ac;border-radius:11px;background:rgba(255,255,255,.45);color:#5d4526;font-size:11px;font-weight:680;cursor:pointer;transition:background .15s,border-color .15s;}
-.hz-priority-links button:hover{background:#fff;border-color:#cba872;color:#3c2c15;}
-.hz-priority-links button svg{color:#a3763b;}
+.hz-priority-date{display:flex;align-items:center;justify-content:center;gap:7px;margin-top:12px;padding-top:12px;border-top:1px solid #d7c8ad;color:#73532e;font-size:12px;font-weight:700;letter-spacing:.02em;}
+.hz-priority-date svg{color:#a3763b;}
 @media(max-width:480px){
   .hz-priority-focus-text strong{font-size:23px;}
-  .hz-priority-links button{font-size:10px;padding:9px 3px;}
 }
 .hz-number-pending{display:inline-block;width:35px;height:.75em;vertical-align:middle;border-radius:6px;background:rgba(165,149,121,.27);animation:hz-pulse 1.6s ease-in-out infinite;}
 .hz-section-heading{margin:26px 1px 10px;}

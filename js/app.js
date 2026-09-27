@@ -2735,6 +2735,10 @@ setInterval(() => { if(posteState.mode === 'ordinateur') verifierSession(); }, 1
 document.addEventListener('visibilitychange', () => { if(document.visibilityState === 'visible'){ verifierSession(); if(state.profile && !state.superAdmin) chargerActivite(true); } });
 window.addEventListener('online', () => setTimeout(verifierSession, 1500));
 
+// Tableau de bord Fondateur : la date affichée dans « Votre priorité » se
+// tient à jour toute seule (changement de jour à minuit) sans navigation.
+setInterval(() => { if(isSuperAdmin() && state.route.name === 'accueil') render(); }, 30000);
+
 
 /* ---------------------------------------------------------------------- */
 /* Ordinateur autorisé par le téléphone (v2.17.5, sql/23)                  */

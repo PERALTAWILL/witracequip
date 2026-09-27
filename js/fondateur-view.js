@@ -22,6 +22,15 @@ return valeur === null || valeur === undefined
   : Number.isFinite(Number(valeur)) ? Number(valeur).toLocaleString('fr-FR') : '—';
 }
 
+const JOURS_COURTS_FR = ['Dim','Lun','Mar','Mer','Jeu','Ven','Sam'];
+function dateCourteFondateur(){
+const d = new Date();
+const jj = String(d.getDate()).padStart(2,'0');
+const mm = String(d.getMonth()+1).padStart(2,'0');
+const aa = String(d.getFullYear()).slice(-2);
+return `${JOURS_COURTS_FR[d.getDay()]} ${jj}/${mm}/${aa}`;
+}
+
 function renderTableauFondateur({ prenom = '', organisation = 'WiDIAG MQ', clients = null,
   profilsActifs = null, interventionsMois = null, aTraiter = null,
   clientsErreur = '', autresErreurs = false, horsLigne = false } = {}){
@@ -54,10 +63,8 @@ return `
       <span class="hz-priority-focus-text"><strong>${chiffreFondateur(aTraiter)}</strong><small>Demande${Number(aTraiter) > 1 ? 's' : ''} client${Number(aTraiter) > 1 ? 's' : ''} à traiter</small></span>
       <span class="hz-priority-focus-go" aria-hidden="true">${iconeNav('chevron',17)}</span>
     </button>
-    <div class="hz-priority-links" role="group" aria-label="Accès rapides support">
-      <button type="button" data-action="go" data-path="/reglages/support/rapports">${iconeNav('wrench',17)}<span>Rapports</span></button>
-      <button type="button" data-action="go" data-path="/reglages/support/stats">${iconeNav('chart',17)}<span>Statistiques</span></button>
-      <button type="button" data-action="go" data-path="/reglages/support/modeles">${iconeNav('tag',17)}<span>Modèles</span></button>
+    <div class="hz-priority-date" role="status" aria-label="Date du jour">
+      <span>${iconeNav('calendar',15)}</span><span>${esc(dateCourteFondateur())}</span>
     </div>
   </section>
 
