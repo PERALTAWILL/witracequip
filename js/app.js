@@ -819,7 +819,6 @@ return `
     <button type="button" class="quick-action" data-action="go" data-path="/reglages/equipe"><span class="quick-action-icon">${iconeNav('users',19)}</span><span><strong>Équipe & accès</strong><small>Inviter et gérer les rôles</small></span>${iconeNav('chevron',16)}</button>
     <button type="button" class="quick-action" data-action="go" data-path="/types"><span class="quick-action-icon">${iconeNav('tag',19)}</span><span><strong>Types d’équipement</strong><small>Adapter les fiches à votre activité</small></span>${iconeNav('chevron',16)}</button>
     <button type="button" class="quick-action" data-action="go" data-path="/support/stats"><span class="quick-action-icon">${iconeNav('chart',19)}</span><span><strong>Rapports & statistiques</strong><small>Analyser votre parc</small></span>${iconeNav('chevron',16)}</button>
-    <button type="button" class="quick-action" data-action="ouvrir-scanner"><span class="quick-action-icon">${iconeNav('scan',19)}</span><span><strong>Scanner un équipement</strong><small>Accéder à une fiche en un geste</small></span>${iconeNav('chevron',16)}</button>
   </section>
   ${accueilCache.error ? `<div class="alert alert-error dashboard-error">Les indicateurs n’ont pas pu être chargés. ${esc(accueilCache.error)}</div>` : ''}
   <p class="dashboard-trust">Vos autorisations s’appliquent à chaque action, dans l’interface comme dans la base de données.</p>
@@ -875,7 +874,6 @@ return `
   <div class="dashboard-section-title"><div><span>POUR ALLER PLUS VITE</span><h2>Actions rapides</h2></div><small>Vos outils du quotidien</small></div>
   <section class="dashboard-quick-actions" aria-label="Actions rapides">
     <button type="button" class="quick-action" data-action="go" data-path="/equipements"><span class="quick-action-icon">${iconeNav('box',19)}</span><span><strong>Parcourir le parc</strong><small>Retrouver une fiche équipement</small></span>${iconeNav('chevron',16)}</button>
-    <button type="button" class="quick-action" data-action="ouvrir-scanner"><span class="quick-action-icon">${iconeNav('scan',19)}</span><span><strong>Scanner un QR code</strong><small>Ouvrir une fiche avec la caméra</small></span>${iconeNav('chevron',16)}</button>
     ${peutGererTypes() ? `<button type="button" class="quick-action" data-action="go" data-path="/types"><span class="quick-action-icon">${iconeNav('tag',19)}</span><span><strong>Types d’équipement</strong><small>Gérer les modèles de fiche</small></span>${iconeNav('chevron',16)}</button>` : ''}
     <button type="button" class="quick-action" data-action="go" data-path="/journal"><span class="quick-action-icon">${iconeNav('journal',19)}</span><span><strong>Historique</strong><small>Suivre les opérations du parc</small></span>${iconeNav('chevron',16)}</button>
   </section>
