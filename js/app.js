@@ -805,12 +805,6 @@ return `
         <button type="button" class="btn hero-secondary" data-action="ouvrir-scanner">${iconeNav('scan',17)} Scanner un QR</button>
       </div>
     </div>
-    <div class="hero-stat-card" aria-label="${actifs} équipements actifs">
-      <span class="hero-stat-label">ÉQUIPEMENTS ACTIFS</span>
-      <strong>${actifs}</strong>
-      <span class="hero-stat-caption">dans ${esc(state.orgName || 'votre organisation')}</span>
-      <div class="hero-stat-line" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
-    </div>
     <div class="hero-orbit" aria-hidden="true"><i></i><i></i><i></i><span>W</span></div>
   </section>
 
@@ -868,12 +862,6 @@ return `
         <button type="button" class="btn hero-cta" data-action="go" data-path="/equip-new">${iconeNav('plus',17)} Ajouter un équipement</button>
         <button type="button" class="btn hero-secondary" data-action="ouvrir-scanner">${iconeNav('scan',17)} Scanner un QR</button>
       </div>
-    </div>
-    <div class="hero-stat-card" aria-label="${actifs} équipements actifs">
-      <span class="hero-stat-label">ÉQUIPEMENTS ACTIFS</span>
-      <strong>${actifs}</strong>
-      <span class="hero-stat-caption">dans votre parc</span>
-      <div class="hero-stat-line" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
     </div>
     <div class="hero-orbit" aria-hidden="true"><i></i><i></i><i></i><span>W</span></div>
   </section>
