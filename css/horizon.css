@@ -79,6 +79,29 @@ body[data-role="fondateur"] .sidebar-link.active svg{color:#edc786;}
 .hz-priority-value span{font-size:11px;color:#627174;}
 .hz-priority button{display:flex;align-items:center;justify-content:space-between;width:100%;padding:10px 1px 0;background:transparent;border:0;border-top:1px solid #d7c8ad;color:#73532e;font-weight:750;font-size:12px;text-align:left;cursor:pointer;}
 .hz-priority button:hover{color:#231e19;}
+.hz-priority-dial{padding-bottom:28px;}
+.hz-dial{position:relative;width:104px;height:104px;margin:14px auto 6px;}
+.hz-dial-ring{position:absolute;inset:0;border-radius:50%;background:linear-gradient(155deg,#f3dcad,#c99653);box-shadow:inset 0 3px 7px rgba(120,80,20,.28);}
+.hz-dial-core{position:absolute;top:7px;left:7px;width:90px;height:90px;border-radius:50%;display:flex;flex-direction:column;align-items:center;justify-content:center;border:0;cursor:pointer;background:linear-gradient(160deg,#fffaf0,#f1e0bc);box-shadow:0 6px 16px rgba(120,80,20,.25),inset 0 1px 1px #fff;color:#4a3a1a;transition:transform .15s;}
+.hz-dial-core:active{transform:scale(.94);}
+.hz-dial-core strong{font-size:30px;font-weight:800;line-height:1;}
+.hz-dial-core span{font-size:9.5px;text-transform:uppercase;letter-spacing:.05em;margin-top:3px;color:#7a5a1e;}
+.hz-dial-toggle{position:absolute;bottom:-4px;right:-4px;width:30px;height:30px;border-radius:50%;border:2px solid #fcf7ec;background:#26343b;color:#f3dcad;font-size:14px;line-height:1;display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:3;box-shadow:0 3px 8px rgba(0,0,0,.25);transition:transform .2s,background .2s;}
+.hz-dial-toggle:hover{background:#3a4c55;}
+.hz-dial-sat{position:absolute;top:35px;left:35px;width:34px;height:34px;border-radius:50%;border:0;display:flex;align-items:center;justify-content:center;background:linear-gradient(160deg,#fffaf0,#f1e0bc);color:#7a5a1e;box-shadow:0 4px 9px rgba(120,80,20,.25),inset 0 1px 1px #fff;opacity:0;transform:scale(.3);pointer-events:none;transition:.3s cubic-bezier(.34,1.56,.64,1);cursor:pointer;}
+.hz-dial.open .hz-dial-sat{opacity:1;pointer-events:auto;}
+.hz-dial.open .hz-dial-sat.s1{transform:translate(-58px,20px) scale(1);}
+.hz-dial.open .hz-dial-sat.s2{transform:translate(0,68px) scale(1);}
+.hz-dial.open .hz-dial-sat.s3{transform:translate(58px,20px) scale(1);}
+.hz-dial.open .hz-dial-toggle{background:#4a3a1a;transform:rotate(90deg);}
+@media(max-width:480px){
+  .hz-dial{width:92px;height:92px;}
+  .hz-dial-core{width:80px;height:80px;top:6px;left:6px;}
+  .hz-dial-core strong{font-size:26px;}
+  .hz-dial.open .hz-dial-sat.s1{transform:translate(-50px,18px) scale(1);}
+  .hz-dial.open .hz-dial-sat.s2{transform:translate(0,60px) scale(1);}
+  .hz-dial.open .hz-dial-sat.s3{transform:translate(50px,18px) scale(1);}
+}
 .hz-number-pending{display:inline-block;width:35px;height:.75em;vertical-align:middle;border-radius:6px;background:rgba(165,149,121,.27);animation:hz-pulse 1.6s ease-in-out infinite;}
 .hz-section-heading{margin:26px 1px 10px;}
 .hz-section-heading>span,.hz-client-action-title>span,.hz-tools-label{color:#e5bd80;font-size:10px;font-weight:820;letter-spacing:.14em;}

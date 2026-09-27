@@ -2326,6 +2326,12 @@ chargerClients(true); chargerMembres(true); chargerSupport(true);
 render();
 }
 else if(action === 'toggle-menu'){ e.stopPropagation(); document.getElementById('user-dropdown')?.classList.toggle('open'); }
+else if(action === 'toggle-dial'){
+e.stopPropagation();
+const dial = t.closest('.hz-dial');
+const ouvert = dial?.classList.toggle('open');
+t.setAttribute('aria-expanded', ouvert ? 'true' : 'false');
+}
 else if(action === 'logout'){ deconnexionVolontaire = true; effacerInstantanes(); sb.auth.signOut({ scope:'local' }); }
 else if(action === 'dash-recharger'){ dashboardCache.error = ''; dashboardCache.items = null; render(); chargerEquipements(); }
 else if(action === 'auth-mode'){ state.authMode = t.dataset.mode; state.authError=''; state.authNotice=''; render(); }
@@ -2516,6 +2522,7 @@ else if(action === 'submit-renommer') submitRenommage(t);
 
 document.addEventListener('click', (e) => {
 if(!e.target.closest('.user-menu')) closeMenus();
+if(!e.target.closest('.hz-dial')) document.querySelectorAll('.hz-dial.open').forEach(d => d.classList.remove('open'));
 });
 function closeMenus(){ document.getElementById('user-dropdown')?.classList.remove('open'); }
 

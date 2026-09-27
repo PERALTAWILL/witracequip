@@ -42,10 +42,18 @@ return `
   ${probleme ? `<div class="alert alert-info hz-data-alert" role="status">Certaines données ne sont pas disponibles actuellement.
     <button type="button" data-action="fondateur-recharger">Réessayer ${iconeNav('undo', 15)}</button></div>` : ''}
 
-  <section class="hz-priority" aria-label="Demandes prioritaires du support">
+  <section class="hz-priority hz-priority-dial" aria-label="Support">
     <div class="hz-priority-kicker"><span>✦ &nbsp; VOTRE PRIORITÉ</span><span class="hz-priority-dot" aria-hidden="true"></span></div>
-    <div class="hz-priority-value"><strong>${chiffreFondateur(aTraiter)}</strong><div><b>Demandes clients</b><span>${aTraiter === 0 ? 'Tout est traité' : 'En attente de traitement'}</span></div></div>
-    <button type="button" data-action="go" data-path="/reglages/support">Ouvrir le support ${iconeNav('chevron', 17)}</button>
+    <div class="hz-dial" role="group" aria-label="Support">
+      <span class="hz-dial-ring" aria-hidden="true"></span>
+      <button type="button" class="hz-dial-core" data-action="go" data-path="/reglages/support" title="Ouvrir les demandes clients">
+        <strong>${chiffreFondateur(aTraiter)}</strong><span>Demandes</span>
+      </button>
+      <button type="button" class="hz-dial-toggle" data-action="toggle-dial" aria-haspopup="true" aria-expanded="false" aria-label="Autres outils du support">⋯</button>
+      <button type="button" class="hz-dial-sat s1" data-action="go" data-path="/reglages/support/rapports" title="Rapports d'intervention">${iconeNav('wrench',18)}</button>
+      <button type="button" class="hz-dial-sat s2" data-action="go" data-path="/reglages/support/stats" title="Statistiques & export">${iconeNav('chart',18)}</button>
+      <button type="button" class="hz-dial-sat s3" data-action="go" data-path="/reglages/support/modeles" title="Modèles métier">${iconeNav('tag',18)}</button>
+    </div>
   </section>
 
   <div class="hz-section-heading"><span>EN UN REGARD</span><h2>Vue globale</h2></div>
