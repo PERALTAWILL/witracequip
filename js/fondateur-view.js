@@ -45,17 +45,20 @@ return `
   ${probleme ? `<div class="alert alert-info hz-data-alert" role="status">Certaines données ne sont pas disponibles actuellement.
     <button type="button" data-action="fondateur-recharger">Réessayer ${iconeNav('undo', 15)}</button></div>` : ''}
 
-  <section class="hz-priority hz-priority-dial" aria-label="Support">
-    <div class="hz-priority-kicker"><span>✦ &nbsp; VOTRE PRIORITÉ</span><span class="hz-priority-dot" aria-hidden="true"></span></div>
-    <div class="hz-dial" role="group" aria-label="Support">
-      <span class="hz-dial-ring" aria-hidden="true"></span>
-      <button type="button" class="hz-dial-core" data-action="go" data-path="/reglages/support" title="Ouvrir les demandes clients" aria-label="Ouvrir les demandes clients et demandes à traiter">
-        <strong>${chiffreFondateur(aTraiter)}</strong><span>Demandes</span>
-      </button>
-      <button type="button" class="hz-dial-toggle" data-action="toggle-dial" aria-haspopup="true" aria-expanded="false" aria-label="Afficher ou masquer les outils satellites du support">⋯</button>
-      <button type="button" tabindex="-1" class="hz-dial-sat s1" data-action="go" data-path="/reglages/support/rapports" title="Rapports d'intervention" aria-label="Ouvrir les rapports d’intervention">${iconeNav('wrench',18)}</button>
-      <button type="button" tabindex="-1" class="hz-dial-sat s2" data-action="go" data-path="/reglages/support/stats" title="Statistiques & export" aria-label="Ouvrir les statistiques et l’export">${iconeNav('chart',18)}</button>
-      <button type="button" tabindex="-1" class="hz-dial-sat s3" data-action="go" data-path="/reglages/support/modeles" title="Modèles métier" aria-label="Ouvrir les modèles métier">${iconeNav('tag',18)}</button>
+  <section class="hz-priority hz-priority-support" aria-label="Support">
+    <div class="hz-priority-kicker">
+      <span>✦ &nbsp; VOTRE PRIORITÉ</span>
+      <button type="button" class="hz-priority-launch" data-action="fondateur-commandes" aria-haspopup="dialog" aria-expanded="false" aria-label="Ouvrir votre espace de travail" title="Votre espace de travail">${iconeNav('grid',15)}</button>
+    </div>
+    <button type="button" class="hz-priority-focus" data-action="go" data-path="/reglages/support" aria-label="Ouvrir les demandes clients et demandes à traiter">
+      <span class="hz-priority-focus-icon">${iconeNav('inbox',21)}</span>
+      <span class="hz-priority-focus-text"><strong>${chiffreFondateur(aTraiter)}</strong><small>Demande${Number(aTraiter) > 1 ? 's' : ''} client${Number(aTraiter) > 1 ? 's' : ''} à traiter</small></span>
+      <span class="hz-priority-focus-go" aria-hidden="true">${iconeNav('chevron',17)}</span>
+    </button>
+    <div class="hz-priority-links" role="group" aria-label="Accès rapides support">
+      <button type="button" data-action="go" data-path="/reglages/support/rapports">${iconeNav('wrench',17)}<span>Rapports</span></button>
+      <button type="button" data-action="go" data-path="/reglages/support/stats">${iconeNav('chart',17)}<span>Statistiques</span></button>
+      <button type="button" data-action="go" data-path="/reglages/support/modeles">${iconeNav('tag',17)}<span>Modèles</span></button>
     </div>
   </section>
 

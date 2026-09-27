@@ -624,7 +624,6 @@ ${sa ? '' : `<button data-action="go" data-path="/support">${iconeNav('help', 15
 </div>
 <main>${renderBandeauOrdi()}${sa && (state.horsLigne || !navigator.onLine) ? `<div class="hz-offline-banner" role="status">${iconeNav('clock',16)} Hors connexion : les données peuvent être anciennes. L’administration exige le réseau.</div>` : ''}${content}${sa ? `<div class="founder-footer">WiTracEQUIP <span>✦</span> ESPACE FONDATEUR <span>·</span> by WiDIAG MQ</div>` : isAdmin() ? `<div class="admin-footer"><span>WiTracEQUIP</span><span>·</span> ESPACE ADMINISTRATION <span>·</span> ${esc(state.orgName || '')}</div>` : piedSupport()}</main>
 </div>
-${sa ? boutonCommandesFondateur(null, true) : ''}
 ${renderModal()}
 ${sa && scannerState.ouvert ? renderScannerOverlay() : ''}
 
@@ -2370,12 +2369,11 @@ chargerClients(true); chargerMembres(true); chargerSupport(true);
 render();
 }
 else if(action === 'toggle-menu'){ e.stopPropagation(); document.getElementById('user-dropdown')?.classList.toggle('open'); }
-else if(action === 'toggle-dial'){
+else if(action === 'toggle-sous-menu'){
 e.stopPropagation();
-const dial = t.closest('.hz-dial');
-const ouvert = dial?.classList.toggle('open');
+const wrap = t.closest('.sous-menu-drop');
+const ouvert = wrap?.classList.toggle('open');
 t.setAttribute('aria-expanded', ouvert ? 'true' : 'false');
-dial?.querySelectorAll('.hz-dial-sat').forEach(b => { b.tabIndex = ouvert ? 0 : -1; });
 }
 else if(action === 'logout'){ deconnexionVolontaire = true; effacerInstantanes(); sb.auth.signOut({ scope:'local' }); }
 else if(action === 'accueil-recharger'){ if(accueilCache.loading) return; accueilCache.chiffres = null; accueilCache.error = ''; render(); }
@@ -2580,7 +2578,7 @@ else if(action === 'submit-renommer') submitRenommage(t);
 
 document.addEventListener('click', (e) => {
 if(!e.target.closest('.user-menu')) closeMenus();
-if(!e.target.closest('.hz-dial')) document.querySelectorAll('.hz-dial.open').forEach(d => d.classList.remove('open'));
+if(!e.target.closest('.sous-menu-drop')) document.querySelectorAll('.sous-menu-drop.open').forEach(d => d.classList.remove('open'));
 });
 function closeMenus(){ document.getElementById('user-dropdown')?.classList.remove('open'); }
 

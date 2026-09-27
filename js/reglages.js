@@ -1446,12 +1446,29 @@ let modeleEdit = null; // { nouveau, cle, nom, description, types:[{nom, champs:
 function sousMenuSupport(actif){
 const aTraiter = (reglages.support || []).filter(d => d.statut !== 'traite').length;
 const nb = (state.modeles || []).length;
+const items = [
+{ cle:'demandes', icone:'inbox', label:'Demandes clients', path:'/reglages/support', badge: aTraiter || null, alerte:true },
+{ cle:'rapports', icone:'wrench', label:"Rapport d'intervention", path:'/reglages/support/rapports' },
+{ cle:'stats', icone:'chart', label:'Statistiques & export', path:'/reglages/support/stats' },
+{ cle:'modeles', icone:'tag', label:'Modèles métier', path:'/reglages/support/modeles', badge: nb || null },
+];
+const courant = items.find(i => i.cle === actif) || items[0];
 return `
-<div class="sous-menu" role="tablist">
-<button class="${actif === 'demandes' ? 'active' : ''}" data-action="go" data-path="/reglages/support">${iconeNav('inbox', 16)} Demandes clients ${aTraiter ? `<span class="onglet-compteur alerte">${aTraiter}</span>` : ''}</button>
-<button class="${actif === 'rapports' ? 'active' : ''}" data-action="go" data-path="/reglages/support/rapports">${iconeNav('wrench', 16)} Rapport d'intervention</button>
-<button class="${actif === 'stats' ? 'active' : ''}" data-action="go" data-path="/reglages/support/stats">${iconeNav('chart', 16)} Statistiques &amp; export</button>
-<button class="${actif === 'modeles' ? 'active' : ''}" data-action="go" data-path="/reglages/support/modeles">${iconeNav('tag', 16)} Modèles métier <span class="onglet-compteur">${nb}</span></button>
+<div class="sous-menu-drop">
+<button type="button" class="sous-menu-trigger" data-action="toggle-sous-menu" aria-haspopup="listbox" aria-expanded="false">
+<span class="sous-menu-trigger-icon">${iconeNav(courant.icone, 16)}</span>
+<span class="sous-menu-trigger-label">${esc(courant.label)}</span>
+${courant.badge ? `<span class="onglet-compteur ${courant.alerte ? 'alerte' : ''}">${courant.badge}</span>` : ''}
+<span class="sous-menu-trigger-chevron">${iconeNav('chevron', 15)}</span>
+</button>
+<div class="sous-menu-panel" role="listbox">
+${items.map(i => `<button type="button" class="sous-menu-option ${i.cle === actif ? 'active' : ''}" role="option" aria-selected="${i.cle === actif}" data-action="go" data-path="${i.path}">
+<span class="sous-menu-option-icon">${iconeNav(i.icone, 16)}</span>
+<span class="sous-menu-option-label">${esc(i.label)}</span>
+${i.badge ? `<span class="onglet-compteur ${i.alerte ? 'alerte' : ''}">${i.badge}</span>` : ''}
+${i.cle === actif ? iconeNav('check', 15) : ''}
+</button>`).join('')}
+</div>
 </div>`;
 }
 
