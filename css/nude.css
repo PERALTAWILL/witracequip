@@ -31,9 +31,9 @@ body:not([data-role="fondateur"]){
   background:var(--bg-glow) fixed,var(--bg);
 }
 body[data-role="utilisateur"]{
-  --primary:#966e5c;--primary-dim:#765342;--primary-contrast:#fffaf7;
-  --sidebar-bg:#fbf8f4;--sidebar-active:#f2e7df;
-  --role-wash:#f1e3d9;--role-ink:#805943;
+  --primary:#c1622f;--primary-dim:#9c4c22;--primary-contrast:#fff9f5;
+  --sidebar-bg:#fdf7f4;--sidebar-active:#f5ded0;
+  --role-wash:#f6ddce;--role-ink:#9c4c22;
 }
 body[data-role="responsable"]{
   --primary:#637965;--primary-dim:#4a614d;--primary-contrast:#fff;
@@ -92,7 +92,7 @@ body[data-role="responsable"] main{max-width:1160px;padding:26px clamp(18px,3vw,
 /* Topbar identity and role markers */
 body[data-role="admin"] .avatar{background:linear-gradient(145deg,#a27f97,#704d70);color:#fff;border:1px solid #8e6c85;box-shadow:0 0 0 3px rgba(121,89,111,.10);}
 body[data-role="utilisateur"] .badge-role.role-utilisateur,
-body[data-role="utilisateur"] .thumb.role-utilisateur{background:#f1e4db;color:#795743;border-color:#e2cec0;}
+body[data-role="utilisateur"] .thumb.role-utilisateur{background:#fbe4d4;color:#9c4c22;border-color:#eec9ae;}
 body[data-role="responsable"] .badge-role.role-responsable,
 body[data-role="responsable"] .thumb.role-responsable{background:#e8eee5;color:#526a53;border-color:#cedac9;}
 body[data-role="admin"] .badge-role.role-admin,
