@@ -26,7 +26,6 @@ function renderTableauFondateur({ prenom = '', organisation = 'WiDIAG MQ', clien
   profilsActifs = null, interventionsMois = null, aTraiter = null,
   clientsErreur = '', autresErreurs = false, horsLigne = false } = {}){
 const liste = Array.isArray(clients) ? clients.filter(c => !c.est_mon_organisation) : null;
-const recents = liste ? [...liste].sort((a,b) => (b.created_at || '').localeCompare(a.created_at || '')).slice(0,3) : [];
 const heure = new Date().getHours();
 const salut = heure < 5 || heure >= 18 ? 'Bonsoir' : 'Bonjour';
 const probleme = !!(clientsErreur || autresErreurs);
@@ -79,14 +78,11 @@ return `
     <button type="button" data-action="go" data-path="/reglages/profils"><span>${iconeNav('users',20)}</span><strong>Profils & accès</strong>${iconeNav('chevron',16)}</button>
     <button type="button" data-action="go" data-path="/reglages/journal"><span>${iconeNav('journal',20)}</span><strong>Journal d’activité</strong>${iconeNav('chevron',16)}</button>
   </div>
-  ${clientsErreur ? '' : liste === null ? '<div class="hz-recent hz-recent-loading" aria-label="Clients en cours de chargement">Chargement des clients…</div>'
-    : recents.length ? `<div class="hz-recent-list" aria-label="Clients récents">${recents.map(c => `
-      <button type="button" class="hz-recent" data-action="go" data-path="/reglages/clients/${esc(c.id)}">
-        <span class="hz-recent-avatar">${esc(initials(c.nom))}</span>
-        <span><strong>${esc(c.nom)}</strong><small>N° ${esc(c.code_client || '—')} · ${chiffreFondateur(c.nb_equipements ?? 0)} équipements</small></span>
-        ${iconeNav('chevron',15)}
-      </button>`).join('')}</div>`
-    : '<div class="hz-recent hz-recent-loading">Aucun client dans le portefeuille.</div>'}
+  <button type="button" class="hz-scan-card" data-action="ouvrir-scanner" aria-label="Scanner un QR code pour ouvrir directement une fiche équipement">
+    <span class="hz-scan-frame" aria-hidden="true"><i></i><i></i><i></i><i></i>${iconeNav('scan',24)}</span>
+    <span class="hz-scan-copy"><strong>Scanner un équipement</strong><small>Ouvrez sa fiche en un geste, caméra directe</small></span>
+    <span class="hz-scan-arrow" aria-hidden="true">${iconeNav('chevron',18)}</span>
+  </button>
 </div>`;
 }
 
@@ -99,18 +95,14 @@ return `<button type="button" class="hz-tool-row" data-action="${action || 'go'}
 function viewOutilsFondateur(){
 return `<div class="hz-tools-page">
   <header class="hz-tools-hero"><span class="hz-overline">LA BIBLIOTHÈQUE DE DIRECTION</span><h1>Votre espace.<br><em>Sans limite.</em></h1><p>Chaque fonction à sa place, toujours accessible.</p><div class="hz-tool-orbit" aria-hidden="true"></div></header>
-  <div class="hz-tools-grid">
-    <section class="hz-tools-group"><div class="hz-tools-label">01 · ÉQUIPES & HISTORIQUE</div>
+  <div class="hz-tools-grid hz-tools-grid-solo">
+    <section class="hz-tools-group"><div class="hz-tools-label">ÉQUIPES & HISTORIQUE</div>
       ${ligneOutilFondateur('users', 'Profils & accès', 'Membres, rôles et appareils', '/reglages/profils')}
       ${ligneOutilFondateur('journal', 'Journal d’activité', 'Historique et traçabilité', '/reglages/journal')}
     </section>
-    <section class="hz-tools-group"><div class="hz-tools-label">02 · ANALYSER & PRÉPARER</div>
-      ${ligneOutilFondateur('wrench', 'Rapports d’intervention', 'Suivi des interventions', '/reglages/support/rapports')}
-      ${ligneOutilFondateur('chart', 'Statistiques & export', 'Vue et export d’un parc', '/reglages/support/stats')}
-      ${ligneOutilFondateur('tag', 'Modèles métier', 'Préparer les types du secteur', '/reglages/support/modeles')}
-    </section>
   </div>
   <div class="hz-tools-scan">${ligneOutilFondateur('scan','Scanner un QR code','Ouvrir une fiche équipement',null,'ouvrir-scanner')}</div>
+  <p class="hz-tools-note">Rapports, statistiques et modèles métier restent dans le menu déroulant de l’onglet Support.</p>
 </div>`;
 }
 
