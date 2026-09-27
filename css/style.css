@@ -1062,3 +1062,56 @@ padding-bottom:4px; border-bottom:1px solid var(--border);}
 .bandeau-ordi .btn-lien-petit{margin-left:auto;}
 .bandeau-ordi.alerte{background:var(--danger-bg); color:var(--danger); border-color:var(--danger); font-weight:600;}
 .ordi-actif{color:var(--primary); font-weight:600;}
+/* ==========================================================================
+   Correctifs UI - Recherche & Liste Clients
+   ========================================================================== */
+
+/* 1. Zone de recherche globale */
+.search-bar, 
+form input[type="search"],
+.search-input-wrapper {
+    background: transparent !important;
+    border: none !important;
+    outline: none !important;
+    box-shadow: none !important;
+    color: #FFFFFF !important;
+    font-size: 0.95rem;
+    width: 100%;
+}
+
+/* Texte indicatif (placeholder) */
+.search-bar::placeholder,
+input[type="search"]::placeholder {
+    color: rgba(255, 255, 255, 0.6) !important;
+}
+
+/* 2. Titres des cartes clients (Résolution du problème de contraste) */
+.client-card h3,
+.client-card .title,
+.client-name,
+div[class*="client"] strong {
+    color: #FFFFFF !important; /* Rend le texte parfaitement visible */
+    font-weight: 600;
+}
+
+/* Sous-titres (Numéro & Équipements) */
+.client-card p,
+.client-card .subtitle,
+.client-details {
+    color: rgba(255, 255, 255, 0.65) !important;
+}
+
+/* 3. Champ de tri / Filtre */
+select, 
+.filter-select {
+    background-color: rgba(255, 255, 255, 0.08) !important;
+    border: 1px solid rgba(255, 255, 255, 0.15) !important;
+    color: #FFFFFF !important;
+    border-radius: 10px !important;
+    padding: 8px 12px;
+}
+
+select option {
+    background-color: #121f28 !important; /* Fond sombre pour la liste déroulante */
+    color: #FFFFFF !important;
+}
