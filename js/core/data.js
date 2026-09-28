@@ -18,6 +18,21 @@ state.profile = profile;
 }
 const { data: org } = await sb.from('organizations').select('nom').eq('id', state.profile.organization_id).maybeSingle();
 state.orgName = org?.nom || '';
+// Thème de couleur : lu à part pour que la connexion ne dépende jamais de la colonne
+// (tant que le script SQL 10-theme n'est pas passé, tout continue de marcher en local).
+try{ await synchroniserTheme(); }catch(e){}
+}
+
+/* --- Thème de couleur : mémorisé dans le profil pour suivre la personne --- */
+async function lireThemeProfil(id){
+const { data, error } = await sb.from('profiles').select('theme').eq('id', id).maybeSingle();
+if(error) return { ok:false, theme:null };
+return { ok:true, theme: data?.theme || null };
+}
+
+async function ecrireThemeProfil(id, theme){
+const { error } = await sb.from('profiles').update({ theme }).eq('id', id);
+if(error) throw error;
 }
 
 async function loadTypes(force){
@@ -142,6 +157,18 @@ const { error } = await sb.storage.from(BUCKET_AVATARS).upload(chemin, blob, { c
 if(error) throw error;
 const { data } = sb.storage.from(BUCKET_AVATARS).getPublicUrl(chemin);
 return data?.publicUrl || null;
+}
+
+/* Supprime le fichier de l'ancienne photo. Silencieux en cas d'échec : la
+photo n'est déjà plus rattachée au profil, un fichier orphelin est sans gravité. */
+async function supprimerFichierAvatar(url){
+try{
+const marque = `/${BUCKET_AVATARS}/`;
+const i = String(url || '').indexOf(marque);
+if(i === -1) return;
+const chemin = decodeURIComponent(String(url).slice(i + marque.length).split('?')[0]);
+await sb.storage.from(BUCKET_AVATARS).remove([chemin]);
+}catch(e){}
 }
 
 async function definirAvatar(id, url){

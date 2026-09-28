@@ -45,6 +45,7 @@ function peindre(){
 const app = document.getElementById('app');
 if(!state.session || !isSuperAdmin()) fermerCommandesFondateur();
 document.body.dataset.role = state.route.name === 'p' ? '' : roleTheme();
+appliquerTheme();
 if(state.loading){
 app.innerHTML = `<div class="center-screen demarrage"><img src="${LOGO_DATA_URL}" alt=""><div class="spinner"></div></div>`;
 return;
@@ -522,6 +523,62 @@ reglages.journal = null;
 await confirmer(`Mot de passe réinitialisé\n\nTransmettez à ${m.full_name || 'la personne'} :\n${email ? 'Identifiant : ' + email + '\n' : ''}Mot de passe provisoire : ${mdp}\n\n${copie ? 'Le mot de passe est copié : vous pouvez le coller dans un SMS ou un mail.' : ''} Il lui sera demandé d'en choisir un nouveau à la connexion.`, { ok:'Compris', danger:false, info:true });
 }
 
+/* --- Thème de couleur (menu du compte) ------------------------------- */
+/* Chaque personne choisit sa couleur. Le choix est gardé sur l'appareil (par compte,
+pour un affichage immédiat, même hors ligne) et enregistré dans le profil pour la
+retrouver sur un autre appareil. */
+const THEMES = [
+{ id:'argile',     nom:'Argile',      dot:'#987061' },
+{ id:'saumon',     nom:'Rose saumon', dot:'#d0685c' },
+{ id:'bleu-nuit',  nom:'Bleu nuit',   dot:'#2f4a7c' },
+{ id:'violet',     nom:'Violet',      dot:'#6a479d' },
+{ id:'bordeaux',   nom:'Bordeaux',    dot:'#8a304a' },
+{ id:'vert-fonce', nom:'Vert foncé',  dot:'#2f6b4a' }
+];
+function cleTheme(){ return 'wte-theme:' + (state.profile?.id || state.session?.user?.id || ''); }
+function themeValide(id){ return THEMES.some(t => t.id === id); }
+function themeLocal(){
+try{ const id = localStorage.getItem(cleTheme()) || ''; return themeValide(id) ? id : ''; }catch(e){ return ''; }
+}
+function themeActuel(){ return themeLocal() || (themeValide(state.profile?.theme) ? state.profile.theme : 'argile'); }
+
+/* Au chargement du profil : le thème enregistré côté serveur fait foi (il suit la
+personne d'un appareil à l'autre) ; s'il n'y en a pas encore, on y envoie celui de cet appareil. */
+async function synchroniserTheme(){
+const id = state.profile?.id; if(!id) return;
+const r = await lireThemeProfil(id);
+if(!r.ok) return; // colonne absente ou lecture refusée : on reste sur le choix local
+if(themeValide(r.theme)){
+state.profile.theme = r.theme;
+try{ localStorage.setItem(cleTheme(), r.theme); }catch(e){}
+} else {
+const local = themeLocal();
+if(local && local !== 'argile'){ state.profile.theme = local; ecrireThemeProfil(id, local).catch(() => {}); }
+}
+}
+function appliquerTheme(){
+// Seulement une fois connecté : l'écran de connexion et les pages publiques gardent la palette d'origine.
+if(state.session && state.profile && state.route.name !== 'p') document.body.dataset.theme = themeActuel();
+else delete document.body.dataset.theme;
+}
+function choisirTheme(id){
+if(!themeValide(id)) return;
+try{ localStorage.setItem(cleTheme(), id); }catch(e){}
+if(state.profile){
+state.profile.theme = id;
+// Enregistré dans le profil sans bloquer : hors ligne ou colonne absente, le choix local suffit.
+ecrireThemeProfil(state.profile.id, id).catch(() => {});
+}
+appliquerTheme();
+// Le menu reste ouvert : on met simplement la coche à jour.
+document.querySelectorAll('#user-dropdown .theme-dot').forEach(b => {
+const on = b.dataset.theme === id;
+b.classList.toggle('actif', on); b.setAttribute('aria-pressed', on ? 'true' : 'false');
+});
+const nom = document.querySelector('#user-dropdown .theme-nom');
+if(nom) nom.textContent = THEMES.find(t => t.id === id).nom;
+}
+
 /* --- Photo de profil (menu du compte) -------------------------------- */
 let monAvatarBusy = false;
 
@@ -554,6 +611,23 @@ state.profile.avatar_url = url;
 const m = (reglages.membres || []).find(x => x.id === state.profile.id);
 if(m) m.avatar_url = url;
 toast('Photo de profil mise à jour');
+}catch(e){ toast('Erreur : ' + (e.message || e), 'erreur'); }
+finally{ monAvatarBusy = false; render(); }
+}
+
+async function supprimerMaPhoto(){
+closeMenus();
+const url = state.profile?.avatar_url;
+if(!url) return;
+if(!await confirmer('Supprimer ma photo de profil ?\n\nVos initiales seront affichées à la place. Vous pourrez en ajouter une nouvelle à tout moment.', { danger:true, ok:'Supprimer' })) return;
+monAvatarBusy = true; render();
+try{
+await definirAvatar(state.profile.id, null);
+state.profile.avatar_url = null;
+const m = (reglages.membres || []).find(x => x.id === state.profile.id);
+if(m) m.avatar_url = null;
+supprimerFichierAvatar(url); // ménage du stockage, sans bloquer si refusé
+toast('Photo de profil supprimée');
 }catch(e){ toast('Erreur : ' + (e.message || e), 'erreur'); }
 finally{ monAvatarBusy = false; render(); }
 }
@@ -646,9 +720,12 @@ ${state.enAttenteCount > 0 ? `<span class="badge-attente" title="${state.enAtten
 </button>
 <div class="dropdown" id="user-dropdown">
 <div class="dropdown-entete">
+<div class="avatar-grand">${state.profile?.avatar_url ? `<img src="${esc(state.profile.avatar_url)}" alt="">` : esc(initials(state.profile?.full_name || state.session.user.email))}</div>
+<div class="dropdown-entete-txt">
 <div class="dropdown-nom">${esc(state.profile?.full_name || 'Sans nom')}</div>
 <div class="small muted">${esc(state.session.user.email)}</div>
 <div style="margin-top:6px;"><span class="badge badge-role role-${roleTheme()}">${esc(libelleRoleTheme())}</span></div>
+</div>
 </div>
 <button data-action="renommer-moi">${iconeNav('pencil', 15)} Modifier mon nom</button>
 <label class="dropdown-fichier ${monAvatarBusy ? 'disabled' : ''}">
@@ -656,6 +733,14 @@ ${state.enAttenteCount > 0 ? `<span class="badge-attente" title="${state.enAtten
 ${monAvatarBusy ? 'Envoi en cours…' : 'Modifier ma photo de profil'}
 <input type="file" accept="image/*" data-action="avatar-photo" hidden ${monAvatarBusy ? 'disabled' : ''}>
 </label>
+${state.profile?.avatar_url ? `<button data-action="avatar-supprimer" ${monAvatarBusy ? 'disabled' : ''}>${iconeNav('trash', 15)} Supprimer ma photo de profil</button>` : ''}
+<div class="theme-bloc">
+<div class="theme-titre">${iconeNav('palette', 15)} Couleur du thème</div>
+<div class="theme-picker" role="group" aria-label="Couleur du thème">
+${THEMES.map(t => `<button type="button" class="theme-dot ${t.id === themeActuel() ? 'actif' : ''}" style="--dot:${t.dot};" data-action="theme-choisir" data-theme="${t.id}" title="${esc(t.nom)}" aria-label="${esc(t.nom)}" aria-pressed="${t.id === themeActuel()}"></button>`).join('')}
+</div>
+<div class="theme-nom">${esc(THEMES.find(t => t.id === themeActuel()).nom)}</div>
+</div>
 <button data-action="changer-mdp">${iconeNav('key', 15)} Modifier mon mot de passe</button>
 ${!sa && posteState.mode === 'mobile' ? `<button data-action="ouvrir-sur-ordi">${iconeNav('monitor', 15)} Ouvrir sur un ordinateur</button>` : ''}
 ${sa ? '' : `<button data-action="go" data-path="/support">${iconeNav('help', 15)} Support & réclamations</button>`}
@@ -2477,6 +2562,8 @@ render();
 else if(action === 'support-supprimer'){ actionSupprimerDemande(t.dataset.id); }
 else if(action === 'renommer-membre'){ ouvrirRenommage(t.dataset.id); }
 else if(action === 'renommer-moi'){ renommerMoi(); }
+else if(action === 'avatar-supprimer'){ supprimerMaPhoto(); }
+else if(action === 'theme-choisir'){ choisirTheme(t.dataset.theme); }
 else if(action === 'changer-mdp'){ closeMenus(); changerMonMotDePasse(); }
 else if(action === 'reset-mdp'){ reinitialiserMdpMembre(t.dataset.id); }
 else if(action === 'liberer-appareil'){ actionLibererAppareil(t.dataset.id); }

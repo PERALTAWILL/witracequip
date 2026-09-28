@@ -64,7 +64,8 @@ border:1px solid var(--border); overflow:hidden;
 .avatar img, .member .thumb img{width:100%; height:100%; object-fit:cover; border-radius:inherit; display:block;}
 .dropdown-fichier{
 display:flex; align-items:center; gap:8px; width:100%; text-align:left; background:none; border:none;
-padding:8px 10px; border-radius:6px; cursor:pointer; color:var(--text); font-size:inherit;
+padding:8px 10px; border-radius:6px; cursor:pointer; color:var(--text);
+margin:0; font-size:inherit; font-weight:inherit; text-transform:none; letter-spacing:normal; line-height:inherit;
 -webkit-text-size-adjust:100%; text-size-adjust:100%;
 }
 .dropdown-fichier:hover{background:var(--surface-2);}
@@ -865,8 +866,21 @@ body[data-role="admin"]{--primary:#a78bfa; --primary-dim:#8b5cf6; --primary-cont
 .dropdown{min-width:240px;}
 .dropdown-entete{padding:10px 10px 12px; border-bottom:1px solid var(--border); margin-bottom:6px;}
 .dropdown-nom{font-weight:700; font-size:14.5px;}
-.dropdown button{display:flex; align-items:center; gap:8px;}
+.dropdown button, .dropdown .dropdown-fichier{display:flex; align-items:center; gap:8px; font-size:14.5px; font-weight:500; line-height:1.3; text-transform:none; letter-spacing:normal; color:var(--text);}
 .dropdown .dropdown-sortie{color:var(--danger);}
+.dropdown-entete{display:flex; align-items:center; gap:12px;}
+.dropdown-entete-txt{min-width:0; flex:1;}
+.dropdown-entete-txt .small{overflow:hidden; text-overflow:ellipsis;}
+.avatar-grand{
+width:64px; height:64px; flex:none; border-radius:50%; overflow:hidden;
+display:flex; align-items:center; justify-content:center; font-size:22px; font-weight:700;
+background:var(--surface-2); border:2px solid var(--border);
+}
+.avatar-grand img{width:100%; height:100%; object-fit:cover; display:block;}
+/* Pastille de la barre du haut : assez grande pour reconnaître la photo au téléphone */
+.user-btn .avatar{width:36px; height:36px; font-size:13px;}
+.user-btn{padding:4px 10px 4px 4px;}
+@media(max-width:640px){ .user-btn{padding:3px;} .user-btn .avatar{width:40px; height:40px; font-size:14px;} .dropdown{min-width:min(280px, calc(100vw - 24px));} .avatar-grand{width:72px; height:72px; font-size:26px;} }
 .nav-badge{
 margin-left:auto; min-width:20px; padding:1px 6px; border-radius:999px; text-align:center;
 font-size:11px; font-weight:800; background:var(--danger); color:#fff; line-height:1.5;
