@@ -329,7 +329,7 @@ return `
 <img src="${LOGO_DATA_URL}" alt="">
 <div>
 <div class="nom">WiTracEQUIP</div>
-<div class="by">Le Passeport numérique de vos équipements</div>
+<div class="by">Passeport numérique de vos équipements</div>
 </div>
 ${org ? `<div class="org">${esc(org)}</div>` : ''}
 <button class="pub-connexion" data-action="connexion-depuis-scan">Se connecter</button>
