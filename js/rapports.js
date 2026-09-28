@@ -7,6 +7,9 @@
    « rapports-intervention ». Tout est réservé au super-administrateur : la
    base le vérifie elle-même (RLS).
 
+   v2.17.11 — mise en page du PDF : identité WiTracEQUIP, sections structurées,
+   pagination soignée, signature et documents associés.
+
    v2.17.8 — refonte des actions sur un rapport :
    - Modifier : champs, signature (remplaçable) et documents (ajout / retrait)
    - Archiver / Restaurer, avec une vue « Archivés »
@@ -14,7 +17,7 @@
    - Envoyer par e-mail : PDF + documents joints via la feuille de partage du
      téléphone ; sur ordinateur, PDF téléchargé + messagerie ouverte. */
 
-const RP_VERSION = 'v2.17.10';
+const RP_VERSION = 'v2.17.11';
 const BUCKET_RAPPORTS = 'rapports-intervention';
 const RP_TAILLE_MAX = 10 * 1024 * 1024; // 10 Mo par document
 const RP_EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -558,7 +561,8 @@ document.head.appendChild(s);
 });
 }
 
-/* Les polices standard d'un PDF ne connaissent que le Latin-1 : on remplace le reste. */
+/* Les polices standard d'un PDF couvrent le Latin-1 : on normalise les signes
+   typographiques rares sans abîmer les accents français. */
 function rpTxt(s){
 return String(s == null ? '' : s)
 .replace(/\r\n?/g, '\n')
@@ -568,116 +572,423 @@ return String(s == null ? '' : s)
 .replace(/[\u2013\u2014]/g, '-')
 .replace(/\u2026/g, '...')
 .replace(/\u20AC/g, ' EUR')
-.replace(/[\u202F\u2009\u200A]/g, ' ')
+.replace(/\u2192/g, ' -> ')
+.replace(/\u0152/g, 'OE').replace(/\u0153/g, 'oe')
+.replace(/\u00C6/g, 'AE').replace(/\u00E6/g, 'ae')
+.replace(/[\u202F\u2009\u200A\u00A0]/g, ' ')
 .replace(/[^\n\x20-\x7E\u00A0-\u00FF]/g, '?');
+}
+
+/* Palette du passeport numérique : forêt, ivoire et or, comme la vitrine
+   WiTracEQUIP. Elle reste volontairement stable quel que soit le thème écran. */
+const RP_PDF_COULEURS = {
+foret: [5, 47, 41],
+vert: [14, 95, 82],
+or: [232, 161, 58],
+encre: [18, 48, 43],
+muet: [91, 107, 103],
+ligne: [224, 221, 211],
+menthe: [234, 243, 239],
+ivoire: [248, 246, 241],
+ivoireOr: [250, 244, 232],
+blanc: [255, 255, 255],
+};
+let rpLogoPDFPromise = null;
+
+function rpLignesPDF(doc, valeur, largeur){
+const texteBrut = rpTxt(valeur == null ? '' : valeur);
+const texte = texteBrut.trim() ? texteBrut : '-';
+const lignes = [];
+for(const paragraphe of texte.split('\n')){
+if(!paragraphe){ lignes.push(''); continue; }
+const morceaux = doc.splitTextToSize(paragraphe, largeur);
+lignes.push(...(Array.isArray(morceaux) ? morceaux : [morceaux]));
+}
+return lignes.length ? lignes : ['-'];
+}
+
+function rpArrondiPDF(doc, x, y, largeur, hauteur, rayon, style){
+if(typeof doc.roundedRect === 'function') doc.roundedRect(x, y, largeur, hauteur, rayon, rayon, style);
+else doc.rect(x, y, largeur, hauteur, style);
+}
+
+function rpMarquePDF(doc, logo, x, y, taille){
+if(logo){
+try{ doc.addImage(logo, 'PNG', x, y, taille, taille); return; }catch(_){}
+}
+// Repli vectoriel : petit rappel du pictogramme WiTracEQUIP si l'icône
+// n'est pas disponible (export hors ligne, par exemple).
+doc.setFillColor(...RP_PDF_COULEURS.or);
+rpArrondiPDF(doc, x, y, taille, taille, 2.2, 'F');
+doc.setFillColor(...RP_PDF_COULEURS.foret);
+const t = taille * 0.22, marge = taille * 0.2, ecart = taille * 0.12;
+doc.rect(x + marge, y + marge, t, t, 'F');
+doc.rect(x + marge + t + ecart, y + marge, t, t, 'F');
+doc.rect(x + marge, y + marge + t + ecart, t, t, 'F');
+doc.rect(x + marge + t + ecart, y + marge + t + ecart, t, t, 'F');
+}
+
+function rpChargerLogoPDF(){
+if(!rpLogoPDFPromise){
+rpLogoPDFPromise = (async () => {
+try{
+const chemin = typeof LOGO_DATA_URL === 'string' && LOGO_DATA_URL ? LOGO_DATA_URL : 'assets/icons/icon-192.png';
+const reponse = await fetch(new URL(chemin, document.baseURI), { cache: 'force-cache' });
+if(!reponse.ok) throw new Error('logo indisponible');
+return await rpBlobVersDataUrl(await reponse.blob());
+}catch(_){ rpLogoPDFPromise = null; return null; }
+})();
+}
+return rpLogoPDFPromise;
+}
+
+async function rpLireSignaturePDF(chemin){
+if(!chemin) return null;
+try{
+const { data, error } = await sb.storage.from(BUCKET_RAPPORTS).download(chemin);
+if(error) throw error;
+return await rpBlobVersDataUrl(data);
+}catch(_){ return null; }
+}
+
+function rpDessinerEntetePDF(doc, logo, premierePage, date){
+const C = RP_PDF_COULEURS;
+doc.setFillColor(...C.foret);
+doc.rect(0, 0, 210, premierePage ? 47 : 23, 'F');
+doc.setFillColor(...C.or);
+doc.rect(0, premierePage ? 47 : 23, 210, 1.3, 'F');
+
+if(premierePage){
+rpMarquePDF(doc, logo, 18, 8, 13);
+doc.setTextColor(...C.blanc);
+doc.setFont('helvetica', 'bold'); doc.setFontSize(12);
+doc.text('WiTracEQUIP', 35, 14);
+doc.setFont('helvetica', 'normal'); doc.setFontSize(8.2);
+doc.setTextColor(202, 222, 215);
+doc.text('by WiDIAG MQ  ·  Vos équipements ont une histoire. Gardez-en la trace.', 35, 20);
+doc.setFont('helvetica', 'bold'); doc.setFontSize(7.4);
+doc.setTextColor(...C.or);
+doc.text(rpTxt('DOCUMENT DE TRAÇABILITÉ'), 192, 13, { align: 'right' });
+doc.setFont('times', 'bold'); doc.setFontSize(22);
+doc.setTextColor(...C.blanc);
+doc.text("Rapport d'intervention", 18, 37);
+doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5);
+doc.setTextColor(202, 222, 215);
+doc.text('Passeport numérique de vos équipements', 192, 37, { align: 'right' });
+return;
+}
+
+rpMarquePDF(doc, logo, 18, 5.5, 11);
+doc.setTextColor(...C.blanc);
+doc.setFont('helvetica', 'bold'); doc.setFontSize(10.2);
+doc.text('WiTracEQUIP', 32, 11.5);
+doc.setFont('helvetica', 'normal'); doc.setFontSize(7.2);
+doc.setTextColor(202, 222, 215);
+doc.text('by WiDIAG MQ', 32, 17);
+doc.setFont('helvetica', 'bold'); doc.setFontSize(8);
+doc.setTextColor(...C.or);
+doc.text("RAPPORT D'INTERVENTION", 192, 11.5, { align: 'right' });
+doc.setFont('helvetica', 'normal'); doc.setFontSize(7.2);
+doc.setTextColor(202, 222, 215);
+doc.text(rpTxt(date), 192, 17, { align: 'right' });
+}
+
+function rpTitreSectionPDF(doc, y, numero, titre, detail){
+const C = RP_PDF_COULEURS;
+doc.setFillColor(...C.menthe);
+rpArrondiPDF(doc, 18, y, 9, 8, 2, 'F');
+doc.setFont('helvetica', 'bold'); doc.setFontSize(7.2);
+doc.setTextColor(...C.vert);
+doc.text(rpTxt(numero), 22.5, y + 5.4, { align: 'center' });
+doc.setFont('times', 'bold'); doc.setFontSize(13.4);
+doc.setTextColor(...C.encre);
+const titrePDF = rpTxt(titre);
+doc.text(titrePDF, 32, y + 6.2);
+const finDetail = detail ? 192 - doc.getTextWidth(rpTxt(detail)) - 7 : 192;
+const debutLigne = Math.min(192, 32 + doc.getTextWidth(titrePDF) + 5);
+if(finDetail - debutLigne > 5){
+doc.setDrawColor(...C.ligne); doc.setLineWidth(0.25);
+doc.line(debutLigne, y + 4.7, finDetail, y + 4.7);
+}
+if(detail){
+doc.setFont('helvetica', 'bold'); doc.setFontSize(7.1);
+doc.setTextColor(...C.muet);
+doc.text(rpTxt(detail), 192, y + 5.3, { align: 'right' });
+}
+return y + 11;
+}
+
+function rpTaillePDF(o){
+const n = Number(o) || 0;
+if(n <= 0) return '';
+if(n < 1024) return n + ' o';
+if(n < 1048576) return Math.round(n / 1024) + ' Ko';
+return (n / 1048576).toFixed(1).replace('.', ',') + ' Mo';
+}
+
+function rpExtensionPDF(nom){
+const base = String(nom || '');
+const ext = base.includes('.') ? base.split('.').pop().replace(/[^a-z0-9]/gi, '').slice(0, 4).toUpperCase() : '';
+return ext || 'DOC';
 }
 
 async function rpConstruirePDF(r){
 const JsPDF = await rpChargerJsPDF();
-const doc = new JsPDF({ unit: 'mm', format: 'a4' });
-const L = 18, LARG = 210 - 2 * L, BAS = 285;
-const client = (r.organizations && r.organizations.nom) || 'Client';
-const code = (r.organizations && r.organizations.code_client) || '';
+const [logo, signature] = await Promise.all([
+rpChargerLogoPDF(), rpLireSignaturePDF(r.signature_path),
+]);
+const doc = new JsPDF({ unit: 'mm', format: 'a4', compress: true });
+const C = RP_PDF_COULEURS;
+const L = 18, R = 192, LARGEUR = R - L;
+const BAS_CORPS = 274, DEBUT_PAGE_SUIVANTE = 33;
 let y;
 
-// Bandeau de titre
-doc.setFillColor(15, 118, 110); doc.rect(0, 0, 210, 28, 'F');
-doc.setTextColor(255, 255, 255);
-doc.setFont('helvetica', 'bold'); doc.setFontSize(18);
-doc.text("RAPPORT D'INTERVENTION", L, 17);
-doc.setFont('helvetica', 'normal'); doc.setFontSize(9);
-doc.text('WiTracEQUIP', 210 - L, 17, { align: 'right' });
-doc.setTextColor(34, 34, 34);
-y = 40;
+const client = String((r.organizations && r.organizations.nom) || 'Client').trim() || 'Client';
+const code = String((r.organizations && r.organizations.code_client) || '').trim();
+const date = fmtDate(r.date_intervention);
+const pieces = Array.isArray(r.pieces_jointes) ? r.pieces_jointes : [];
+const auteur = 'WiTracEQUIP - WiDIAG MQ';
+const titrePDF = `Rapport d'intervention - ${rpTxt(client)} - ${rpTxt(date)}`;
+doc.setProperties({
+title: titrePDF,
+subject: rpTxt("Traçabilité d’une intervention technique"),
+author: auteur,
+creator: 'WiTracEQUIP',
+keywords: rpTxt('WiTracEQUIP, intervention, maintenance, traçabilité'),
+});
 
-// Informations
-const infos = [
-['Client', client],
-code ? ['N° client', code] : null,
-['Date', fmtDate(r.date_intervention)],
-['Intervenant', r.nom_support || ''],
-['Destinataire', r.email_destinataire || ''],
-].filter(Boolean);
-doc.setFontSize(10.5);
-for(const [etiquette, valeur] of infos){
-const lignes = doc.splitTextToSize(rpTxt(valeur) || '-', LARG - 34);
-doc.setFont('helvetica', 'bold'); doc.text(rpTxt(etiquette) + ' :', L, y);
-doc.setFont('helvetica', 'normal'); doc.text(lignes, L + 34, y);
-y += 5.6 * lignes.length + 1.6;
+rpDessinerEntetePDF(doc, logo, true, date);
+y = 55;
+const nouvellePage = () => {
+doc.addPage();
+rpDessinerEntetePDF(doc, logo, false, date);
+y = DEBUT_PAGE_SUIVANTE;
+return y;
+};
+
+/* Carte client + date : le lecteur comprend immédiatement à qui et quand
+   l'intervention correspond, avant même de lire le compte rendu. */
+doc.setFont('times', 'bold'); doc.setFontSize(13.8);
+const lignesClient = rpLignesPDF(doc, client, 94);
+const debutNomY = y + 17;
+const ligneNomH = 5.8;
+const debutCodeY = debutNomY + (lignesClient.length - 1) * ligneNomH + 7.5;
+doc.setFont('helvetica', 'normal'); doc.setFontSize(7.8);
+const lignesCode = code ? rpLignesPDF(doc, 'Code client : ' + code, 94) : [];
+const hCode = lignesCode.length ? (lignesCode.length - 1) * 4 + 5 : 0;
+const hIdentite = Math.max(34, code ? debutCodeY - y + hCode : debutNomY - y + 10);
+
+doc.setFillColor(...C.menthe); doc.setDrawColor(...C.ligne); doc.setLineWidth(0.25);
+rpArrondiPDF(doc, L, y, 110, hIdentite, 2.5, 'FD');
+doc.setFillColor(...C.vert); doc.rect(L + 0.5, y + 3, 1.4, hIdentite - 6, 'F');
+doc.setFont('helvetica', 'bold'); doc.setFontSize(7.2);
+doc.setTextColor(...C.vert);
+doc.text('CLIENT', L + 8, y + 8);
+doc.setFont('times', 'bold'); doc.setFontSize(13.8);
+doc.setTextColor(...C.encre);
+lignesClient.forEach((ligne, i) => doc.text(ligne, L + 8, debutNomY + i * ligneNomH));
+if(code){
+doc.setFont('helvetica', 'normal'); doc.setFontSize(7.8);
+doc.setTextColor(...C.muet);
+lignesCode.forEach((ligne, i) => doc.text(ligne, L + 8, debutCodeY + i * 4));
 }
-y += 4;
 
-// Raison / description (avec sauts de page)
-doc.setFont('helvetica', 'bold'); doc.setFontSize(12);
-doc.text("Raison / description de l'intervention", L, y);
-y += 3;
-doc.setDrawColor(200, 200, 200); doc.line(L, y, L + LARG, y);
-y += 6;
-doc.setFont('helvetica', 'normal'); doc.setFontSize(10.5);
-for(const ligne of doc.splitTextToSize(rpTxt(r.raison) || '-', LARG)){
-if(y > BAS){ doc.addPage(); y = 20; }
-doc.text(ligne, L, y);
-y += 5.4;
+const xDate = 136, lDate = R - xDate;
+doc.setFillColor(...C.ivoireOr); doc.setDrawColor(234, 218, 191); doc.setLineWidth(0.25);
+rpArrondiPDF(doc, xDate, y, lDate, hIdentite, 2.5, 'FD');
+doc.setFillColor(...C.or); doc.rect(xDate + 0.5, y + 3, 1.4, hIdentite - 6, 'F');
+const centreDate = y + hIdentite / 2;
+doc.setFont('helvetica', 'bold'); doc.setFontSize(6.8);
+doc.setTextColor(...C.muet);
+doc.text("DATE D'INTERVENTION", xDate + 7, centreDate - 3.5);
+doc.setFont('times', 'bold'); doc.setFontSize(11.2);
+doc.setTextColor(...C.foret);
+doc.text(rpTxt(date), xDate + 7, centreDate + 6);
+y += hIdentite + 7;
+
+/* Intervenant et destinataire : deux repères utiles, sans effet de formulaire. */
+const largeurColonne = (LARGEUR - 8) / 2;
+const champs = [
+{ x: L, label: 'INTERVENANT', valeur: r.nom_support || '-' },
+{ x: L + largeurColonne + 8, label: 'DESTINATAIRE', valeur: r.email_destinataire || '-' },
+];
+doc.setFont('helvetica', 'normal'); doc.setFontSize(9.1);
+champs.forEach(champ => { champ.lignes = rpLignesPDF(doc, champ.valeur, largeurColonne - 14); });
+const nbLignesChamp = Math.max(...champs.map(champ => champ.lignes.length));
+const hChamps = Math.max(28, 16 + nbLignesChamp * 4.4);
+for(const champ of champs){
+doc.setFillColor(...C.blanc); doc.setDrawColor(...C.ligne); doc.setLineWidth(0.25);
+rpArrondiPDF(doc, champ.x, y, largeurColonne, hChamps, 2, 'FD');
+doc.setFont('helvetica', 'bold'); doc.setFontSize(7.1);
+doc.setTextColor(...C.muet);
+doc.text(champ.label, champ.x + 7, y + 8);
+doc.setFont('helvetica', 'normal'); doc.setFontSize(9.1);
+doc.setTextColor(...C.encre);
+champ.lignes.forEach((ligne, i) => doc.text(ligne, champ.x + 7, y + 17 + i * 4.4));
 }
-y += 8;
+y += hChamps + 8;
 
-// Signature
-if(r.signature_path){
-let data = null;
+/* Récit de l'intervention : le texte reste lisible et se poursuit proprement
+   sur une autre page si un compte rendu est particulièrement détaillé. */
+doc.setFont('helvetica', 'normal'); doc.setFontSize(10.2);
+const raison = String(r.raison || '').trim() || '-';
+const lignesRaison = rpLignesPDF(doc, raison, LARGEUR - 16);
+const hauteurRaison = 13 + lignesRaison.length * 4.8;
+const hauteurBlocRaison = 11 + hauteurRaison + 7;
+if(hauteurBlocRaison <= BAS_CORPS - DEBUT_PAGE_SUIVANTE && y + hauteurBlocRaison > BAS_CORPS) nouvellePage();
+if(y + 29 > BAS_CORPS) nouvellePage();
+y = rpTitreSectionPDF(doc, y, '01', 'Motif & travaux réalisés');
+let ligneRaison = 0, suiteRaison = false;
+while(ligneRaison < lignesRaison.length){
+const margeHaut = suiteRaison ? 12 : 6;
+const place = BAS_CORPS - y;
+if(place < margeHaut + 4.8 + 6){ nouvellePage(); suiteRaison = true; continue; }
+let nb = Math.min(lignesRaison.length - ligneRaison, Math.floor((place - margeHaut - 6) / 4.8));
+if(nb < lignesRaison.length - ligneRaison && nb > 2 && lignesRaison.length - ligneRaison - nb === 1) nb--;
+const hTexte = margeHaut + nb * 4.8 + 6;
+doc.setFillColor(...C.ivoire); doc.setDrawColor(...C.ligne); doc.setLineWidth(0.25);
+rpArrondiPDF(doc, L, y, LARGEUR, hTexte, 2.2, 'FD');
+doc.setFillColor(...C.or); doc.rect(L + 0.5, y + 4, 1.3, hTexte - 8, 'F');
+if(suiteRaison){
+doc.setFont('helvetica', 'bold'); doc.setFontSize(7);
+doc.setTextColor(...C.vert);
+doc.text("SUITE DE L'INTERVENTION", L + 8, y + 6);
+}
+doc.setFont('helvetica', 'normal'); doc.setFontSize(10.2);
+doc.setTextColor(...C.encre);
+const premiereLigneY = y + (suiteRaison ? 14 : 9.5);
+for(let i = 0; i < nb; i++) doc.text(lignesRaison[ligneRaison + i], L + 8, premiereLigneY + i * 4.8);
+ligneRaison += nb;
+y += hTexte + (ligneRaison < lignesRaison.length ? 0 : 7);
+if(ligneRaison < lignesRaison.length){ nouvellePage(); suiteRaison = true; }
+}
+
+/* Signature enregistrée et identité du signataire. Aucun horodatage n'est
+   inventé : le rapport ne connaît que la date de l'intervention. */
+const signataire = String(r.nom_signataire || '').trim() || 'Nom non renseigné';
+doc.setFont('helvetica', 'normal'); doc.setFontSize(9.1);
+const lignesSignataire = rpLignesPDF(doc, signataire, 58);
+const hSignature = Math.max(42, 22 + lignesSignataire.length * 4.4 + 7);
+if(y + 11 + hSignature > BAS_CORPS) nouvellePage();
+y = rpTitreSectionPDF(doc, y, '02', 'Validation client');
+doc.setFillColor(...C.blanc); doc.setDrawColor(...C.ligne); doc.setLineWidth(0.25);
+rpArrondiPDF(doc, L, y, LARGEUR, hSignature, 2.2, 'FD');
+const xCadreSignature = L + 7, yCadreSignature = y + 12, lCadreSignature = 90, hCadreSignature = 24;
+doc.setFont('helvetica', 'bold'); doc.setFontSize(7.1);
+doc.setTextColor(...C.muet);
+doc.text('SIGNATURE DU CLIENT', L + 8, y + 8);
+doc.setFillColor(...C.ivoire); doc.setDrawColor(...C.ligne); doc.setLineWidth(0.2);
+rpArrondiPDF(doc, xCadreSignature, yCadreSignature, lCadreSignature, hCadreSignature, 1.5, 'FD');
+if(signature){
 try{
-const { data: blob, error } = await sb.storage.from(BUCKET_RAPPORTS).download(r.signature_path);
-if(error) throw error;
-data = await rpBlobVersDataUrl(blob);
-}catch(_){ data = null; }
-if(y > BAS - 60){ doc.addPage(); y = 20; }
-doc.setFont('helvetica', 'bold'); doc.setFontSize(12);
-doc.text('Signature du client', L, y);
-y += 5;
-if(data){
-let w = 70, h = 35;
-try{
-const p = doc.getImageProperties(data);
-if(p && p.width && p.height){ h = w * p.height / p.width; if(h > 40){ h = 40; w = h * p.width / p.height; } }
-}catch(_){}
-doc.setDrawColor(200, 200, 200); doc.rect(L, y, w, h);
-doc.addImage(data, 'PNG', L, y, w, h);
-y += h + 5;
+const props = doc.getImageProperties(signature);
+const largeurInterne = lCadreSignature - 8, hauteurInterne = hCadreSignature - 4;
+const ratio = props && props.width && props.height ? Math.min(largeurInterne / props.width, hauteurInterne / props.height) : 0;
+if(ratio){
+const w = props.width * ratio, h = props.height * ratio;
+doc.addImage(signature, 'PNG', xCadreSignature + (lCadreSignature - w) / 2, yCadreSignature + (hCadreSignature - h) / 2, w, h);
+}else doc.addImage(signature, 'PNG', xCadreSignature + 4, yCadreSignature + 3, largeurInterne, hauteurInterne - 2);
+}catch(_){
+doc.setFont('helvetica', 'italic'); doc.setFontSize(8);
+doc.setTextColor(...C.muet);
+doc.text('Signature non disponible', xCadreSignature + 5, yCadreSignature + 13);
+}
 }else{
-doc.setFont('helvetica', 'italic'); doc.setFontSize(10);
-doc.text('Signature non disponible', L, y + 4);
-y += 10;
+doc.setFont('helvetica', 'italic'); doc.setFontSize(8);
+doc.setTextColor(...C.muet);
+const messageSignature = r.signature_path ? 'Fichier de signature indisponible' : 'Aucune signature associée';
+const lignesMessage = rpLignesPDF(doc, messageSignature, lCadreSignature - 10);
+lignesMessage.slice(0, 3).forEach((ligne, i) => doc.text(ligne, xCadreSignature + 5, yCadreSignature + 10 + i * 4));
 }
-if(r.nom_signataire){
-doc.setFont('helvetica', 'normal'); doc.setFontSize(10.5);
-doc.text('Signataire : ' + rpTxt(r.nom_signataire), L, y);
+const xSeparateur = L + 105;
+doc.setDrawColor(...C.ligne); doc.setLineWidth(0.25);
+doc.line(xSeparateur, y + 7, xSeparateur, y + hSignature - 7);
+doc.setFont('helvetica', 'bold'); doc.setFontSize(7.1);
+doc.setTextColor(...C.muet);
+doc.text('NOM DU SIGNATAIRE', xSeparateur + 8, y + 8);
+doc.setFont('helvetica', 'normal'); doc.setFontSize(9.1);
+doc.setTextColor(...C.encre);
+lignesSignataire.forEach((ligne, i) => doc.text(ligne, xSeparateur + 8, y + 18 + i * 4.4));
+const statutSignature = signature ? 'Signature jointe au dossier' : (r.signature_path ? 'Aperçu indisponible' : 'Aucune signature enregistrée');
+doc.setFont('helvetica', 'bold'); doc.setFontSize(7.1);
+doc.setTextColor(...(signature ? C.vert : C.muet));
+doc.text(rpTxt(statutSignature), xSeparateur + 8, y + hSignature - 5);
+y += hSignature + 8;
+
+/* Liste des fichiers associés. Ils restent des pièces distinctes du PDF :
+   leurs noms et tailles sont consignés ici, et l'envoi e-mail les joint à part. */
+const detailPieces = pieces.length ? `${pieces.length} FICHIER${pieces.length > 1 ? 'S' : ''}` : 'AUCUN FICHIER';
+if(y + 11 + (pieces.length ? 6 : 0) + 18 > BAS_CORPS) nouvellePage();
+y = rpTitreSectionPDF(doc, y, '03', 'Documents associés', detailPieces);
+if(pieces.length){
+doc.setFont('helvetica', 'normal'); doc.setFontSize(7.6);
+doc.setTextColor(...C.muet);
+doc.text('Les fichiers associés restent distincts de ce PDF.', L, y + 2.5);
 y += 6;
 }
+if(!pieces.length){
+doc.setFillColor(...C.ivoire); doc.setDrawColor(...C.ligne); doc.setLineWidth(0.25);
+rpArrondiPDF(doc, L, y, LARGEUR, 19, 2, 'FD');
+doc.setFont('helvetica', 'italic'); doc.setFontSize(9);
+doc.setTextColor(...C.muet);
+doc.text('Aucune pièce jointe associée à ce rapport.', L + 8, y + 12);
+y += 24;
+}else{
+const dessinerSuitePieces = () => {
+nouvellePage();
+y = rpTitreSectionPDF(doc, y, '03', 'Documents associés (suite)');
+};
+pieces.forEach((p, index) => {
+const nom = p.nom || 'Document sans nom';
+const taille = rpTaillePDF(p.taille);
+const tag = rpExtensionPDF(nom);
+doc.setFont('helvetica', 'normal'); doc.setFontSize(9);
+const largeurNom = LARGEUR - 27 - (taille ? 22 : 7);
+const lignesNom = rpLignesPDF(doc, nom, largeurNom);
+let offset = 0, premierePartie = true;
+while(offset < lignesNom.length){
+const place = BAS_CORPS - y;
+if(place < 17){ dessinerSuitePieces(); continue; }
+const maxLignes = Math.max(1, Math.floor((place - 11) / 4.5));
+const nb = Math.min(lignesNom.length - offset, maxLignes);
+const hLigne = Math.max(14, 8 + nb * 4.5);
+doc.setFillColor(...(index % 2 ? C.blanc : C.ivoire)); doc.setDrawColor(...C.ligne); doc.setLineWidth(0.22);
+rpArrondiPDF(doc, L, y, LARGEUR, hLigne, 1.8, 'FD');
+doc.setFillColor(...C.menthe);
+rpArrondiPDF(doc, L + 5, y + 3, 15, 8, 1.5, 'F');
+doc.setFont('helvetica', 'bold'); doc.setFontSize(6.8);
+doc.setTextColor(...C.vert);
+doc.text(premierePartie ? rpTxt(tag) : '...', L + 12.5, y + 8.2, { align: 'center' });
+doc.setFont('helvetica', 'normal'); doc.setFontSize(9);
+doc.setTextColor(...C.encre);
+for(let j = 0; j < nb; j++) doc.text(lignesNom[offset + j], L + 26, y + 8 + j * 4.5);
+if(premierePartie && taille){
+doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5);
+doc.setTextColor(...C.muet);
+doc.text(rpTxt(taille), R - 6, y + 8, { align: 'right' });
+}
+offset += nb;
+y += hLigne + 3;
+if(offset < lignesNom.length){ dessinerSuitePieces(); premierePartie = false; }
+}
+});
 }
 
-// Documents joints (liste)
-const pj = r.pieces_jointes || [];
-if(pj.length){
-y += 4;
-if(y > BAS - 20){ doc.addPage(); y = 20; }
-doc.setFont('helvetica', 'bold'); doc.setFontSize(11);
-doc.text('Documents joints', L, y);
-y += 6;
-doc.setFont('helvetica', 'normal'); doc.setFontSize(10);
-for(const p of pj){
-for(const ligne of doc.splitTextToSize('- ' + rpTxt(p.nom), LARG)){
-if(y > BAS){ doc.addPage(); y = 20; }
-doc.text(ligne, L, y);
-y += 5;
-}
-}
-}
-
-// Pied de page
-const n = doc.getNumberOfPages();
-for(let i = 1; i <= n; i++){
+/* Pied de page homogène sur toutes les pages, avec un repère de pagination
+   utile pour l'archivage et le partage du document. */
+const nombrePages = doc.getNumberOfPages();
+for(let i = 1; i <= nombrePages; i++){
 doc.setPage(i);
-doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(120, 120, 120);
-doc.text(`Rapport généré par WiTracEQUIP - page ${i}/${n}`, 105, 291, { align: 'center' });
+doc.setDrawColor(...C.ligne); doc.setLineWidth(0.25);
+doc.line(L, 282, R, 282);
+doc.setFont('helvetica', 'normal'); doc.setFontSize(7.3);
+doc.setTextColor(...C.muet);
+doc.text('WiTracEQUIP  ·  by WiDIAG MQ', L, 288);
+if(typeof SUPPORT_EMAIL !== 'undefined' && SUPPORT_EMAIL){
+doc.text(rpTxt(SUPPORT_EMAIL), 105, 288, { align: 'center' });
+}
+doc.setFont('helvetica', 'bold'); doc.setFontSize(7.3);
+doc.text(`Page ${i} / ${nombrePages}`, R, 288, { align: 'right' });
 }
 
 const nom = `Rapport_intervention_${rpNomSur(client)}_${r.date_intervention || 'sans-date'}.pdf`;

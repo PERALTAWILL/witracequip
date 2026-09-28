@@ -775,7 +775,7 @@ return `
 <div class="auth-logo">
 <img class="logo brand-logo" src="${LOGO_DATA_URL}" alt="WiTracEQUIP">
 <h1 style="font-size:20px;">WiTracEQUIP</h1>
-<div class="small muted">Le passeport technique de vos équipements — by WiDIAG MQ</div>
+<div class="small muted">Le passeport numérique de vos équipements — by WiDIAG MQ</div>
 </div>
 
 ${state.authError ? `<div class="alert alert-error">${esc(state.authError)}</div>` : ''}
