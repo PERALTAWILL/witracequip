@@ -2187,6 +2187,7 @@ vrai profil si on avait démarré hors-ligne, puis la file s'envoie (offline.js)
 window.addEventListener('online', async () => {
 if(!state.session) return;
 reglages.clientsError = ''; reglages.membresError = ''; reglages.supportError = ''; reglages.journalError = '';
+if(reglages.clientsHorsLigne && typeof chargerClients === 'function') chargerClients(true);
 Object.keys(reglages.parcs || {}).forEach(k => { if(reglages.parcs[k]?.error) delete reglages.parcs[k]; });
 fondateurCache.error = ''; accueilCache.error = '';
 if(accueilCache.chiffres && !Object.keys(accueilCache.chiffres).length) accueilCache.chiffres = null;
@@ -2472,7 +2473,6 @@ else if(action === 'fondateur-commandes-fermer') fermerCommandesFondateur();
 else if(action === 'fondateur-section' && isSuperAdmin()) allerSectionClientFondateur(t.dataset.section);
 else if(action === 'fondateur-inviter-client' && isSuperAdmin()) inviterClientFondateur(t.dataset.id);
 else if(action === 'fondateur-nouveau-client' && isSuperAdmin()){
-if(state.horsLigne || !navigator.onLine){ toast('Connexion requise pour créer un client.', 'info'); return; }
 // Le formulaire vit sur la page Clients : depuis l'accueil, on y va d'abord.
 ouvrirClientForm(null);
 nav('/reglages/clients');
@@ -2520,6 +2520,7 @@ else if(action === 'photo-fermer'){ if(t.tagName === 'BUTTON' || e.target === t)
 else if(action === 'photo-suivante'){ changerPhoto(+t.dataset.sens); }
 else if(action === 'photo-supprimer'){ supprimerPhotoOuverte(); }
 else if(action === 'abandonner-equip-attente'){ abandonnerEquipEnAttente(t.dataset.id); }
+else if(action === 'abandonner-client-attente'){ abandonnerClientEnAttente(t.dataset.id); }
 else if(action.startsWith('mm-')){ actionModele(action, t); }
 else if(action === 'archive-equip'){ ouvrirModalArchiver([equipDetail.id]); }
 else if(action === 'suppr-equip-un'){ ouvrirModalSupprimerEquip([t.dataset.id]); }

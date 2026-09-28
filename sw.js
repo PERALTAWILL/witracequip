@@ -26,7 +26,7 @@
 
 /* Changer ce numéro à chaque déploiement : c'est ce qui déclenche le
    remplacement de l'ancien cache par le nouveau chez tous les utilisateurs. */
-const VERSION = 'wte-v2.26.2';
+const VERSION = 'wte-v2.26.4';
 
 const CACHE_SHELL = `${VERSION}-shell`;
 const CACHE_EXTERNE = `${VERSION}-externe`;
@@ -74,6 +74,22 @@ const FICHIERS_SHELL = [
 const HOTES_CDN = [
   'cdn.jsdelivr.net',
   'cdnjs.cloudflare.com',
+  'fonts.googleapis.com',
+  'fonts.gstatic.com',
+];
+
+/* Bibliothèques indispensables au démarrage (js/config.js appelle
+   supabase.createClient dès le chargement : sans elle, l'appli ne démarre
+   pas hors ligne). Elles sont préchargées à l'installation, une par une,
+   avec une requête « no-cors » identique à celle d'une balise <script> —
+   la réponse est alors « opaque » (status 0), ce qui est normal. Un échec
+   d'une seule ne fait pas échouer l'installation : le cache au vol
+   ci-dessous prendra le relais. */
+const BIBLIOTHEQUES = [
+  'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2',
+  'https://cdnjs.cloudflare.com/ajax/libs/qrious/4.0.2/qrious.min.js',
+  'https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js',
+  'https://fonts.googleapis.com/css2?family=Lato:wght@400;700&family=Lora:wght@600;700&display=swap',
 ];
 
 /* =========================================================================
@@ -91,6 +107,13 @@ self.addEventListener('install', (event) => {
       .catch((e) => {
         console.error('[SW] Mise en cache initiale incomplète :', e);
       })
+      // Bibliothèques externes : préchargées séparément (voir BIBLIOTHEQUES).
+      .then(() => caches.open(CACHE_EXTERNE))
+      .then((cache) => Promise.all(BIBLIOTHEQUES.map((u) =>
+        fetch(new Request(u, { mode: 'no-cors' }))
+          .then((rep) => { if (rep && (rep.status === 200 || rep.type === 'opaque')) return cache.put(u, rep); })
+          .catch((e) => console.warn('[SW] Bibliothèque non préchargée :', u, e))
+      )))
       // Nouvelle version prête : elle prend la main tout de suite, sans
       // attendre que l'utilisateur ferme tous ses onglets. Sinon le téléphone
       // mélange l'ancien JavaScript (en cache) et le nouveau HTML.
@@ -160,7 +183,9 @@ self.addEventListener('fetch', (event) => {
       caches.open(CACHE_EXTERNE).then((cache) => cache.match(req).then((enCache) => {
         const reseau = fetch(req)
           .then((rep) => {
-            if (rep && rep.status === 200) cache.put(req, rep.clone());
+            // Une balise <script> sans crossorigin donne une réponse « opaque »
+            // (status 0) : il faut l'accepter, sinon rien n'est jamais mis en cache.
+            if (rep && (rep.status === 200 || rep.type === 'opaque')) cache.put(req, rep.clone());
             return rep;
           })
           .catch(() => enCache);

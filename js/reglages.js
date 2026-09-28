@@ -84,7 +84,7 @@ return `<div class="pied-support">Pour toute demande, contactez le support :
 let reglages;
 function resetReglages(){
 reglages = {
-clients:null, clientsLoading:false, clientsError:'', selClients:[],
+clients:null, clientsLoading:false, clientsError:'', clientsHorsLigne:false, clientsAttente:[], selClients:[],
 clientForm:null, clientFormAReveler:false,
 membres:null, emails:{}, acces:null, typesOrgs:null, membresLoading:false, membresError:'',
 selMembres:[], filtreClient:'',
@@ -104,9 +104,28 @@ if(reglages.clients !== null && !force) return;
 if(reglages.clientsError && !force) return; // pas de relance en boucle sur une erreur
 reglages.clientsLoading = true;
 listClients()
-.then(c => { reglages.clients = c; reglages.clientsError = ''; })
-.catch(e => { reglages.clientsError = e.message; })
-.finally(() => { reglages.clientsLoading = false; render(); });
+.then(c => { reglages.clients = c; reglages.clientsError = ''; reglages.clientsHorsLigne = false; sauverInstantane({ clients: c }); })
+.catch(e => {
+// Sans réseau : dernière liste connue, clairement signalée comme telle.
+const connue = lireInstantane().clients;
+if(estErreurReseau(e) && Array.isArray(connue)){ reglages.clients = connue; reglages.clientsError = ''; reglages.clientsHorsLigne = true; }
+else if(estErreurReseau(e)){ reglages.clients = []; reglages.clientsError = ''; reglages.clientsHorsLigne = true; }
+else reglages.clientsError = e.message;
+})
+.finally(() => { reglages.clientsLoading = false; chargerClientsEnAttente(); render(); });
+}
+
+/* Clients saisis sans réseau, pas encore envoyés (voir offline.js). */
+function chargerClientsEnAttente(){
+if(!isSuperAdmin()) return Promise.resolve();
+return offlineClientLister()
+.then(l => { reglages.clientsAttente = l.filter(x => !x.user_id || x.user_id === state.session?.user?.id); render(); })
+.catch(() => {});
+}
+async function abandonnerClientEnAttente(id){
+if(!await confirmer("Abandonner ce client\n\nIl n'a pas encore été envoyé : il sera définitivement supprimé de ce téléphone.", { ok:'Abandonner', danger:true })) return;
+try{ await offlineClientSupprimer(id); state.enAttenteCount = await offlineCompterEnAttente(); }catch(e){}
+await chargerClientsEnAttente();
 }
 
 function chargerMembres(force){
@@ -203,6 +222,16 @@ const sel = reglages.selClients;
 const tousCoches = clients.length > 0 && clients.every(c => sel.includes(c.id));
 const totalParc = tous.reduce((n, c) => n + (c.nb_equipements || 0), 0);
 
+const lignesAttente = (reglages.clientsAttente || []).map(c => `
+<div class="ligne-select ligne-client">
+<div class="avatar-client" style="--teinte:${teinteClient(c.nom)};">${esc(initials(c.nom))}</div>
+<div class="ligne-corps">
+<div class="ligne-titre">${esc(c.nom)} <span class="badge badge-warn">en attente d'envoi</span></div>
+<div class="small muted">Sera créé dès le retour du réseau · n° client attribué à ce moment-là${c.derniere_erreur && navigator.onLine ? ' · dernier essai refusé : ' + esc(c.derniere_erreur) : ''}</div>
+</div>
+<button type="button" class="btn btn-sm btn-lien" data-action="abandonner-client-attente" data-id="${c.id}">Abandonner</button>
+</div>`).join('');
+
 const lignes = clients.map(c => {
 const nInv = (reglages.invites || []).filter(i => i.organization_id === c.id).length;
 return `
@@ -231,6 +260,7 @@ ${c.modele_metier ? esc(nomModele(c.modele_metier)) : 'Aucun modèle métier'}${
 return `
 <header class="hz-portfolio-hero"><span class="hz-overline">VOTRE PORTEFEUILLE</span><h1>Vos clients.<br><em>À portée de main.</em></h1>
 <p>Retrouvez un dossier, son parc et les personnes qui y travaillent.</p><strong>${tous.length} client${tous.length > 1 ? 's' : ''}</strong></header>
+${reglages.clientsHorsLigne || !navigator.onLine ? `<div class="alert alert-info">${iconeNav('clock',16)} Hors connexion : liste des clients à la dernière connexion. Vous pouvez quand même créer un client, il sera envoyé au retour du réseau.</div>` : ''}
 ${reglages.clientForm && !reglages.clientForm.id ? renderClientForm() : ''}
 <div class="barre-clients">
 <div class="recherche-client">
@@ -263,7 +293,7 @@ ${clients.length ? `
 <input type="checkbox" data-action="sel-clients-tous" data-ids="${clients.map(c => c.id).join(',')}" ${tousCoches ? 'checked' : ''}>
 <span>Tout sélectionner${rq ? ' (résultats)' : ''}</span>
 </label>` : ''}
-${lignes || `<div class="empty small">${rq ? 'Aucun client ne correspond à « ' + esc(reglages.rechercheClient) + ' ».' : 'Aucun client pour l\'instant. Créez le premier avec « + Nouveau client ».'}</div>`}
+${lignesAttente}${(lignes || lignesAttente) ? lignes : `<div class="empty small">${rq ? 'Aucun client ne correspond à « ' + esc(reglages.rechercheClient) + ' ».' : 'Aucun client pour l\'instant. Créez le premier avec « + Nouveau client ».'}</div>`}
 </div>
 `;
 }
@@ -337,12 +367,16 @@ if(!f.nom.trim()){ f.error = "Le nom de l'entreprise est obligatoire."; render()
 f.busy = true; f.error = ''; render();
 try{
 if(f.id){
+if(!navigator.onLine){ f.busy = false; f.error = "Pas de réseau : la modification d'une fiche client nécessite une connexion."; render(); return; }
 await modifierClient(f.id, f);
 reglages.clientForm = null;
 await chargerClientsMaintenant();
 toast('Fiche client enregistrée');
 } else {
-const res = await creerClient(f);
+if(!navigator.onLine){ await clientEnAttente(f); return; }
+let res;
+try{ res = await creerClient(f); }
+catch(e){ if(estErreurReseau(e)){ await clientEnAttente(f); return; } throw e; }
 reglages.clientForm = null;
 await chargerClientsMaintenant();
 toast(`Client créé — n° ${res.code_client}`);
@@ -353,6 +387,17 @@ render();
 }catch(e){
 f.busy = false; f.error = e.message; render();
 }
+}
+
+async function clientEnAttente(f){
+try{
+await offlineClientMettreEnAttente(f);
+state.enAttenteCount = await offlineCompterEnAttente();
+reglages.clientForm = null;
+await chargerClientsEnAttente();
+toast("Pas de réseau : client enregistré sur le téléphone. Il sera créé dès le retour du réseau.");
+render();
+}catch(err){ f.busy = false; f.error = "Enregistrement hors-ligne impossible : " + err.message; render(); }
 }
 
 async function chargerClientsMaintenant(){

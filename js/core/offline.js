@@ -13,9 +13,10 @@ ajoutées avant même l'envoi. À la reconnexion, les équipements partent
 AVANT les interventions (une intervention a besoin de son équipement). */
 
 const OFFLINE_DB_NOM = 'wte-offline';
-const OFFLINE_DB_VERSION = 2;
+const OFFLINE_DB_VERSION = 3;
 const OFFLINE_STORE = 'interventions_en_attente';
 const OFFLINE_STORE_EQ = 'equipements_en_attente';
+const OFFLINE_STORE_CL = 'clients_en_attente';
 
 function offlineOuvrirDB(){
 return new Promise((resolve, reject) => {
@@ -28,6 +29,9 @@ store.createIndex('equipement_id', 'equipement_id', { unique: false });
 }
 if(!db.objectStoreNames.contains(OFFLINE_STORE_EQ)){
 db.createObjectStore(OFFLINE_STORE_EQ, { keyPath: 'id' });
+}
+if(!db.objectStoreNames.contains(OFFLINE_STORE_CL)){
+db.createObjectStore(OFFLINE_STORE_CL, { keyPath: 'id' });
 }
 };
 req.onsuccess = () => resolve(req.result);
@@ -87,8 +91,50 @@ req.onerror = () => reject(req.error);
 
 /* Total affiché dans l'en-tête : interventions + équipements en attente. */
 async function offlineCompterEnAttente(){
-const [a, b] = await Promise.all([offlineCompterStore(OFFLINE_STORE), offlineCompterStore(OFFLINE_STORE_EQ)]);
-return a + b;
+const [a, b, c] = await Promise.all([offlineCompterStore(OFFLINE_STORE), offlineCompterStore(OFFLINE_STORE_EQ), offlineCompterStore(OFFLINE_STORE_CL)]);
+return a + b + c;
+}
+
+/* --- Clients créés sans réseau (fondateur) ---------------------------
+Le n° client à 6 chiffres est attribué par le serveur : il n'existe donc
+qu'à l'envoi. En attendant, le client figure dans la liste avec la mention
+« en attente d'envoi ». Chaque entrée porte l'identifiant du compte qui l'a
+saisie : un autre compte sur le même téléphone ne l'envoie jamais. */
+async function offlineClientMettreEnAttente(f){
+const item = {
+id: uuid(),
+user_id: state.session?.user?.id || '',
+nom: f.nom, adresse: f.adresse || '', telephone: f.telephone || '', email: f.email || '',
+referent: f.referent || '', notes: f.notes || '', modele: f.modele || '',
+cree_le: new Date().toISOString(), tentatives: 0, derniere_erreur: '',
+};
+await offlineTx('readwrite', (store) => store.add(item), OFFLINE_STORE_CL);
+return item;
+}
+
+async function offlineClientLister(){
+return offlineTx('readonly', (store) => new Promise((resolve, reject) => {
+const req = store.getAll();
+req.onsuccess = () => resolve(req.result || []);
+req.onerror = () => reject(req.error);
+}), OFFLINE_STORE_CL);
+}
+
+async function offlineClientSupprimer(id){
+return offlineTx('readwrite', (store) => store.delete(id), OFFLINE_STORE_CL);
+}
+
+async function offlineClientMarquerEchec(id, message){
+return offlineTx('readwrite', (store) => new Promise((resolve, reject) => {
+const req = store.get(id);
+req.onsuccess = () => {
+const item = req.result;
+if(!item) return resolve();
+item.tentatives += 1; item.derniere_erreur = message;
+store.put(item); resolve();
+};
+req.onerror = () => reject(req.error);
+}), OFFLINE_STORE_CL);
 }
 
 /* --- Équipements créés sans réseau ---------------------------------- */
@@ -163,8 +209,20 @@ interventions tout juste envoyées. */
 async function synchroniserInterventionsEnAttente(){
 if(offlineSyncEnCours || !navigator.onLine) return;
 offlineSyncEnCours = true;
-let auMoinsUneEnvoyee = false, equipEnvoye = false;
+let auMoinsUneEnvoyee = false, equipEnvoye = false, clientEnvoye = false;
 try{
+// 0) Les clients tout d'abord (uniquement ceux saisis par le compte connecté).
+for(const cl of await offlineClientLister()){
+if(cl.user_id && cl.user_id !== state.session?.user?.id) continue;
+try{
+await creerClient({ nom: cl.nom, adresse: cl.adresse, telephone: cl.telephone, email: cl.email,
+referent: cl.referent, notes: cl.notes, modele: cl.modele });
+await offlineClientSupprimer(cl.id);
+clientEnvoye = true;
+}catch(e){
+await offlineClientMarquerEchec(cl.id, e.message || 'Erreur inconnue');
+}
+}
 // 1) Les équipements d'abord : les interventions en attente peuvent les viser.
 for(const eq of await offlineEquipLister()){
 try{
@@ -204,6 +262,11 @@ await offlineMarquerEchec(item.id, e.message || 'Erreur inconnue');
 }finally{
 offlineSyncEnCours = false;
 state.enAttenteCount = await offlineCompterEnAttente();
+if(clientEnvoye){
+toast('Clients créés hors-ligne : envoyés');
+if(typeof chargerClients === 'function') chargerClients(true);
+if(typeof chargerClientsEnAttente === 'function') chargerClientsEnAttente();
+}
 if(equipEnvoye){
 toast('Équipements créés hors-ligne : envoyés'); if(typeof chargerActivite === 'function') chargerActivite(true);
 reglages.parcs = {};
