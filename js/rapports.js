@@ -1,8 +1,3 @@
-Désolé — ignore le lien du chat. J’ai lancé un aperçu **Live** séparé, intitulé **« Téléchargement de rapport.js »**. Ouvre ce panneau dans Arena, puis clique sur le bouton orange **« Télécharger rapport.js »** à l’intérieur.
-
-Tu as raison, désolé. Les liens ne fonctionnent pas dans ton interface. Voici le **fichier brut** : copie tout le bloc dans `js/rapports.js` en remplaçant son contenu.
-
-```javascript
 /* ---------------------------------------------------------------------- */
 /* Support → Rapport d'intervention (fondateur)                            */
 /* ---------------------------------------------------------------------- */
@@ -11,6 +6,10 @@ Tu as raison, désolé. Les liens ne fonctionnent pas dans ton interface. Voici 
    Stockage : table « rapports_intervention » + bucket privé
    « rapports-intervention ». Tout est réservé au super-administrateur : la
    base le vérifie elle-même (RLS).
+
+   v2.17.14 — PDF pleine page A4 : le compte rendu s'étend (lignes de
+   rédaction) jusqu'aux blocs de fin, référence du rapport, mention de
+   validation client.
 
    v2.17.13 — direction bleu nuit et ambre, avec panneaux client et
    validation assortis au bandeau supérieur.
@@ -26,7 +25,7 @@ Tu as raison, désolé. Les liens ne fonctionnent pas dans ton interface. Voici 
    - Envoyer par e-mail : PDF + documents joints via la feuille de partage du
      téléphone ; sur ordinateur, PDF téléchargé + messagerie ouverte. */
 
-const RP_VERSION = 'v2.17.13';
+const RP_VERSION = 'v2.17.14';
 const BUCKET_RAPPORTS = 'rapports-intervention';
 const RP_TAILLE_MAX = 10 * 1024 * 1024; // 10 Mo par document
 const RP_EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -173,7 +172,7 @@ if(rapports.listeError){
 return `<div class="alert alert-error">${esc(rapports.listeError)}<br><span class="small">Si le message parle d'une table introuvable, le fichier SQL « rapports_intervention.sql » n'a pas encore été exécuté dans Supabase.</span></div>`;
 }
 if(rapports.liste === null) return squeletteListe(3);
-if(!rapports.liste.length) return `<div class="empty small">${rapports.vue === 'archives' ? 'Aucun rapport archivé.' : 'Aucun rapport pour l\\'instant.'}</div>`;
+if(!rapports.liste.length) return `<div class="empty small">${rapports.vue === 'archives' ? 'Aucun rapport archivé.' : 'Aucun rapport pour l\'instant.'}</div>`;
 const archives = rapports.vue === 'archives';
 return rapports.liste.map(r => {
 const ouvert = rapports.ouvert === r.id;
@@ -669,12 +668,12 @@ return await rpBlobVersDataUrl(data);
 }catch(_){ return null; }
 }
 
-function rpDessinerEntetePDF(doc, logo, premierePage, date){
+function rpDessinerEntetePDF(doc, logo, premierePage, date, ref){
 const C = RP_PDF_COULEURS;
 if(premierePage){
 // Bandeau bleu nuit, date ambre et logo posé sur un cartouche clair.
 doc.setFillColor(...C.nuit);
-doc.rect(0, 0, 210, 61, 'F');
+doc.rect(0, 0, 210, 54, 'F');
 doc.setFillColor(...C.ambre);
 doc.rect(0, 0, 210, 1.5, 'F');
 
@@ -690,13 +689,13 @@ doc.text('by WiDIAG MQ  ·  Passeport numérique de vos équipements', 34, 22.5)
 
 doc.setFont('helvetica', 'bold'); doc.setFontSize(7.4);
 doc.setTextColor(...C.ambreClair);
-doc.text('COMPTE RENDU  /  MAINTENANCE', 18, 34.5);
+doc.text('COMPTE RENDU  /  MAINTENANCE', 18, 30.5);
 doc.setFont('helvetica', 'bold'); doc.setFontSize(22.5);
 doc.setTextColor(...C.blanc);
-doc.text("Rapport d'intervention", 18, 50);
+doc.text("Rapport d'intervention", 18, 45);
 
 // Repère date façon éditoriale : jour dominant, mois et année en regard.
-const xDate = 147, yDate = 9, lDate = 45, hDate = 43;
+const xDate = 147, yDate = 8, lDate = 45, hDate = 37;
 doc.setFillColor(...C.ambre); doc.setDrawColor(...C.sableBord); doc.setLineWidth(0.3);
 rpArrondiPDF(doc, xDate, yDate, lDate, hDate, 2.5, 'FD');
 doc.setFillColor(...C.nuit);
@@ -719,7 +718,7 @@ doc.setDrawColor(...C.ambreFonce); doc.setLineWidth(0.18);
 doc.line(xDate + 7, yDate + 25.5, xDate + lDate - 5, yDate + 25.5);
 doc.setFont('helvetica', 'normal'); doc.setFontSize(6.5);
 doc.setTextColor(...C.bleuTexte);
-doc.text('Fiche de suivi WiTracEQUIP', xDate + 7, yDate + 31);
+doc.text('Réf. ' + rpTxt(ref || '-'), xDate + 7, yDate + 31);
 return;
 }
 
@@ -736,7 +735,7 @@ doc.setFont('helvetica', 'bold'); doc.setFontSize(10);
 doc.text('WiTracEQUIP', 32, 12);
 doc.setFont('helvetica', 'normal'); doc.setFontSize(7.2);
 doc.setTextColor(...C.grisBleu);
-doc.text("Rapport d'intervention  ·  " + rpTxt(date), 32, 19);
+doc.text("Rapport d'intervention  ·  " + rpTxt(date) + (ref ? '  ·  ' + rpTxt(ref) : ''), 32, 19);
 doc.setFont('helvetica', 'bold'); doc.setFontSize(7.2);
 doc.setTextColor(...C.ambreClair);
 doc.text('SUITE DU RAPPORT', 192, 15, { align: 'right' });
@@ -770,12 +769,13 @@ rpChargerLogoPDF(), rpLireSignaturePDF(r.signature_path),
 const doc = new JsPDF({ unit: 'mm', format: 'a4', compress: true });
 const C = RP_PDF_COULEURS;
 const L = 18, R = 192, LARGEUR = R - L;
-const BAS_CORPS = 274, DEBUT_PAGE_SUIVANTE = 37;
+const BAS_CORPS = 277, DEBUT_PAGE_SUIVANTE = 37;
 let y;
 
 const client = String((r.organizations && r.organizations.nom) || 'Client').trim() || 'Client';
 const code = String((r.organizations && r.organizations.code_client) || '').trim();
 const date = fmtDate(r.date_intervention);
+const ref = 'RI-' + (String(r.id || '').replace(/[^A-Za-z0-9]/g, '').slice(0, 8).toUpperCase() || 'SANSREF');
 const titrePDF = `Rapport d'intervention - ${rpTxt(client)} - ${rpTxt(date)}`;
 doc.setProperties({
 title: titrePDF,
@@ -787,13 +787,13 @@ keywords: rpTxt('WiTracEQUIP, intervention, maintenance, traçabilité'),
 
 doc.setFillColor(...C.fond);
 doc.rect(0, 0, 210, 297, 'F');
-rpDessinerEntetePDF(doc, logo, true, date);
-y = 68;
+rpDessinerEntetePDF(doc, logo, true, date, ref);
+y = 60;
 const nouvellePage = () => {
 doc.addPage();
 doc.setFillColor(...C.fond);
 doc.rect(0, 0, 210, 297, 'F');
-rpDessinerEntetePDF(doc, logo, false, date);
+rpDessinerEntetePDF(doc, logo, false, date, ref);
 y = DEBUT_PAGE_SUIVANTE;
 return y;
 };
@@ -806,7 +806,7 @@ doc.setFont('helvetica', 'normal'); doc.setFontSize(8.1);
 const lignesCode = code ? rpLignesPDF(doc, code, 35) : [];
 const hNom = 21 + (lignesClient.length - 1) * 5.8 + 7;
 const hCode = lignesCode.length ? 6 + 8 + lignesCode.length * 4 + 6 : 0;
-const hClient = Math.max(34, hNom, hCode);
+const hClient = Math.max(32, hNom, hCode);
 if(y + hClient + 6 > BAS_CORPS) nouvellePage();
 doc.setFillColor(...C.nuit); doc.setDrawColor(...C.nuitBord); doc.setLineWidth(0.24);
 rpArrondiPDF(doc, L, y, LARGEUR, hClient, 3, 'FD');
@@ -840,7 +840,7 @@ const champs = [
 doc.setFont('helvetica', 'normal'); doc.setFontSize(9.4);
 champs.forEach(champ => { champ.lignes = rpLignesPDF(doc, champ.valeur, largeurColonne - 14); });
 const nbLignesChamp = Math.max(...champs.map(champ => champ.lignes.length));
-const hChamps = Math.max(25, 15 + nbLignesChamp * 4.5);
+const hChamps = Math.max(23, 15 + nbLignesChamp * 4.5);
 if(y + hChamps + 6 > BAS_CORPS) nouvellePage();
 doc.setFillColor(...C.ivoire); doc.setDrawColor(...C.ligne); doc.setLineWidth(0.22);
 rpArrondiPDF(doc, L, y, LARGEUR, hChamps, 2, 'FD');
@@ -862,22 +862,38 @@ y += hChamps + 6;
 doc.setFont('helvetica', 'normal'); doc.setFontSize(11.4);
 const raison = String(r.raison || '').trim() || '-';
 const lignesRaison = rpLignesPDF(doc, raison, LARGEUR - 18);
-const ligneH = 5.8;
-const hauteurMinRecit = 52;
+const ligneH = 5.6;
+const hauteurMinRecit = 40;
+
+/* Bloc de fin (validation client) : leur hauteur est connue
+   d'avance pour que le compte rendu remplisse exactement la place restante. */
+const signataire = String(r.nom_signataire || '').trim() || 'Nom non renseigné';
+doc.setFont('helvetica', 'normal'); doc.setFontSize(9.2);
+const lignesSignataire = rpLignesPDF(doc, signataire, 58);
+const hSignature = Math.max(44, 37 + lignesSignataire.length * 4.5);
+const hBlocSignature = 11 + hSignature + 5;
+const hApres = hBlocSignature;
+doc.setFont('helvetica', 'normal'); doc.setFontSize(11.4);
 const hauteurRecitComplet = Math.max(hauteurMinRecit, 19 + lignesRaison.length * ligneH);
 const hauteurBlocRecit = 11 + hauteurRecitComplet + 5;
-if(hauteurBlocRecit <= BAS_CORPS - DEBUT_PAGE_SUIVANTE && y + hauteurBlocRecit > BAS_CORPS) nouvellePage();
+// Un long récit commence tout de suite et se poursuit sur la page suivante (pas de grand vide en bas de page 1).
 if(y + 11 + 25 > BAS_CORPS) nouvellePage();
 y = rpTitreSectionPDF(doc, y, 'Intervention réalisée');
 let ligneRaison = 0, suiteRaison = false;
 while(ligneRaison < lignesRaison.length){
-const margeHaut = suiteRaison ? 12 : 13;
+const margeHaut = suiteRaison ? 12 : 11;
 const place = BAS_CORPS - y;
 if(place < margeHaut + ligneH + 6){ nouvellePage(); suiteRaison = true; continue; }
 let nb = Math.min(lignesRaison.length - ligneRaison, Math.floor((place - margeHaut - 6) / ligneH));
 if(nb < lignesRaison.length - ligneRaison && nb > 2 && lignesRaison.length - ligneRaison - nb === 1) nb--;
 let hTexte = margeHaut + nb * ligneH + 6;
-if(!suiteRaison && nb === lignesRaison.length - ligneRaison) hTexte = Math.max(hauteurMinRecit, hTexte);
+const dernierBloc = nb === lignesRaison.length - ligneRaison;
+if(!suiteRaison && dernierBloc) hTexte = Math.max(hauteurMinRecit, hTexte);
+// Dernier bloc de texte : on l'étire jusqu'aux blocs de fin pour occuper la page.
+if(dernierBloc){
+const libre = BAS_CORPS - y - 5 - hApres;
+if(libre > hTexte) hTexte = libre;
+}
 doc.setFillColor(...C.ivoire); doc.setDrawColor(...C.ligne); doc.setLineWidth(0.22);
 rpArrondiPDF(doc, L, y, LARGEUR, hTexte, 2.5, 'FD');
 doc.setFillColor(...C.ambre); doc.rect(L + 0.5, y + 4, 1.7, hTexte - 8, 'F');
@@ -890,9 +906,12 @@ doc.setFont('helvetica', 'bold'); doc.setFontSize(7);
 doc.setTextColor(...C.ambreFonce);
 doc.text('COMPTE RENDU', L + 9, y + 7.5);
 }
+const premiereLigneY = y + (suiteRaison ? 14 : 16);
+// Lignes de rédaction, comme sur une fiche papier.
+doc.setDrawColor(...C.ligne); doc.setLineWidth(0.15);
+for(let ly = premiereLigneY + 1.6; ly <= y + hTexte - 5; ly += ligneH) doc.line(L + 9, ly, R - 9, ly);
 doc.setFont('helvetica', 'normal'); doc.setFontSize(11.4);
 doc.setTextColor(...C.encre);
-const premiereLigneY = y + (suiteRaison ? 14 : 18);
 for(let i = 0; i < nb; i++){
 const texteLigne = lignesRaison[ligneRaison + i];
 if(texteLigne) doc.text(texteLigne, L + 9, premiereLigneY + i * ligneH);
@@ -903,17 +922,13 @@ if(ligneRaison < lignesRaison.length){ nouvellePage(); suiteRaison = true; }
 }
 
 /* Validation client et signature, assorties au panneau Client. */
-const signataire = String(r.nom_signataire || '').trim() || 'Nom non renseigné';
-doc.setFont('helvetica', 'normal'); doc.setFontSize(9.2);
-const lignesSignataire = rpLignesPDF(doc, signataire, 58);
-const hSignature = Math.max(48, 21 + lignesSignataire.length * 4.5 + 7);
-if(y + 11 + hSignature > BAS_CORPS) nouvellePage();
+if(y + hBlocSignature - 5 > BAS_CORPS) nouvellePage();
 y = rpTitreSectionPDF(doc, y, 'Validation client');
 doc.setFillColor(...C.nuit); doc.setDrawColor(...C.nuitBord); doc.setLineWidth(0.24);
 rpArrondiPDF(doc, L, y, LARGEUR, hSignature, 2.5, 'FD');
 doc.setFillColor(...C.ambre);
 doc.rect(L + 0.5, y + 4, 1.5, hSignature - 8, 'F');
-const xCadreSignature = L + 7, yCadreSignature = y + 12, lCadreSignature = 90, hCadreSignature = 28;
+const xCadreSignature = L + 7, yCadreSignature = y + 12, lCadreSignature = 90, hCadreSignature = 26;
 doc.setFont('helvetica', 'bold'); doc.setFontSize(6.9);
 doc.setTextColor(...C.ambreClair);
 doc.text('SIGNATURE DU CLIENT', L + 8, y + 8);
@@ -950,6 +965,11 @@ doc.text('NOM DU SIGNATAIRE', xSeparateur + 8, y + 8);
 doc.setFont('helvetica', 'normal'); doc.setFontSize(9.2);
 doc.setTextColor(...C.blanc);
 lignesSignataire.forEach((ligne, i) => doc.text(ligne, xSeparateur + 8, y + 18 + i * 4.5));
+doc.setFont('helvetica', 'italic'); doc.setFontSize(7.2);
+doc.setTextColor(...C.grisBleu);
+rpLignesPDF(doc, "Le client atteste la réalisation de l'intervention décrite dans ce rapport.", 54).slice(0, 3).forEach((ligne, i) => {
+if(ligne) doc.text(ligne, xSeparateur + 8, y + hSignature - 14.5 + i * 3.6);
+});
 y += hSignature + 5;
 
 /* Pied discret, imprimable même en noir et blanc. */
