@@ -412,7 +412,7 @@ return [
 { path:'/equipements', icone:'box', label:'Équipements', court:'Équip.', actif: equipementsActif },
 ...(peutGererTypes() ? [{ path:'/types', icone:'tag', label:"Types d'équipement", court:'Types', actif: r.name === 'types' }] : []),
 { path:'/journal', icone:'journal', label:'Journal', actif: r.name === 'journal', badge: nbActiviteNonLue() || '' },
-...(peutReglages() ? [{ path:'/reglages', icone:'gear', label:'Réglages', actif: r.name === 'reglages' || r.name === 'equipe' }] : []),
+...(peutGererEquipe() ? [{ path: estResponsableSeul() ? '/reglages/equipe' : '/reglages', icone: estResponsableSeul() ? 'users' : 'gear', label: estResponsableSeul() ? 'Mon équipe' : 'Réglages', court: estResponsableSeul() ? 'Équipe' : undefined, actif: r.name === 'reglages' || r.name === 'equipe' }] : []),
 { path:'/support', icone:'help', label:'Support', actif: r.name === 'support' },
 ];
 }
@@ -1347,12 +1347,22 @@ toast('Erreur : ' + e.message, 'erreur');
 }
 }
 
+/* Champs de base d'un type, tels que définis par le modèle métier attribué par le
+   fondateur. Un client peut en ajouter, pas les retirer ni les renommer. */
+function clesChampsModele(nomType){
+if(isSuperAdmin()) return new Set();
+const m = modelesMetiers()[0];
+const t = m && (m.types || []).find(x => (x.nom || '').trim().toLowerCase() === (nomType || '').trim().toLowerCase());
+return new Set(t ? (t.champs || []).map(c => slugify(c.label)) : []);
+}
+
 function ouvrirTypeForm(type){
+const base = type ? clesChampsModele(type.nom) : new Set();
 typeForm = type
 ? { open:true, id:type.id, nom:type.nom,
 // On conserve la clé d'origine de chaque champ : c'est elle qui relie
 // le champ aux valeurs déjà saisies sur les équipements existants.
-champs:(type.champs||[]).map(c => ({ key:c.key, label:c.label, type:c.type })),
+champs:(type.champs||[]).map(c => ({ key:c.key, label:c.label, type:c.type, verrou: base.has(c.key) })),
 busy:false, error:'' }
 : { open:true, id:null, nom:'', champs:[], busy:false, error:'' };
 render();
@@ -1393,7 +1403,8 @@ ${peutGererTypes()
 
 ${typeForm.open && peutGererTypes() ? renderTypeForm() : ''}
 
-${(peutGererTypes() && !typeForm.open) ? `
+${(peutGererTypes() && !typeForm.open && !isSuperAdmin()) ? carteModeleAttribue() : ''}
+${(peutGererTypes() && !typeForm.open && isSuperAdmin()) ? `
 <div class="card" style="margin-bottom:14px;">
 <div class="row between wrap" style="gap:10px;">
 <div style="flex:1;min-width:200px;">
@@ -1427,8 +1438,37 @@ ${typesVisibles.length ? rows : `<div class="empty"><div class="empty-icone">${i
 </div>
 `;
 }
+/* Client (responsable / admin) : uniquement le modèle attribué par le fondateur. */
+function carteModeleAttribue(){
+const m = modelesMetiers()[0];
+if(!m) return `
+<div class="card" style="margin-bottom:14px;">
+<h3>Votre modèle métier</h3>
+<div class="hint" style="margin:4px 0 0;">Aucun modèle métier ne vous a été attribué pour l'instant. Contactez WiDIAG MQ.</div>
+</div>`;
+const existants = new Set(typesPour(orgTypesCible()).map(t => (t.nom||'').trim().toLowerCase()));
+const manquants = m.types.filter(t => !existants.has(t.nom.trim().toLowerCase()));
+return `
+<div class="card" style="margin-bottom:14px;">
+<div class="row between wrap" style="gap:10px;">
+<div style="flex:1;min-width:200px;">
+<h3>Votre modèle métier : ${esc(m.nom)}</h3>
+${m.description ? `<div class="small muted">${esc(m.description)}</div>` : ''}
+<div class="modele-types" style="margin-top:6px;">${m.types.map(t => esc(t.nom)).join(' · ')}</div>
+<div class="hint" style="margin:6px 0 0;">Attribué par WiDIAG MQ. Pour l'adapter à votre activité, ouvrez un type (« Modifier ») et ajoutez vos propres champs.</div>
+</div>
+${manquants.length ? `<button class="btn btn-sm btn-primary" data-action="appliquer-modele" data-cle="${esc(m.cle)}" ${modeleState.busy ? 'disabled' : ''}>${modeleState.busy ? 'Création…' : `Ajouter ${manquants.length === m.types.length ? 'les ' + manquants.length + ' types' : (manquants.length > 1 ? 'les ' + manquants.length + ' types manquants' : 'le type manquant')}`}</button>` : `<span class="badge badge-neutral">Types en place</span>`}
+</div>
+</div>`;
+}
+
 function renderTypeForm(){
-const champsRows = typeForm.champs.map((c, i) => `
+const champsRows = typeForm.champs.map((c, i) => c.verrou ? `
+<div class="champ-row champ-verrou">
+<input type="text" value="${esc(c.label)}" disabled>
+<select disabled><option>${esc((CHAMP_TYPES.find(ct => ct.v === c.type) || {}).l || c.type)}</option></select>
+<span class="small muted" title="Champ du modèle métier attribué par WiDIAG MQ" style="text-align:center;font-size:11px;">modèle</span>
+</div>` : `
 <div class="champ-row">
 <input type="text" placeholder="Nom du champ (ex : Kilométrage)" value="${esc(c.label)}" data-action="champ-label" data-i="${i}">
 <select data-action="champ-type" data-i="${i}">
@@ -1448,10 +1488,10 @@ ${typeForm.error ? `<div class="alert alert-error">${esc(typeForm.error)}</div>`
 <label>Nom du type</label>
 <input type="text" placeholder="Ex : Véhicule" id="type-nom-input" value="${esc(typeForm.nom)}" data-action="type-nom">
 </div>
-<label>Champs personnalisés (optionnel)</label>
+<label>Champs supplémentaires (optionnel)</label>
 <div style="margin-bottom:8px;">${champsRows}</div>
 <button type="button" class="btn btn-sm" data-action="champ-add">+ Ajouter un champ</button>
-<div class="hint">Ces champs apparaîtront dans le formulaire d'ajout d'équipement de ce type (ex : marque, modèle, capacité, kilométrage…).</div>
+<div class="hint">Ces champs apparaîtront dans le formulaire d'ajout d'équipement de ce type (ex : marque, modèle, capacité, kilométrage…).${typeForm.champs.some(c => c.verrou) ? ' Les champs « modèle » viennent de votre modèle métier : vous pouvez en ajouter d\'autres, pas les retirer.' : ''}</div>
 ${modification ? `
 <div class="hint">
 Ajouter un champ est sans risque : les équipements existants l'afficheront, vide,
@@ -2199,7 +2239,7 @@ try{
 await loadProfileAndOrg(); await chargerStatutSuperAdmin(); await loadTypes(true);
 try{ await chargerModeles(); }catch(err){ console.error('[modèles]', err); }
 state.horsLigne = false;
-sauverInstantane({ profile: state.profile, orgName: state.orgName, superAdmin: state.superAdmin, types: state.types, modeles: state.modeles });
+sauverInstantane({ profile: state.profile, orgName: state.orgName, superAdmin: state.superAdmin, types: state.types, modeles: state.modeles, modeleCle: state.modeleCle });
 dashboardCache.horsLigneLe = null;
 refreshDashboard();
 }catch(e){}
@@ -2445,6 +2485,7 @@ const cote = ETIQUETTE.taille_qr_mm;
 printArea.innerHTML = `
 <img id="print-qr-img" alt="" style="width:${cote}mm;height:${cote}mm;">
 ${(ETIQUETTE.afficher_identifiant && ident) ? `<div class="etiquette-id">${esc(ident)}</div>` : ''}
+${ETIQUETTE.texte_site ? `<div class="etiquette-site">${esc(ETIQUETTE.texte_site)}</div>` : ''}
 `;
 
 const img = document.getElementById('print-qr-img');
@@ -2540,6 +2581,7 @@ else if(action === 'fermer-client-form'){ reglages.clientForm = null; render(); 
 else if(action === 'clients-statut'){ actionClientsStatut(t.dataset.id ? [t.dataset.id] : [...reglages.selClients], t.dataset.actif === '1'); }
 else if(action === 'clients-supprimer'){ actionClientsSupprimer(t.dataset.id ? [t.dataset.id] : [...reglages.selClients]); }
 else if(action === 'clients-desel'){ reglages.selClients = []; render(); }
+else if(action === 'membre-statut'){ actionMembresActive([t.dataset.id], t.dataset.active === '1'); }
 else if(action === 'membres-active'){ actionMembresActive([...reglages.selMembres], t.dataset.active === '1'); }
 else if(action === 'membres-supprimer'){ actionMembresSupprimer([...reglages.selMembres]); }
 else if(action === 'membres-desel'){ reglages.selMembres = []; render(); }
@@ -3080,7 +3122,7 @@ await chargerStatutSuperAdmin();
 await loadTypes(true);
 try{ await chargerModeles(); }catch(err){ console.error('[modèles]', err); }
 state.horsLigne = false;
-sauverInstantane({ profile: state.profile, orgName: state.orgName, superAdmin: state.superAdmin, types: state.types, modeles: state.modeles });
+sauverInstantane({ profile: state.profile, orgName: state.orgName, superAdmin: state.superAdmin, types: state.types, modeles: state.modeles, modeleCle: state.modeleCle });
 if(state.profile?.mdp_a_changer) setTimeout(imposerNouveauMotDePasse, 400);
 setTimeout(verifierSession, 2000);
 if(!state.superAdmin) setTimeout(() => chargerActivite(true), 1200);
@@ -3098,7 +3140,7 @@ if(estErreurReseau(e) && inst.profile && inst.profile.id === session.user.id && 
 // Pas de réseau : on démarre sur le dernier état connu.
 state.profile = inst.profile; state.orgName = inst.orgName || ''; state.superAdmin = !!inst.superAdmin;
 state.types = inst.types || []; state.typesLoaded = true; state.horsLigne = true;
-state.modeles = inst.modeles || null;
+state.modeles = inst.modeles || null; state.modeleCle = inst.modeleCle || null;
 retourApresConnexion();
 try{ state.enAttenteCount = await offlineCompterEnAttente(); }catch(err){}
 state.loading = false;

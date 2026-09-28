@@ -41,6 +41,8 @@ reactivation_client: 'Client réactivé',
 
 function isSuperAdmin(){ return state.superAdmin === true; }
 function peutReglages(){ return isAdmin() || isSuperAdmin(); }
+// Responsable : accès limité à « Mon équipe » (voir, suspendre, réactiver ses utilisateurs).
+function peutVoirReglages(){ return peutGererEquipe(); }
 function nomModele(cle){ return (modelesMetiers().find(m => m.cle === cle) || {}).nom || ''; }
 
 /* Peu d'onglets, chacun avec une seule mission. Les membres et les invitations
@@ -58,6 +60,9 @@ aide:"Les demandes de vos clients, les statistiques et l’export Excel d’un p
 journal,
 ];
 }
+if(estResponsableSeul()) return [
+{ cle:'equipe', l:'Mon équipe', aide:"Vos collaborateurs : consultez leurs profils et suspendez ou réactivez leur accès à l'application." },
+];
 return [
 { cle:'equipe', l:'Mon équipe', aide:"Les membres de votre organisation, leurs rôles et ce qu'ils peuvent voir." },
 journal,
@@ -133,7 +138,11 @@ if(reglages.membresLoading) return;
 if(reglages.membres !== null && !force) return;
 if(reglages.membresError && !force) return;
 reglages.membresLoading = true;
-Promise.all([listMembers(), listInvites(), listAcces(), listTypesToutesOrgs(), listEmailsMembres()])
+// Responsable : seule la liste de son équipe (pas d'invitations, d'accès par type ni d'e-mails).
+const chargement = estResponsableSeul()
+? listEquipe().then(m => [m, [], [], [], []])
+: Promise.all([listMembers(), listInvites(), listAcces(), listTypesToutesOrgs(), listEmailsMembres()]);
+chargement
 .then(([m, i, a, t, em]) => {
 reglages.membres = m; reglages.invites = i; reglages.acces = a; reglages.typesOrgs = t;
 reglages.emails = Object.fromEntries(em.map(x => [x.id, x]));
@@ -155,7 +164,7 @@ if(isSuperAdmin()) chargerClients(true);
 /* ---------------------------------------------------------------------- */
 
 function viewReglages(onglet, sous){
-if(!peutReglages()) return viewNonAutorise();
+if(!peutVoirReglages()) return viewNonAutorise();
 if(isSuperAdmin()){ chargerSupport(false); chargerClients(false); } // compteurs des onglets
 onglet = ongletReglagesValide(onglet);
 const onglets = ongletsReglages();
@@ -168,7 +177,7 @@ const courant = onglets.find(o => o.cle === onglet);
 
 let contenu = '';
 if(onglet === 'clients') contenu = sous ? viewClientDetail(sous) : viewClients();
-else if(onglet === 'equipe') contenu = viewMembres() + viewInvitations();
+else if(onglet === 'equipe') contenu = estResponsableSeul() ? viewMembres() : viewMembres() + viewInvitations();
 else if(onglet === 'support') contenu = isSuperAdmin()
 ? sousMenuSupport(['modeles','stats','rapports'].includes(sous) ? sous : 'demandes') + (sous === 'modeles' ? viewModelesMetier() : sous === 'stats' ? viewStats() : sous === 'rapports' ? viewRapports() : viewSupportAdmin())
 : viewSupportAdmin();
@@ -583,6 +592,7 @@ if(state.route.name === 'reglages' && state.route.sub) nav('/reglages/clients');
 
 function membreVerrouille(m){
 // Soi-même : jamais. Le fondateur d'une organisation : seul le super-admin y touche.
+if(estResponsableSeul()) return m.id === state.profile?.id || m.fondateur || m.role !== 'utilisateur';
 return m.id === state.profile?.id || (m.fondateur && !isSuperAdmin());
 }
 
@@ -661,7 +671,7 @@ ${sel.length ? `
 <strong>${sel.length} sélectionné${sel.length > 1 ? 's' : ''}</strong>
 <button class="btn btn-sm" data-action="membres-active" data-active="0">Suspendre</button>
 <button class="btn btn-sm" data-action="membres-active" data-active="1">Réactiver</button>
-<button class="btn btn-sm btn-danger" data-action="membres-supprimer">Supprimer</button>
+${estResponsableSeul() ? '' : '<button class="btn btn-sm btn-danger" data-action="membres-supprimer">Supprimer</button>'}
 <button class="btn btn-sm btn-lien" data-action="membres-desel">Annuler</button>
 </div>` : ''}
 ${selectionnables.length ? `
@@ -682,7 +692,7 @@ const typesOrg = (reglages.typesOrgs || []).filter(t => t.organization_id === m.
 const acces = reglages.acces || [];
 const email = reglages.emails[m.id]?.email || '';
 
-const blocAcces = estAdmin ? '' : `
+const blocAcces = (estAdmin || estResponsableSeul()) ? '' : `
 <div class="acces">
 <label class="case">
 <input type="checkbox" data-action="acces-tous" data-id="${m.id}" ${m.acces_tous_types ? 'checked' : ''} ${verrouille ? 'disabled' : ''}>
@@ -733,7 +743,7 @@ ${avecClient && m.organizations ? ` · <a href="#/reglages/clients/${m.organizat
 </div>
 <div class="membre-role-acces">
 <div class="membre-role-ligne">
-${verrouille
+${(verrouille || estResponsableSeul())
 ? `<span class="badge badge-role role-${m.fondateur ? 'fondateur' : esc(m.role)}">${esc(m.fondateur ? 'Fondateur' : roleLabel(m.role))}</span>`
 : `<select data-action="member-role" data-id="${m.id}">
 ${ROLES_ASSIGNABLES.map(r => `<option value="${r}" ${r === m.role ? 'selected' : ''}>${esc(roleLabel(r))}</option>`).join('')}
@@ -741,6 +751,10 @@ ${ROLES_ASSIGNABLES.map(r => `<option value="${r}" ${r === m.role ? 'selected' :
 </div>
 ${blocAcces}
 </div>
+${estResponsableSeul() && !verrouille ? `
+<div class="membre-actions">
+<button class="btn btn-sm" data-action="membre-statut" data-id="${m.id}" data-active="${m.active ? '0' : '1'}">${m.active ? 'Suspendre' : 'Réactiver'}</button>
+</div>` : ''}
 ${isSuperAdmin() && (!estMoi || !verrouille) ? `
 <div class="membre-actions">
 ${!estMoi ? `<button class="btn btn-sm btn-mdp" data-action="reset-mdp" data-id="${m.id}" title="Donner un mot de passe provisoire">${iconeNav('key', 15)} Mot de passe</button>
@@ -778,7 +792,7 @@ render();
 /* Nom et prénom : modifiables par l'administrateur (et le super-admin) pour
    les membres qu'il gère, et par chacun pour lui-même. Les interventions
    déjà enregistrées gardent le nom saisi à l'époque : c'est l'historique. */
-function peutRenommer(m){ return m.id === state.profile?.id || !membreVerrouille(m); }
+function peutRenommer(m){ return m.id === state.profile?.id || (!membreVerrouille(m) && !estResponsableSeul()); }
 
 function renderRenommage(){
 const r = reglages.renommage;

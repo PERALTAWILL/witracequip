@@ -187,6 +187,12 @@ return data || [];
 }
 
 /* Cloisonnement par métier : quels types chaque profil a le droit de voir. */
+async function listEquipe(){
+const { data, error } = await sb.rpc('liste_equipe');
+if(error) throw error;
+return data || [];
+}
+
 async function listAcces(){
 const { data, error } = await sb.from('acces_types').select('profile_id, type_id');
 if(error) throw error;
@@ -262,12 +268,21 @@ return data || [];
 /* --- Modèles métier (gérés par le fondateur : Support → Modèles métier) ---
 En base depuis la v2.16.8 ; la liste écrite dans config.js ne sert plus que
 de secours tant que la base n'a pas répondu (hors-ligne au premier lancement). */
-function modelesMetiers(){ return state.modeles || MODELES_METIERS; }
+function modelesMetiers(){
+const tous = state.modeles || (state.superAdmin ? MODELES_METIERS : []);
+if(state.superAdmin) return tous;
+// Un client ne voit que le modèle que le fondateur lui a attribué (jamais la liste complète).
+return state.modeleCle ? tous.filter(m => m.cle === state.modeleCle) : [];
+}
 
 async function chargerModeles(){
 const { data, error } = await sb.from('modeles_metiers').select('cle, nom, description, types, ordre').order('ordre').order('nom');
 if(error) throw error;
 state.modeles = data || [];
+if(!state.superAdmin){
+try{ const r = await sb.rpc('mon_modele_cle'); state.modeleCle = r.error ? null : (r.data || null); }
+catch(e){ state.modeleCle = null; }
+}
 return state.modeles;
 }
 
@@ -349,6 +364,11 @@ return data;
 }
 
 async function setMembresActive(ids, active){
+if(estResponsableSeul()){
+const { error } = await sb.rpc('definir_statut_collaborateurs', { p_ids: ids, p_actif: active });
+if(error) throw error;
+return;
+}
 const { error } = await sb.from('profiles').update({ active }).in('id', ids);
 if(error) throw error;
 }

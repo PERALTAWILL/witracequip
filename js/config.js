@@ -29,8 +29,9 @@ d'autre, pour tenir sur une imprimante thermique.
 Ajustez la taille selon le format de vos étiquettes.
 ========================================================================= */
 const ETIQUETTE = {
-taille_qr_mm: 16, // côté du QR imprimé, en millimètres — étiquette thermique 2 cm x 2 cm
-afficher_identifiant: true, // n° de série / immatriculation sous le QR
+taille_qr_mm: 14, // côté du QR imprimé, en millimètres — étiquette thermique 2 cm x 2 cm
+afficher_identifiant: false, // n° de série / immatriculation sous le QR (désactivé : trop de place)
+texte_site: 'WitracEquip.fr', // petite mention sous le QR ('' pour ne rien afficher)
 };
 
 /* Adresse du support : pied de page de toutes les pages + formulaire Support. */
@@ -252,12 +253,17 @@ types: [
 
 function roleLabel(r){ return ROLE_LABELS[r] || r || '—'; }
 function isAdmin(){ return state.profile?.role === 'admin'; }
+// Responsable « seul » : ni administrateur ni fondateur de la plateforme. Il gère son équipe
+// (voir, suspendre, réactiver les utilisateurs) mais ne change ni rôles, ni accès, ni invitations.
+function estResponsableSeul(){ return state.profile?.role === 'responsable' && !state.superAdmin; }
+function peutGererEquipe(){ return ['admin','responsable'].includes(state.profile?.role) || state.superAdmin === true; }
 function peutSupprimer(){ return ['admin','responsable'].includes(state.profile?.role); }
 // Créer / modifier les types d'équipement et leurs champs : administrateur et responsable.
 // L'utilisateur simple s'en sert sans les voir (vérifié aussi par la base, sql/10).
 function peutGererTypes(){ return ['admin','responsable'].includes(state.profile?.role); }
 
 const state = {
+modeleCle: null, // clé du modèle métier attribué à l'organisation (lue en base)
 session: null,
 profile: null, // { id, organization_id, full_name, role, fondateur }
 superAdmin: false, // super-administrateur plateforme (WiDIAG MQ) : gère tous les clients
