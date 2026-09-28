@@ -7,6 +7,9 @@
    « rapports-intervention ». Tout est réservé au super-administrateur : la
    base le vérifie elle-même (RLS).
 
+   v2.17.16 — sélection multiple dans la liste : tout sélectionner, archiver /
+   restaurer, supprimer ou exporter (un seul ZIP de PDF) plusieurs rapports.
+
    v2.17.15 — plus aucun champ obligatoire (adresse e-mail vérifiée seulement si
    elle est saisie) ; le client se tape librement ou se choisit dans la liste
    (sql/13-rapports-champs-libres.sql).
@@ -29,11 +32,12 @@
    - Envoyer par e-mail : PDF + documents joints via la feuille de partage du
      téléphone ; sur ordinateur, PDF téléchargé + messagerie ouverte. */
 
-const RP_VERSION = 'v2.17.15';
+const RP_VERSION = 'v2.17.16';
 const BUCKET_RAPPORTS = 'rapports-intervention';
 const RP_TAILLE_MAX = 10 * 1024 * 1024; // 10 Mo par document
 const RP_EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const RP_JSPDF_URL = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
+const RP_JSZIP_URL = 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js';
 
 function rpAujourdhui(){
 const d = new Date();
@@ -80,7 +84,7 @@ return String((r.organizations && r.organizations.nom) || r.client_nom || '').tr
 }
 
 function rpEtatInitial(uid){
-return { uid, form: rpFormVide(), modificationId: null, liste: null, listeLoading: false, listeError: '', vue: 'actifs', busy: false, occupe: null, error: '', ouvert: null, urls: {} };
+return { uid, form: rpFormVide(), modificationId: null, liste: null, listeLoading: false, listeError: '', vue: 'actifs', sel: [], progression: '', busy: false, occupe: null, error: '', ouvert: null, urls: {} };
 }
 let rapports = { uid: null, form: null };
 
@@ -99,7 +103,7 @@ let q = sb.from('rapports_intervention')
 q = vue === 'archives' ? q.not('archived_at', 'is', null) : q.is('archived_at', null);
 q.order('date_intervention', { ascending: false })
 .order('created_at', { ascending: false })
-.limit(100)
+.limit(500)
 .then(({ data, error }) => {
 if(error) throw error;
 // L'utilisateur a changé d'onglet pendant le chargement : on recharge la bonne vue.
@@ -200,13 +204,30 @@ return `<div class="alert alert-error">${esc(rapports.listeError)}<br><span clas
 if(rapports.liste === null) return squeletteListe(3);
 if(!rapports.liste.length) return `<div class="empty small">${rapports.vue === 'archives' ? 'Aucun rapport archivé.' : 'Aucun rapport pour l\'instant.'}</div>`;
 const archives = rapports.vue === 'archives';
-return rapports.liste.map(r => {
+const sel = new Set(rpSelIds());
+const nb = sel.size, total = rapports.liste.length;
+const occupeLot = rapports.occupe === 'lot';
+const barre = `
+<div class="row between wrap" style="gap:8px;padding:6px 0 10px;border-bottom:1px solid var(--border);margin-bottom:6px;">
+<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:600;">
+<input type="checkbox" data-rp="sel-tout" ${nb === total ? 'checked' : ''} ${rapports.occupe ? 'disabled' : ''} style="width:18px;height:18px;">
+Tout sélectionner (${total})</label>
+<div class="small muted">${nb ? nb + ' sélectionné' + (nb > 1 ? 's' : '') : 'Aucune sélection'}</div>
+</div>
+${nb ? `<div style="display:flex;gap:8px;flex-wrap:wrap;margin:0 0 10px;">
+<button class="btn btn-sm" data-rp="lot-exporter" ${rapports.occupe ? 'disabled' : ''}>${occupeLot ? 'Export ' + esc(rapports.progression || '…') : 'Exporter (' + nb + ')'}</button>
+<button class="btn btn-sm" data-rp="${archives ? 'lot-restaurer' : 'lot-archiver'}" ${rapports.occupe ? 'disabled' : ''}>${archives ? 'Restaurer' : 'Archiver'} (${nb})</button>
+<button class="btn btn-sm btn-danger" data-rp="lot-supprimer" ${rapports.occupe ? 'disabled' : ''}>Supprimer (${nb})</button>
+<button class="btn btn-sm" data-rp="sel-vider" ${rapports.occupe ? 'disabled' : ''}>Désélectionner</button>
+</div>` : ''}`;
+return barre + rapports.liste.map(r => {
 const ouvert = rapports.ouvert === r.id;
 const pj = r.pieces_jointes || [];
 const occupe = rapports.occupe === r.id;
 return `
 <div class="list-item" style="flex-wrap:wrap;align-items:flex-start;">
-<div style="flex:1;min-width:200px;">
+<input type="checkbox" data-rp="sel" data-id="${r.id}" ${sel.has(r.id) ? 'checked' : ''} ${rapports.occupe ? 'disabled' : ''} aria-label="Sélectionner ce rapport" style="width:18px;height:18px;margin:3px 10px 0 0;flex:none;">
+<div style="flex:1;min-width:180px;">
 <div style="font-weight:650;">${esc(rpNomClient(r))}</div>
 <div class="small muted">${fmtDate(r.date_intervention)}${r.nom_support ? ' · par ' + esc(r.nom_support) : ''}${pj.length ? ` · ${pj.length} document${pj.length > 1 ? 's' : ''}` : ''}</div>
 </div>
@@ -582,6 +603,146 @@ if(rapports.modificationId === id) rpAnnulerModification();
 toast('Rapport supprimé');
 }catch(e){ toast('Suppression impossible : ' + (e.message || e), 'erreur'); }
 render();
+}
+
+/* ---------- SÉLECTION MULTIPLE : archiver, supprimer, exporter ---------- */
+
+function rpSelIds(){
+return (rapports.sel || []).filter(id => rpTrouver(id));
+}
+
+function rpSelBasculer(id, coche){
+const s = new Set(rapports.sel || []);
+if(coche) s.add(id); else s.delete(id);
+rapports.sel = [...s];
+}
+
+function rpSelTout(coche){
+rapports.sel = coche ? (rapports.liste || []).map(r => r.id) : [];
+}
+
+function rpLotArrete(){
+rapports.occupe = null; rapports.progression = '';
+}
+
+async function rpLotArchiver(archiver){
+const ids = rpSelIds();
+if(!ids.length || rapports.occupe) return;
+const n = ids.length, mot = n + ' rapport' + (n > 1 ? 's' : '');
+if(archiver && !await confirmer(`Archiver ${mot} ?\n\nLes rapports ne sont pas supprimés : ils restent consultables dans l'onglet « Archivés » et peuvent être restaurés.`, { ok: 'Archiver' })) return;
+if(!archiver && !await confirmer(`Restaurer ${mot} ?`, { ok: 'Restaurer' })) return;
+rapports.occupe = 'lot'; render();
+try{
+const { data, error } = await sb.from('rapports_intervention')
+.update({ archived_at: archiver ? new Date().toISOString() : null })
+.in('id', ids).select('id');
+if(error) throw error;
+const faits = new Set((data || []).map(x => x.id));
+if(!faits.size) throw new Error("la base a refusé l'opération (aucune ligne modifiée).");
+rapports.liste = rapports.liste.filter(x => !faits.has(x.id));
+rapports.sel = rapports.sel.filter(id => !faits.has(id));
+rapports.ouvert = null;
+if(rapports.modificationId && faits.has(rapports.modificationId)) rapports.modificationId = null;
+if(faits.size < n) toast(`${faits.size} rapport(s) sur ${n} ${archiver ? 'archivé(s)' : 'restauré(s)'} — vérifiez les autres.`, 'erreur');
+else toast(faits.size > 1 ? `${faits.size} rapports ${archiver ? 'archivés' : 'restaurés'}` : `Rapport ${archiver ? 'archivé' : 'restauré'}`);
+}catch(e){
+toast((archiver ? 'Archivage impossible : ' : 'Restauration impossible : ') + (e.message || e), 'erreur');
+}
+rpLotArrete(); render();
+}
+
+async function rpLotSupprimer(){
+const ids = rpSelIds();
+if(!ids.length || rapports.occupe) return;
+const n = ids.length;
+const tout = n === (rapports.liste || []).length;
+if(!await confirmer(`Supprimer ${n} rapport${n > 1 ? 's' : ''} ?\n\n${tout ? 'TOUS les rapports de cette liste' : (n > 1 ? 'Ces rapports' : 'Ce rapport')} ${n > 1 || tout ? 'seront' : 'sera'} définitivement effacé${n > 1 || tout ? 's' : ''}, avec leurs signatures et leurs documents joints. Cette action est irréversible.`, { danger: true, ok: 'Supprimer ' + n + (n > 1 ? ' rapports' : ' rapport') })) return;
+rapports.occupe = 'lot'; render();
+try{
+const cibles = ids.map(rpTrouver).filter(Boolean);
+const chemins = cibles.flatMap(r => [r.signature_path, ...(r.pieces_jointes || []).map(p => p.chemin)]).filter(Boolean);
+for(let i = 0; i < chemins.length; i += 100){
+const { error: e1 } = await sb.storage.from(BUCKET_RAPPORTS).remove(chemins.slice(i, i + 100));
+if(e1) throw e1;
+}
+const { data, error } = await sb.from('rapports_intervention').delete().in('id', ids).select('id');
+if(error) throw error;
+const faits = new Set((data || []).map(x => x.id));
+rapports.liste = rapports.liste.filter(x => !faits.has(x.id));
+rapports.sel = rapports.sel.filter(id => !faits.has(id));
+rapports.ouvert = null;
+if(rapports.modificationId && faits.has(rapports.modificationId)) rpAnnulerModification();
+if(faits.size < n) toast(`${faits.size} rapport(s) supprimé(s) sur ${n} — actualisez la liste et réessayez.`, 'erreur');
+else toast(faits.size > 1 ? `${faits.size} rapports supprimés` : 'Rapport supprimé');
+}catch(e){ toast('Suppression impossible : ' + (e.message || e), 'erreur'); }
+rpLotArrete(); render();
+}
+
+function rpChargerJsZip(){
+if(window.JSZip) return Promise.resolve(window.JSZip);
+return new Promise((resolve, reject) => {
+const s = document.createElement('script');
+s.src = RP_JSZIP_URL;
+s.onload = () => window.JSZip ? resolve(window.JSZip) : reject(new Error('module ZIP introuvable'));
+s.onerror = () => reject(new Error('impossible de charger le module ZIP (pas de connexion ?)'));
+document.head.appendChild(s);
+});
+}
+
+async function rpLotExporter(){
+const ids = rpSelIds();
+if(!ids.length || rapports.occupe) return;
+if(ids.length === 1) return rpExporterPDF(ids[0]);
+const cibles = ids.map(rpTrouver).filter(Boolean);
+rapports.occupe = 'lot'; rapports.progression = '0 / ' + cibles.length; render();
+
+const pdfs = [], echecs = [];
+for(const [i, r] of cibles.entries()){
+rapports.progression = `${i + 1} / ${cibles.length}`; render();
+try{ pdfs.push(await rpConstruirePDF(r)); }
+catch(e){ echecs.push(rpNomClient(r) + ' (' + (e.message || e) + ')'); }
+}
+rpLotArrete(); render();
+if(!pdfs.length){ toast("Aucun PDF n'a pu être préparé : " + (echecs[0] || ''), 'erreur'); return; }
+
+// Deux rapports du même client le même jour ne doivent pas s'écraser dans le ZIP.
+const vus = {};
+const nomUnique = (nom) => {
+vus[nom] = (vus[nom] || 0) + 1;
+return vus[nom] === 1 ? nom : nom.replace(/\.pdf$/i, '') + '_' + vus[nom] + '.pdf';
+};
+
+let livrable = null, mode = 'zip';
+try{
+const JSZip = await rpChargerJsZip();
+const zip = new JSZip();
+pdfs.forEach(f => zip.file(nomUnique(f.name), f));
+const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE' });
+livrable = new File([blob], `Rapports_intervention_${rpAujourdhui()}.zip`, { type: 'application/zip' });
+}catch(_){ mode = 'pdfs'; }
+
+const info = echecs.length ? `\n\nAttention : ${echecs.length} rapport(s) n'ont pas pu être préparés (${echecs.join(', ')}).` : '';
+
+if(mode === 'zip'){
+if(rpEstMobile() && rpPeutPartager([livrable])){
+if(!await confirmer(`Export prêt\n\n${pdfs.length} rapports dans un ZIP\n${livrable.name}${info}`, { ok: 'Enregistrer / partager' })) return;
+try{ await navigator.share({ files: [livrable], title: livrable.name }); return; }
+catch(e){ if(e && e.name === 'AbortError') return; }
+}
+rpTelecharger(livrable);
+toast(`ZIP téléchargé : ${pdfs.length} rapports`);
+if(echecs.length) toast(`${echecs.length} rapport(s) n'ont pas pu être exportés.`, 'erreur');
+return;
+}
+
+// Repli : le module ZIP n'a pas pu être chargé → les PDF un par un.
+if(rpEstMobile() && rpPeutPartager(pdfs)){
+if(!await confirmer(`Export prêt\n\n${pdfs.length} PDF à enregistrer${info}`, { ok: 'Enregistrer / partager' })) return;
+try{ await navigator.share({ files: pdfs, title: 'Rapports d\'intervention' }); return; }
+catch(e){ if(e && e.name === 'AbortError') return; }
+}
+for(const f of pdfs){ rpTelecharger(f); await new Promise(ok => setTimeout(ok, 350)); }
+toast(`${pdfs.length} PDF téléchargés (autorisez les téléchargements multiples si le navigateur le demande)`);
 }
 
 function rpAjouterFichiers(input){
@@ -1169,6 +1330,8 @@ rapports.form[t.name] = t.value;
 if(t.name === 'client_nom') rapports.form.client_id = rpResoudreClient(t.value);
 }
 else if(t.dataset.rp === 'fichiers') rpAjouterFichiers(t);
+else if(t.dataset.rp === 'sel'){ rpSelBasculer(t.dataset.id, t.checked); render(); }
+else if(t.dataset.rp === 'sel-tout'){ rpSelTout(t.checked); render(); }
 });
 
 document.addEventListener('click', (e) => {
@@ -1190,10 +1353,15 @@ else if(a === 'exporter') rpExporterPDF(id);
 else if(a === 'email') rpPreparerEmail(id);
 else if(a === 'vue'){
 if(rapports.vue !== t.dataset.vue){
-rapports.vue = t.dataset.vue; rapports.liste = null; rapports.listeError = ''; rapports.ouvert = null;
+rapports.vue = t.dataset.vue; rapports.liste = null; rapports.listeError = ''; rapports.ouvert = null; rapports.sel = [];
 render();
 }
 }
+else if(a === 'sel-vider'){ rapports.sel = []; render(); }
+else if(a === 'lot-exporter') rpLotExporter();
+else if(a === 'lot-archiver') rpLotArchiver(true);
+else if(a === 'lot-restaurer') rpLotArchiver(false);
+else if(a === 'lot-supprimer') rpLotSupprimer();
 else if(a === 'actualiser'){ rapports.listeError = ''; chargerRapports(true); }
 });
 
