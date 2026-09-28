@@ -7,6 +7,10 @@
    « rapports-intervention ». Tout est réservé au super-administrateur : la
    base le vérifie elle-même (RLS).
 
+   v2.17.15 — plus aucun champ obligatoire (adresse e-mail vérifiée seulement si
+   elle est saisie) ; le client se tape librement ou se choisit dans la liste
+   (sql/13-rapports-champs-libres.sql).
+
    v2.17.14 — PDF pleine page A4 : le compte rendu s'étend (lignes de
    rédaction) jusqu'aux blocs de fin, référence du rapport, mention de
    validation client.
@@ -25,7 +29,7 @@
    - Envoyer par e-mail : PDF + documents joints via la feuille de partage du
      téléphone ; sur ordinateur, PDF téléchargé + messagerie ouverte. */
 
-const RP_VERSION = 'v2.17.14';
+const RP_VERSION = 'v2.17.15';
 const BUCKET_RAPPORTS = 'rapports-intervention';
 const RP_TAILLE_MAX = 10 * 1024 * 1024; // 10 Mo par document
 const RP_EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -40,6 +44,7 @@ function rpFormVide(){
 return {
 nom_support: ((state.profile && state.profile.full_name) || '').trim() || (state.session && state.session.user.email) || '',
 client_id: '',
+client_nom: '',            // texte tapé (ou nom choisi dans la liste)
 date: rpAujourdhui(),
 raison: '',
 signataire: '',
@@ -49,6 +54,29 @@ signatureExistante: null,   // chemin de la signature déjà enregistrée (modif
 fichiers: [],               // nouveaux documents (File)
 piecesExistantes: [],       // documents déjà enregistrés (modification)
 };
+}
+
+/* Clients proposés dans la liste. Deux clients de même nom se distinguent par leur numéro. */
+function rpClientsListe(){
+const l = [...(reglages.clients || [])].filter(c => !c.est_mon_organisation)
+.sort((a, b) => a.nom.localeCompare(b.nom, 'fr'));
+const norm = x => String(x || '').trim().toLowerCase();
+const nb = {}; l.forEach(c => { nb[norm(c.nom)] = (nb[norm(c.nom)] || 0) + 1; });
+return l.map(c => ({ id: c.id, nom: c.nom, code: c.code_client || '',
+label: (nb[norm(c.nom)] > 1 && c.code_client) ? `${c.nom} — n° ${c.code_client}` : c.nom }));
+}
+
+/* Le texte tapé correspond-il à un client de la liste ? Si oui on le rattache, sinon nom libre. */
+function rpResoudreClient(texte){
+const t = String(texte || '').trim().toLowerCase();
+if(!t) return '';
+const c = rpClientsListe().find(x => x.label.toLowerCase() === t);
+return c ? c.id : '';
+}
+
+/* Nom du client à afficher : client de la liste, sinon nom saisi. */
+function rpNomClient(r){
+return String((r.organizations && r.organizations.nom) || r.client_nom || '').trim() || 'Client';
 }
 
 function rpEtatInitial(uid){
@@ -67,7 +95,7 @@ if(rapports.listeError && !force) return; // pas de relance en boucle sur une er
 const vue = rapports.vue;
 rapports.listeLoading = true;
 let q = sb.from('rapports_intervention')
-.select('id, organization_id, nom_support, date_intervention, raison, nom_signataire, email_destinataire, signature_path, pieces_jointes, created_at, archived_at, organizations(nom, code_client)');
+.select('id, organization_id, nom_support, date_intervention, raison, nom_signataire, email_destinataire, signature_path, pieces_jointes, client_nom, created_at, archived_at, organizations(nom, code_client)');
 q = vue === 'archives' ? q.not('archived_at', 'is', null) : q.is('archived_at', null);
 q.order('date_intervention', { ascending: false })
 .order('created_at', { ascending: false })
@@ -92,8 +120,7 @@ requestAnimationFrame(rpPreparerCanvas);
 
 const f = rapports.form;
 const modif = !!rapports.modificationId;
-const clients = [...(reglages.clients || [])].filter(c => !c.est_mon_organisation)
-.sort((a, b) => a.nom.localeCompare(b.nom, 'fr'));
+const clients = rpClientsListe();
 
 return `
 <div class="card">
@@ -105,22 +132,21 @@ Vous modifiez le rapport du ${esc(fmtDate(f.date))}. Rien n'est changé tant que
 ${rapports.error ? `<div class="alert alert-error">${esc(rapports.error)}</div>` : ''}
 <form id="rp-form" novalidate>
 <div class="grid-2">
-<div class="field"><label>Nom du support <span class="oblig">obligatoire</span></label>
+<div class="field"><label>Nom du support <span class="muted small">(facultatif)</span></label>
 <input type="text" name="nom_support" data-rp="champ" value="${esc(f.nom_support)}" placeholder="Qui a réalisé l'intervention ?"></div>
-<div class="field"><label>Date de l'intervention <span class="oblig">obligatoire</span></label>
+<div class="field"><label>Date de l'intervention <span class="muted small">(facultatif)</span></label>
 <input type="date" name="date" data-rp="champ" value="${esc(f.date)}"></div>
 </div>
-<div class="field"><label>Client <span class="oblig">obligatoire</span></label>
-<select name="client_id" data-rp="champ" ${reglages.clients === null ? 'disabled' : ''}>
-<option value="">${reglages.clients === null ? 'Chargement des clients…' : '— Choisir un client —'}</option>
-${clients.map(c => `<option value="${c.id}" ${c.id === f.client_id ? 'selected' : ''}>${esc(c.nom)}${c.code_client ? ' — n° ' + esc(c.code_client) : ''}</option>`).join('')}
-</select></div>
+<div class="field"><label>Client <span class="muted small">(facultatif — tapez un nom ou choisissez dans la liste)</span></label>
+<input type="text" name="client_nom" data-rp="champ" list="rp-clients" value="${esc(f.client_nom)}" placeholder="${clients.length ? 'Nom du client ou choisir dans la liste' : 'Nom du client'}" autocomplete="off">
+<datalist id="rp-clients">${clients.map(c => `<option value="${esc(c.label)}">${c.code ? 'n° ' + esc(c.code) : ''}</option>`).join('')}</datalist>
+<div class="hint" id="rp-client-hint">${f.client_id ? 'Client de la liste sélectionné.' : (f.client_nom.trim() ? 'Nom saisi à la main (client hors liste).' : 'Effacez le champ pour voir toute la liste.')}</div></div>
 <div class="field">
-<label>Adresse e-mail du destinataire <span class="oblig">obligatoire</span></label>
+<label>Adresse e-mail du destinataire <span class="muted small">(facultatif)</span></label>
 <input type="email" name="email_destinataire" data-rp="champ" value="${esc(f.email_destinataire)}" placeholder="exemple@entreprise.fr" autocomplete="email">
 <div class="hint">Adresse de la personne qui recevra ce rapport. Elle peut être différente du contact principal du client.</div>
 </div>
-<div class="field"><label>Raison de l'intervention <span class="oblig">obligatoire</span></label>
+<div class="field"><label>Raison de l'intervention <span class="muted small">(facultatif)</span></label>
 <textarea name="raison" data-rp="champ" rows="4" placeholder="Décrivez la raison de l'intervention et ce qui a été fait…">${esc(f.raison)}</textarea></div>
 
 <div class="field"><label>Documents joints <span class="muted small">(facultatif — PDF, photo, Word, Excel… 10 Mo max chacun)</span></label>
@@ -139,7 +165,7 @@ ${f.fichiers.map((x, i) => `
 </label>
 </div>
 
-<div class="field"><label>Signature du client ${modif ? '' : '<span class="oblig">obligatoire</span>'}</label>
+<div class="field"><label>Signature du client <span class="muted small">(facultatif)</span></label>
 ${modif && f.signatureExistante && !f.signature ? `
 <div class="hint" style="margin:0 0 6px;">Signature déjà enregistrée (conservée). Pour la remplacer, le client signe à nouveau dans le cadre ci-dessous.</div>
 ${rapports.urls[f.signatureExistante] ? `<img src="${esc(rapports.urls[f.signatureExistante])}" alt="Signature enregistrée" style="display:block;max-width:240px;width:100%;background:#fff;border:1px solid var(--border);border-radius:8px;margin-bottom:8px;">` : ''}
@@ -181,20 +207,20 @@ const occupe = rapports.occupe === r.id;
 return `
 <div class="list-item" style="flex-wrap:wrap;align-items:flex-start;">
 <div style="flex:1;min-width:200px;">
-<div style="font-weight:650;">${esc((r.organizations && r.organizations.nom) || 'Client')}</div>
-<div class="small muted">${fmtDate(r.date_intervention)} · par ${esc(r.nom_support)}${pj.length ? ` · ${pj.length} document${pj.length > 1 ? 's' : ''}` : ''}</div>
+<div style="font-weight:650;">${esc(rpNomClient(r))}</div>
+<div class="small muted">${fmtDate(r.date_intervention)}${r.nom_support ? ' · par ' + esc(r.nom_support) : ''}${pj.length ? ` · ${pj.length} document${pj.length > 1 ? 's' : ''}` : ''}</div>
 </div>
 <button class="btn btn-sm" data-rp="ouvrir" data-id="${r.id}">${ouvert ? 'Masquer' : 'Voir'}</button>
 ${ouvert ? `
 <div style="flex-basis:100%;padding-top:8px;">
-<div style="white-space:pre-wrap;overflow-wrap:anywhere;">${esc(r.raison)}</div>
+<div style="white-space:pre-wrap;overflow-wrap:anywhere;">${r.raison ? esc(r.raison) : '<span class="muted">Aucune raison renseignée.</span>'}</div>
 
 <div class="small muted" style="margin-top:8px;"><strong>Destinataire :</strong> ${r.email_destinataire ? esc(r.email_destinataire) : 'Non renseigné'}</div>
 
-<div class="small muted" style="margin-top:8px;">Signature${r.nom_signataire ? ' de ' + esc(r.nom_signataire) : ' du client'} :</div>
+${r.signature_path ? `<div class="small muted" style="margin-top:8px;">Signature${r.nom_signataire ? ' de ' + esc(r.nom_signataire) : ' du client'} :</div>
 ${rapports.urls[r.signature_path]
 ? `<img src="${esc(rapports.urls[r.signature_path])}" alt="Signature" style="display:block;max-width:320px;width:100%;background:#fff;border:1px solid var(--border);border-radius:8px;margin-top:4px;">`
-: `<div class="small muted">Chargement…</div>`}
+: `<div class="small muted">Chargement…</div>`}` : `<div class="small muted" style="margin-top:8px;">Pas de signature${r.nom_signataire ? ' (signataire : ' + esc(r.nom_signataire) + ')' : ''}.</div>`}
 ${pj.length ? `<div class="small muted" style="margin-top:10px;">Documents joints :</div>
 ${pj.map(p => rapports.urls[p.chemin]
 ? `<div><a href="${esc(rapports.urls[p.chemin])}" target="_blank" rel="noopener">${esc(p.nom)}</a></div>`
@@ -306,14 +332,17 @@ function rpNomSur(nom){
 return String(nom).normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^A-Za-z0-9._-]+/g, '_').replace(/_+/g, '_').slice(-80) || 'document';
 }
 
-function rpValider(f, creation){
-return !f.nom_support.trim() ? 'Indiquez le nom du support.'
-: !f.client_id ? 'Choisissez un client.'
-: !f.date ? "Indiquez la date de l'intervention."
-: !f.raison.trim() ? "Indiquez la raison de l'intervention."
-: !f.email_destinataire.trim() ? "Indiquez l'adresse e-mail du destinataire."
-: !RP_EMAIL_RE.test(f.email_destinataire.trim()) ? "L'adresse e-mail indiquée n'est pas valide."
-: (creation && !f.signature) ? 'La signature du client est obligatoire.' : '';
+function rpValider(f){
+// Plus aucun champ obligatoire : on ne vérifie que le format de l'e-mail s'il est saisi.
+const mail = f.email_destinataire.trim();
+return (mail && !RP_EMAIL_RE.test(mail)) ? "L'adresse e-mail indiquée n'est pas valide." : '';
+}
+
+/* Si la base n'a pas encore reçu le script SQL 13, on l'explique clairement. */
+function rpAideSql(e){
+const m = String((e && e.message) || e || '');
+return /client_nom|null value in column|not-null/i.test(m)
+? "\n→ Exécutez d'abord le fichier sql/13-rapports-champs-libres.sql dans Supabase (SQL Editor)." : '';
 }
 
 function rpRetourFormulaire(erreur){
@@ -327,18 +356,21 @@ window.scrollTo({ top: 0, behavior: 'smooth' });
 async function rpEnregistrer(){
 if(rapports.busy) return;
 const f = rapports.form;
-const erreur = rpValider(f, true);
+const erreur = rpValider(f);
 if(erreur) return rpRetourFormulaire(erreur);
 
 rapports.busy = true; rapports.error = ''; render();
 const id = idAleatoire();
-const dossier = `${f.client_id}/${id}`;
+const dossier = `${f.client_id || 'sans-client'}/${id}`;
 const envoyes = [];
 try{
-const cheminSig = `${dossier}/signature.png`;
-let r = await sb.storage.from(BUCKET_RAPPORTS).upload(cheminSig, rpDataUrlVersBlob(f.signature), { contentType: 'image/png', upsert: false });
+let cheminSig = null, r;
+if(f.signature){
+cheminSig = `${dossier}/signature.png`;
+r = await sb.storage.from(BUCKET_RAPPORTS).upload(cheminSig, rpDataUrlVersBlob(f.signature), { contentType: 'image/png', upsert: false });
 if(r.error) throw r.error;
 envoyes.push(cheminSig);
+}
 
 const pieces = [];
 for(const [i, fichier] of f.fichiers.entries()){
@@ -351,12 +383,13 @@ pieces.push({ chemin, nom: fichier.name, taille: fichier.size, type: fichier.typ
 
 const { error } = await sb.from('rapports_intervention').insert({
 id,
-organization_id: f.client_id,
-nom_support: f.nom_support.trim(),
-date_intervention: f.date,
-raison: f.raison.trim(),
+organization_id: f.client_id || null,
+client_nom: f.client_id ? null : (f.client_nom.trim() || null),
+nom_support: f.nom_support.trim() || null,
+date_intervention: f.date || null,
+raison: f.raison.trim() || null,
 nom_signataire: f.signataire.trim() || null,
-email_destinataire: f.email_destinataire.trim(),
+email_destinataire: f.email_destinataire.trim() || null,
 signature_path: cheminSig,
 pieces_jointes: pieces,
 });
@@ -368,7 +401,7 @@ toast("Rapport d'intervention enregistré");
 }catch(e){
 // Rien ne doit rester à moitié envoyé : on retire les fichiers déjà partis.
 if(envoyes.length) sb.storage.from(BUCKET_RAPPORTS).remove(envoyes).catch(() => {});
-rapports.error = "Enregistrement impossible : " + (e.message || e);
+rapports.error = "Enregistrement impossible : " + (e.message || e) + rpAideSql(e);
 }finally{
 rapports.busy = false; render();
 }
@@ -405,7 +438,8 @@ try{ await rpChargerURLsRapport(r); }catch(_){ /* l'aperçu de la signature est 
 rapports.form = {
 nom_support: r.nom_support || '',
 client_id: r.organization_id || '',
-date: r.date_intervention || rpAujourdhui(),
+client_nom: (r.organizations && r.organizations.nom) || r.client_nom || '',
+date: r.date_intervention || '',
 raison: r.raison || '',
 signataire: r.nom_signataire || '',
 email_destinataire: r.email_destinataire || '',
@@ -436,13 +470,14 @@ if(rapports.busy) return;
 const f = rapports.form;
 const original = rpTrouver(id);
 if(!original) return rpRetourFormulaire("Ce rapport n'est plus dans la liste : actualisez puis recommencez.");
-const erreur = rpValider(f, false);
+const erreur = rpValider(f);
 if(erreur) return rpRetourFormulaire(erreur);
 
 rapports.busy = true; rapports.error = ''; render();
 
 // Les nouveaux fichiers vont dans le dossier existant du rapport.
-const dossier = (original.signature_path || '').split('/').slice(0, -1).join('/') || `${original.organization_id}/${id}`;
+const cheminRef = original.signature_path || ((original.pieces_jointes || [])[0] || {}).chemin || '';
+const dossier = cheminRef.split('/').slice(0, -1).join('/') || `${original.organization_id || 'sans-client'}/${id}`;
 const horodatage = Date.now();
 const envoyes = [];
 try{
@@ -466,12 +501,13 @@ pieces.push({ chemin, nom: fichier.name, taille: fichier.size, type: fichier.typ
 }
 
 const { data, error } = await sb.from('rapports_intervention').update({
-organization_id: f.client_id,
-nom_support: f.nom_support.trim(),
-date_intervention: f.date,
-raison: f.raison.trim(),
+organization_id: f.client_id || null,
+client_nom: f.client_id ? null : (f.client_nom.trim() || null),
+nom_support: f.nom_support.trim() || null,
+date_intervention: f.date || null,
+raison: f.raison.trim() || null,
 nom_signataire: f.signataire.trim() || null,
-email_destinataire: f.email_destinataire.trim(),
+email_destinataire: f.email_destinataire.trim() || null,
 signature_path: cheminSig,
 pieces_jointes: pieces,
 }).eq('id', id).select('id');
@@ -492,7 +528,7 @@ rapports.ouvert = id;
 toast('Rapport modifié');
 }catch(e){
 if(envoyes.length) sb.storage.from(BUCKET_RAPPORTS).remove(envoyes).catch(() => {});
-rapports.error = 'Modification impossible : ' + (e.message || e);
+rapports.error = 'Modification impossible : ' + (e.message || e) + rpAideSql(e);
 }finally{
 rapports.busy = false; render();
 if(rapports.error) window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -772,7 +808,7 @@ const L = 18, R = 192, LARGEUR = R - L;
 const BAS_CORPS = 277, DEBUT_PAGE_SUIVANTE = 37;
 let y;
 
-const client = String((r.organizations && r.organizations.nom) || 'Client').trim() || 'Client';
+const client = rpNomClient(r);
 const code = String((r.organizations && r.organizations.code_client) || '').trim();
 const date = fmtDate(r.date_intervention);
 const ref = 'RI-' + (String(r.id || '').replace(/[^A-Za-z0-9]/g, '').slice(0, 8).toUpperCase() || 'SANSREF');
@@ -1066,7 +1102,7 @@ pieces = await rpTelechargerPieces(r);
 rapports.occupe = null; render();
 if(!pdf) return;
 
-const client = (r.organizations && r.organizations.nom) || 'Client';
+const client = rpNomClient(r);
 const sujet = `Rapport d'intervention - ${client} - ${fmtDate(r.date_intervention)}`;
 const corps = `Bonjour,
 
@@ -1115,13 +1151,23 @@ window.location.href = `mailto:${email}?subject=${encodeURIComponent(sujet)}&bod
 
 document.addEventListener('input', (e) => {
 const t = e.target;
-if(t && t.dataset && t.dataset.rp === 'champ' && rapports.form) rapports.form[t.name] = t.value;
+if(t && t.dataset && t.dataset.rp === 'champ' && rapports.form){
+rapports.form[t.name] = t.value;
+if(t.name === 'client_nom'){
+rapports.form.client_id = rpResoudreClient(t.value);
+const h = document.getElementById('rp-client-hint');
+if(h) h.textContent = rapports.form.client_id ? 'Client de la liste sélectionné.' : (t.value.trim() ? 'Nom saisi à la main (client hors liste).' : 'Effacez le champ pour voir toute la liste.');
+}
+}
 });
 
 document.addEventListener('change', (e) => {
 const t = e.target;
 if(!t || !t.dataset || !rapports.form) return;
-if(t.dataset.rp === 'champ') rapports.form[t.name] = t.value;
+if(t.dataset.rp === 'champ'){
+rapports.form[t.name] = t.value;
+if(t.name === 'client_nom') rapports.form.client_id = rpResoudreClient(t.value);
+}
 else if(t.dataset.rp === 'fichiers') rpAjouterFichiers(t);
 });
 
