@@ -17,13 +17,14 @@ body[data-theme="bleu-nuit"]{ --h:222; --hs:.3; --sk:1.9; --dl:-14%; --theme-dot
 body[data-theme="violet"]  { --h:268; --hs:.3; --sk:1.7; --dl:-4%;  --theme-dot:#6a479d; }
 body[data-theme="bordeaux"]{ --h:347; --hs:.3; --sk:2.1; --dl:-12%; --theme-dot:#8a304a; }
 body[data-theme="vert-fonce"]{ --h:152; --hs:.3; --sk:1.7; --dl:-16%; --theme-dot:#2f6b4a; }
+body[data-theme="emeraude"]{ --h:171; --hs:.3; --sk:1.9; --dl:-16%; --theme-dot:#0b5a4d; }
 
 /* --- Sélecteur dans le menu du compte --- */
 .dropdown .theme-bloc{padding:8px 10px 6px;}
 .dropdown .theme-titre{display:flex; align-items:center; gap:8px; font-size:14.5px; font-weight:500; line-height:1.3; color:var(--text); margin-bottom:8px;}
 .dropdown .theme-picker{display:flex; flex-wrap:nowrap; justify-content:space-between; gap:6px;}
 .dropdown .theme-picker .theme-dot{
-  display:block; width:30px; height:30px; min-width:30px; padding:0; margin:0; border-radius:50%;
+  display:block; width:26px; height:26px; min-width:26px; padding:0; margin:0; border-radius:50%;
   background:var(--dot); border:2px solid transparent; cursor:pointer; position:relative;
   box-shadow:0 0 0 1px rgba(0,0,0,.12) inset;
 }
@@ -35,3 +36,28 @@ body[data-theme="vert-fonce"]{ --h:152; --hs:.3; --sk:1.7; --dl:-16%; --theme-do
 }
 .dropdown .theme-picker .theme-dot:focus-visible{outline:2px solid var(--text); outline-offset:2px;}
 .dropdown .theme-nom{margin-top:6px; font-size:12.5px; color:var(--text-dim);}
+
+/* --- Thème Émeraude : les couleurs de la page vitrine (vert profond + or) ---
+   Le reste de la palette suit la teinte (--h). Ici : bandeaux en vert profond,
+   accents dorés, boutons verts, pour que l'espace fondateur ressemble à la vitrine. */
+body[data-theme="emeraude"][data-role="fondateur"]{ --primary:#0e5f52; --primary-dim:#0a4a40; --primary-contrast:#fff; }
+body[data-theme="emeraude"][data-role="fondateur"] :is(.hz-hero,.hz-tools-hero,.hz-portfolio-hero,.hz-client-banner){
+  border:1px solid rgba(232,161,58,.28); color:#fff;
+  background:radial-gradient(420px 300px at 88% 0,rgba(232,161,58,.24),transparent 70%),linear-gradient(160deg,#032a25,#0b5a4d); }
+body[data-theme="emeraude"][data-role="fondateur"] :is(.hz-hero-eyebrow,.hz-overline,.hz-client-kicker){ color:#e8a13a; }
+body[data-theme="emeraude"][data-role="fondateur"] :is(.hz-hero,.hz-tools-hero,.hz-portfolio-hero,.hz-client-banner) h1{ color:#fff; }
+body[data-theme="emeraude"][data-role="fondateur"] :is(.hz-hero,.hz-tools-hero,.hz-portfolio-hero) h1 em{ color:#e8a13a; }
+body[data-theme="emeraude"][data-role="fondateur"] :is(.hz-hero,.hz-tools-hero,.hz-portfolio-hero,.hz-client-banner) p{ color:#cfe3de; }
+body[data-theme="emeraude"][data-role="fondateur"] .hz-hero-rings i{ border-color:rgba(232,161,58,.22); }
+body[data-theme="emeraude"][data-role="fondateur"] .hz-hero-rings span{ color:rgba(232,161,58,.3); }
+body[data-theme="emeraude"][data-role="fondateur"] :is(.hz-section-heading>span,.hz-tools-label,.hz-priority-kicker){ color:#0e5f52; }
+body[data-theme="emeraude"][data-role="fondateur"] .hz-priority-focus-icon{ background:linear-gradient(145deg,#f3c26f,#e8a13a); color:#052f29; }
+body[data-theme="emeraude"][data-role="fondateur"] .hz-priority-launch{ border-color:rgba(14,95,82,.35); background:rgba(14,95,82,.1); color:#0e5f52; }
+body[data-theme="emeraude"][data-role="fondateur"] .hz-priority-launch[aria-expanded="true"]{ background:#052f29; border-color:#052f29; color:#e8a13a; }
+body[data-theme="emeraude"][data-role="fondateur"] .hz-priority-links button svg{ color:#0e5f52; }
+body[data-theme="emeraude"][data-role="fondateur"] .hz-priority-links button:hover{ border-color:#e8a13a; }
+body[data-theme="emeraude"][data-role="fondateur"] .hz-scan-frame{ background:linear-gradient(150deg,#052f29,#0b5a4d); color:#e8a13a; }
+body[data-theme="emeraude"][data-role="fondateur"] .hz-scan-beam{ background:linear-gradient(90deg,transparent,#f3c26f,transparent); }
+body[data-theme="emeraude"][data-role="fondateur"] :is(.hz-scan-card,.hz-shortcuts button,.hz-tool-row):hover{ border-color:#e8a13a; }
+body[data-theme="emeraude"][data-role="fondateur"] .hz-shortcuts button>span:first-child,
+body[data-theme="emeraude"][data-role="fondateur"] .hz-tool-icon{ background:#eaf3ef; color:#0e5f52; }

@@ -80,7 +80,8 @@ if(state.route.name === 'equip' && state.route.param){
 app.innerHTML = viewFichePublique(state.route.param);
 return;
 }
-app.innerHTML = renderAuth();
+// Ouverture sans session : page vitrine. « Se connecter » mène à #/connexion.
+app.innerHTML = (state.route.name === 'accueil' && typeof renderVitrine === 'function') ? renderVitrine() : renderAuth();
 return;
 }
 app.innerHTML = renderShell();
@@ -528,6 +529,7 @@ await confirmer(`Mot de passe réinitialisé\n\nTransmettez à ${m.full_name || 
 pour un affichage immédiat, même hors ligne) et enregistré dans le profil pour la
 retrouver sur un autre appareil. */
 const THEMES = [
+{ id:'emeraude',   nom:'Émeraude',    dot:'#0b5a4d' },
 { id:'argile',     nom:'Argile',      dot:'#987061' },
 { id:'saumon',     nom:'Rose saumon', dot:'#d0685c' },
 { id:'bleu-nuit',  nom:'Bleu nuit',   dot:'#2f4a7c' },
@@ -540,7 +542,7 @@ function themeValide(id){ return THEMES.some(t => t.id === id); }
 function themeLocal(){
 try{ const id = localStorage.getItem(cleTheme()) || ''; return themeValide(id) ? id : ''; }catch(e){ return ''; }
 }
-function themeActuel(){ return themeLocal() || (themeValide(state.profile?.theme) ? state.profile.theme : 'argile'); }
+function themeActuel(){ return themeLocal() || (themeValide(state.profile?.theme) ? state.profile.theme : (typeof isSuperAdmin === 'function' && isSuperAdmin() ? 'emeraude' : 'argile')); }
 
 /* Au chargement du profil : le thème enregistré côté serveur fait foi (il suit la
 personne d'un appareil à l'autre) ; s'il n'y en a pas encore, on y envoie celui de cet appareil. */
@@ -769,6 +771,7 @@ function renderAuth(){
 // ouvrant un lien d'invitation (#/join/...). Cet écran ne sert qu'à se connecter.
 return `
 <div class="auth-wrap">
+<button type="button" class="auth-retour" data-action="vitrine-retour">← Retour à la présentation</button>
 <div class="auth-logo">
 <img class="logo brand-logo" src="${LOGO_DATA_URL}" alt="WiTracEQUIP">
 <h1 style="font-size:20px;">WiTracEQUIP</h1>
@@ -2584,6 +2587,9 @@ else if(action === 'reprendre-mobile'){ actionReprendreMobile(); }
 else if(action === 'rendre-main-telephone'){ actionRendreMainTelephone(); }
 else if(action === 'fermer-scanner'){ fermerScanner(); }
 else if(action === 'connexion-depuis-scan'){ connexionDepuisScan(); }
+else if(action === 'vitrine-connexion'){ state.authError = ''; state.authNotice = ''; nav('/connexion'); window.scrollTo(0,0); }
+else if(action === 'vitrine-retour'){ nav('/'); window.scrollTo(0,0); }
+else if(action === 'vitrine-scroll'){ vitrineScroll(t.dataset.cible); }
 else if(action === 'toggle-partage'){ actionTogglePartage(); }
 else if(action === 'regen-token'){ actionRegenererLienPublic(); }
 else if(action === 'creer-invite'){ actionCreerInvite(); }
@@ -2681,6 +2687,7 @@ if(!t) return;
 e.preventDefault();
 const action = t.dataset.action;
 if(action === 'submit-auth') handleAuthSubmit(t);
+else if(action === 'submit-vitrine-contact') submitVitrineContact(t);
 else if(action === 'submit-iv') submitIntervention(t);
 else if(action === 'submit-join') handleJoinSubmit(t);
 else if(action === 'submit-edit-equip') submitEditEquip(t);

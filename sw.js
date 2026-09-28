@@ -26,7 +26,7 @@
 
 /* Changer ce numéro à chaque déploiement : c'est ce qui déclenche le
    remplacement de l'ancien cache par le nouveau chez tous les utilisateurs. */
-const VERSION = 'wte-v2.24.1';
+const VERSION = 'wte-v2.26.1';
 
 const CACHE_SHELL = `${VERSION}-shell`;
 const CACHE_EXTERNE = `${VERSION}-externe`;
@@ -46,12 +46,14 @@ const FICHIERS_SHELL = [
   'css/support-atelier.css',
   'css/tour-controle.css',
   'css/themes.css',
+  'css/vitrine.css',
 
   'js/config.js',
   'js/core/icons.js',
   'js/core/data.js',
   'js/core/offline.js',
   'js/fondateur-view.js',
+  'js/vitrine.js',
   'js/ui.js',
   'js/reglages.js',
   'js/rapports.js',
