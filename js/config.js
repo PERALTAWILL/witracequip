@@ -35,7 +35,7 @@ texte_site: 'WitracEquip.fr', // petite mention sous le QR ('' pour ne rien affi
 };
 
 /* Adresse du support : pied de page de toutes les pages + formulaire Support. */
-const SUPPORT_EMAIL = 'widiagmq@gmail.com';
+const SUPPORT_EMAIL = 'contact-support@witracequip.fr';
 
 const SUPABASE_URL = 'https://oeqgyjyqdwlymlpfkdyn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_w3Lh6JYXepKHspWG5e06FQ_BpXaGQnE';
