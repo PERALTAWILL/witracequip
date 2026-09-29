@@ -2472,7 +2472,7 @@ const url = lienPublic(eq.public_token);
 let source = null;
 if(typeof QRious !== 'undefined'){
 const hd = document.createElement('canvas');
-new QRious({ element: hd, value: url, size: 800, background:'white', foreground:'#000000', level:'H' }); (function(c){ const g=c.getContext('2d'), s=c.width, b=Math.round(s*0.2), x=(s-b)/2, r=b*0.18; g.fillStyle='#ffffff'; g.fillRect(x-10,x-10,b+20,b+20); g.fillStyle='#064032'; g.beginPath(); g.moveTo(x+r,x); g.arcTo(x+b,x,x+b,x+b,r); g.arcTo(x+b,x+b,x,x+b,r); g.arcTo(x,x+b,x,x,r); g.arcTo(x,x,x+b,x,r); g.closePath(); g.fill(); g.fillStyle='#ffffff'; g.font='bold '+Math.round(b*0.74)+'px Georgia, "Times New Roman", serif'; g.textAlign='center'; g.textBaseline='middle'; g.fillText('W', s/2, s/2+b*0.04); })(hd);
+new QRious({ element: hd, value: url, size: 800, background:'white', foreground:'#000000', level:'H' }); (function(c){ const g=c.getContext('2d'), s=c.width, b=Math.round(s*0.2), x=(s-b)/2, r=b*0.18; g.fillStyle='#ffffff'; g.fillRect(x-10,x-10,b+20,b+20); g.fillStyle='#000000'; g.beginPath(); g.moveTo(x+r,x); g.arcTo(x+b,x,x+b,x+b,r); g.arcTo(x+b,x+b,x,x+b,r); g.arcTo(x,x+b,x,x,r); g.arcTo(x,x,x+b,x,r); g.closePath(); g.fill(); g.fillStyle='#ffffff'; g.font='bold '+Math.round(b*0.74)+'px Georgia, "Times New Roman", serif'; g.textAlign='center'; g.textBaseline='middle'; g.fillText('W', s/2, s/2+b*0.04); })(hd);
 source = hd;
 } else {
 source = document.getElementById('qr-canvas'); // repli
