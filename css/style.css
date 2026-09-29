@@ -1106,4 +1106,4 @@ padding-bottom:4px; border-bottom:1px solid var(--border);}
 .champ-verrou{ grid-template-columns:1fr 110px 44px; }
 
 /* Impression du QR : page auto (A4, PDF, telephone), QR grand et centre */
-@media print{@page{size:auto;margin:15mm}#print-area{display:flex!important;flex-direction:column;align-items:center;width:100%!important;overflow:visible!important}#print-area img{width:50mm!important;height:50mm!important}#print-area .etiquette-id{font-size:14pt!important;margin-top:4mm!important}#print-area .etiquette-site{font-size:11pt!important;margin-top:2mm!important}}
+@media print{@page{size:auto;margin:15mm}#print-area{display:flex!important;flex-direction:column;align-items:center;width:100%!important;overflow:visible!important}#print-area img{width:20mm!important;height:20mm!important}#print-area .etiquette-id{font-size:8pt!important;margin-top:2mm!important}#print-area .etiquette-site{font-size:7pt!important;margin-top:1.5mm!important}}
