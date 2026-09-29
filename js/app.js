@@ -2822,7 +2822,7 @@ setTimeout(() => appliquerSession(session), 0);
 perd l'accès aux données (vérifié côté base, sql/19) et on l'en informe. */
 let deconnexionVolontaire = false;
 const MSG_SESSION_FERMEE = "Vous avez été déconnecté à distance par WiDIAG MQ. Reconnectez-vous avec votre e-mail et votre mot de passe.";
-const MSG_APPAREIL_REFUSE = "Ce compte est déjà utilisé sur un autre appareil. Un compte = une personne = un appareil. Pour l'utiliser sur celui-ci, demandez à WiDIAG MQ de réaccorder l'accès (widiagmq@gmail.com · 06 96 20 93 19).";
+const MSG_APPAREIL_REFUSE = "Ce compte est déjà utilisé sur un autre appareil. Un compte = une personne = un appareil. Pour l'utiliser sur celui-ci, demandez à WiDIAG MQ de réaccorder l'accès (contact-support@witracequip.fr · 06 96 20 93 19).";
 
 /* Identifiant de CET appareil (navigateur), créé une fois et gardé.
 La base n'en garde que l'empreinte. Voir sql/20. */
