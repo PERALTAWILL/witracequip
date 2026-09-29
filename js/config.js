@@ -19,7 +19,7 @@ est ouverte — pratique pour tester, mais à ne PAS utiliser pour imprimer des
 Dès que le domaine définitif est en place, renseigner cette ligne :
 const APP_BASE_URL = 'https://witracequip.fr/';
 ========================================================================= */
-const APP_BASE_URL = '';
+const APP_BASE_URL = 'https://witracequip.fr/';
 
 /* =========================================================================
 ÉTIQUETTE IMPRIMÉE
