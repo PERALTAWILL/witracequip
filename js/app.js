@@ -196,8 +196,12 @@ return [...enAttente, ...liste.filter(e => !enAttente.some(x => x.id === e.id))]
 function retourApresConnexion(){
 let t = '';
 try{ t = sessionStorage.getItem('wt_retour_scan') || ''; sessionStorage.removeItem('wt_retour_scan'); }catch(e){}
-if(t){ nav('/p/' + t); state.route = parseHash(); }
+if(t){ connexionFraiche = false; nav('/p/' + t); state.route = parseHash(); return; }
+// Après une connexion ou une reconnexion : toujours l'accueil (jamais l'écran de connexion ni l'ancienne page).
+const r = parseHash().name;
+if(connexionFraiche || r === 'connexion'){ connexionFraiche = false; nav('/'); state.route = parseHash(); }
 }
+let connexionFraiche = false;
 let resolvePublic = { token:null, busy:false };
 
 /* Une personne déjà connectée qui scanne une étiquette de son parc n'a pas
@@ -812,6 +816,7 @@ const password = fd.get('password');
 try{
 const { error } = await sb.auth.signInWithPassword({ email, password });
 if(error) throw error;
+connexionFraiche = true;
 // onAuthStateChange se charge de la suite (dont la vérification de l'appareil)
 }catch(e){
 state.authError = translateAuthError(e.message || String(e));
