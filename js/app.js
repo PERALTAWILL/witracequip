@@ -907,8 +907,8 @@ horsLigne: !!state.horsLigne || !navigator.onLine,
 /* ---------------------------------------------------------------------- */
 /* Une échéance = un champ « date » du type dont le libellé annonce une date
    à venir (« Prochain contrôle », « Prochaine inspection », « Prochain essai »,
-   « Prochaine révision décennale »…). On ne rappelle que les 90 prochains jours
-   et ce qui est en retard. */
+   « Prochaine révision décennale »…). Toutes les échéances renseignées sont listées,
+   de la plus proche (ou dépassée) à la plus lointaine. */
 const RAPPELS_HORIZON_JOURS = 90;
 function calculerRappels(parc){
 const auj = new Date(); auj.setHours(0,0,0,0);
@@ -922,10 +922,19 @@ if(!brut) return;
 const d = new Date(String(brut).slice(0, 10) + 'T00:00:00');
 if(isNaN(d)) return;
 const jours = Math.round((d - auj) / 86400000);
-if(jours <= RAPPELS_HORIZON_JOURS) out.push({ id:eq.id, nom:eq.nom, label:c.label, date:brut, jours });
+out.push({ id:eq.id, nom:eq.nom, label:c.label, date:brut, jours });
 });
 });
 return out.sort((a, b) => a.jours - b.jours);
+}
+
+function delaiTexte(j){
+if(j < 0) return `En retard de ${-j} j`;
+if(j === 0) return "Aujourd'hui";
+if(j <= 60) return `Dans ${j} j`;
+const mois = Math.round(j / 30.44);
+if(mois < 24) return `Dans ${mois} mois`;
+return `Dans ${Math.round(j / 365.25)} ans`;
 }
 
 function renderRappels(){
@@ -935,19 +944,63 @@ const l = calculerRappels(c.parc);
 const MAX = 6;
 const ligne = r => {
 const cls = r.jours < 0 ? 'retard' : (r.jours <= 30 ? 'proche' : 'prevu');
-const txt = r.jours < 0 ? `En retard de ${-r.jours} j` : (r.jours === 0 ? "Aujourd'hui" : `Dans ${r.jours} j`);
-return `<button type="button" class="rappel-ligne rappel-${cls}" data-action="go" data-path="/equip/${esc(r.id)}">
+const txt = delaiTexte(r.jours);
+return `<div class="rappel-item rappel-${cls}">
+<button type="button" class="rappel-ligne" data-action="go" data-path="/equip/${esc(r.id)}">
 <span class="rappel-badge">${txt}</span>
 <span class="rappel-corps"><strong>${esc(r.nom)}</strong><small>${esc(r.label)} · ${fmtDate(r.date)}</small></span>
-${iconeNav('chevron',16)}</button>`;
+${iconeNav('chevron',16)}</button>
+<button type="button" class="rappel-agenda" data-action="rappel-agenda" data-id="${esc(r.id)}" data-nom="${esc(r.nom)}" data-label="${esc(r.label)}" data-date="${esc(String(r.date).slice(0, 10))}" title="Ajouter un rappel à mon agenda" aria-label="Ajouter à mon agenda : ${esc(r.label)} — ${esc(r.nom)}">${iconeNav('clock',17)}<span>Agenda</span></button>
+</div>`;
 };
 const nbRetard = l.filter(r => r.jours < 0).length;
+const nbProche = l.filter(r => r.jours >= 0 && r.jours <= 30).length;
+// Coup d'œil : une bande qui dit tout de suite si quelque chose presse.
+const bande = (nbRetard || nbProche)
+? `<div class="rappel-urgence ${nbRetard ? 'rappel-urgence-retard' : 'rappel-urgence-proche'}" role="status"><strong>${nbRetard ? nbRetard + ' échéance' + (nbRetard > 1 ? 's dépassées' : ' dépassée') : ''}${nbRetard && nbProche ? ' · ' : ''}${nbProche ? nbProche + ' à moins de 30 jours' : ''}</strong><span>À traiter en priorité</span></div>`
+: `<div class="rappel-urgence rappel-urgence-ok" role="status"><strong>Rien d'urgent</strong><span>${l.length ? 'Prochaine échéance : ' + fmtDate(l[0].date) : 'Aucune date d\u2019échéance renseignée'}</span></div>`;
 return `
-<div class="dashboard-section-title"><div><span>ÉCHÉANCES</span><h2>Rappels de révision</h2></div><small>${nbRetard ? nbRetard + ' en retard · ' : ''}${RAPPELS_HORIZON_JOURS} prochains jours</small></div>
 <section class="rappels-zone" aria-label="Rappels de révision des équipements">
-${l.length ? l.slice(0, MAX).map(ligne).join('') + (l.length > MAX ? `<button type="button" class="rappel-suite" data-action="go" data-path="/equipements">+ ${l.length - MAX} autre${l.length - MAX > 1 ? 's' : ''} échéance${l.length - MAX > 1 ? 's' : ''} — voir le parc</button>` : '')
-: `<div class="rappel-vide">Aucune révision à prévoir dans les ${RAPPELS_HORIZON_JOURS} prochains jours.</div>`}
+${bande}
+${l.slice(0, MAX).map(ligne).join('')}
+${l.length > MAX ? `<button type="button" class="rappel-suite" data-action="go" data-path="/equipements">+ ${l.length - MAX} autre${l.length - MAX > 1 ? 's' : ''} échéance${l.length - MAX > 1 ? 's' : ''} — voir le parc</button>` : ''}
 </section>`;
+}
+
+/* « Ajouter à mon agenda » : un fichier .ics (lu par l'agenda du téléphone ou
+   de l'ordinateur) avec l'échéance en journée entière et deux alertes, un mois
+   et une semaine avant, à 9 h. Aucun compte ni service externe. */
+function telechargerAgenda(id, nom, label, dateIso){
+const d = String(dateIso || '').slice(0, 10);
+if(!/^\d{4}-\d{2}-\d{2}$/.test(d)) return;
+const compact = x => x.replace(/-/g, '');
+const suivant = new Date(d + 'T00:00:00'); suivant.setDate(suivant.getDate() + 1);
+const fin = suivant.getFullYear() + String(suivant.getMonth() + 1).padStart(2, '0') + String(suivant.getDate()).padStart(2, '0');
+const ics = t => String(t).replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\r?\n/g, '\\n');
+const lien = location.origin + location.pathname.replace(/[^/]*$/, '') + '#/equip/' + id;
+const stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d+/, '');
+const alerte = (delai, texte) => ['BEGIN:VALARM', 'ACTION:DISPLAY', 'DESCRIPTION:' + ics(texte), 'TRIGGER:' + delai, 'END:VALARM'];
+const lignes = [
+'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//WiTracEQUIP//Rappels//FR', 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH',
+'BEGIN:VEVENT',
+'UID:rappel-' + id + '-' + slugify(label) + '-' + compact(d) + '@witracequip.fr',
+'DTSTAMP:' + stamp,
+'DTSTART;VALUE=DATE:' + compact(d),
+'DTEND;VALUE=DATE:' + fin,
+'SUMMARY:' + ics(label + ' — ' + nom),
+'DESCRIPTION:' + ics('Échéance à prévoir pour ' + nom + '. Fiche : ' + lien),
+'URL:' + lien,
+...alerte('-P29DT15H', label + ' dans 1 mois — ' + nom),
+...alerte('-P6DT15H', label + ' dans 1 semaine — ' + nom),
+'END:VEVENT', 'END:VCALENDAR'
+];
+const blob = new Blob([lignes.join('\r\n')], { type:'text/calendar;charset=utf-8' });
+const url = URL.createObjectURL(blob);
+const a = document.createElement('a');
+a.href = url; a.download = 'rappel-' + slugify(nom) + '-' + compact(d) + '.ics';
+document.body.appendChild(a); a.click(); a.remove();
+setTimeout(() => URL.revokeObjectURL(url), 4000);
+toast('Rappel prêt : ouvrez le fichier pour l\u2019ajouter à votre agenda');
 }
 
 function viewAccueilAdmin(){
@@ -975,6 +1028,8 @@ return `
     <button type="button" class="dashboard-refresh" data-action="accueil-recharger" aria-label="Actualiser le tableau de bord" title="Actualiser">${iconeNav('undo',17)}</button>
   </header>
 
+  ${renderRappels()}
+
   <section class="dashboard-hero admin-hero" aria-label="Synthèse du parc">
     <div class="dashboard-hero-copy">
       <span class="hero-kicker">VOTRE ORGANISATION <b>✦</b></span>
@@ -993,8 +1048,6 @@ return `
     <button type="button" class="dashboard-stat" data-action="go" data-path="${c.derniereEquipementId ? '/equip/' + esc(c.derniereEquipementId) : '/equipements'}"><span class="stat-icon">${iconeNav('journal',18)}</span><span class="stat-copy"><small>Dernière intervention</small><strong class="stat-date">${esc(derniere)}</strong></span>${iconeNav('chevron',16)}</button>
     <button type="button" class="dashboard-stat" data-action="go" data-path="/types"><span class="stat-icon">${iconeNav('tag',18)}</span><span class="stat-copy"><small>Types configurés</small><strong>${types}</strong></span>${iconeNav('chevron',16)}</button>
   </section>
-
-  ${renderRappels()}
 
   <div class="dashboard-section-title"><div><span>ESPACE DE TRAVAIL</span><h2>Raccourcis utiles</h2></div><small>Les actions de gestion, à portée de main</small></div>
   <section class="dashboard-quick-actions" aria-label="Actions d’administration">
@@ -1034,6 +1087,8 @@ return `
     <button type="button" class="dashboard-refresh" data-action="accueil-recharger" aria-label="Actualiser le tableau de bord" title="Actualiser">${iconeNav('undo',17)}</button>
   </header>
 
+  ${renderRappels()}
+
   <section class="dashboard-hero client-hero" aria-label="Résumé du parc d’équipements">
     <div class="dashboard-hero-copy">
       <span class="hero-kicker">VOTRE PARC <b>✦</b> TOUJOURS À JOUR</span>
@@ -1052,8 +1107,6 @@ return `
     <button type="button" class="dashboard-stat" data-action="go" data-path="${c.derniereEquipementId ? '/equip/' + esc(c.derniereEquipementId) : '/equipements'}"><span class="stat-icon">${iconeNav('journal',18)}</span><span class="stat-copy"><small>Dernière intervention</small><strong class="stat-date">${esc(derniere)}</strong></span>${iconeNav('chevron',16)}</button>
     <button type="button" class="dashboard-stat" data-action="go" data-path="${peutGererTypes() ? '/types' : '/equipements'}"><span class="stat-icon">${iconeNav('tag',18)}</span><span class="stat-copy"><small>Types disponibles</small><strong>${nbTypes}</strong></span>${iconeNav('chevron',16)}</button>
   </section>
-
-  ${renderRappels()}
 
   <div class="dashboard-section-title"><div><span>POUR ALLER PLUS VITE</span><h2>Actions rapides</h2></div><small>Vos outils du quotidien</small></div>
   <section class="dashboard-quick-actions" aria-label="Actions rapides">
@@ -2587,6 +2640,7 @@ const ouvert = wrap?.classList.toggle('open');
 t.setAttribute('aria-expanded', ouvert ? 'true' : 'false');
 }
 else if(action === 'logout'){ deconnexionVolontaire = true; effacerInstantanes(); sb.auth.signOut({ scope:'local' }); }
+else if(action === 'rappel-agenda'){ telechargerAgenda(t.dataset.id, t.dataset.nom, t.dataset.label, t.dataset.date); }
 else if(action === 'accueil-recharger'){ if(accueilCache.loading) return; accueilCache.chiffres = null; accueilCache.error = ''; render(); }
 else if(action === 'dash-recharger'){ dashboardCache.error = ''; dashboardCache.items = null; render(); chargerEquipements(); }
 else if(action === 'auth-mode'){ state.authMode = t.dataset.mode; state.authError=''; state.authNotice=''; render(); }
