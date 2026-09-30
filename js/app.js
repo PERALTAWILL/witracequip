@@ -2740,6 +2740,7 @@ else if(action === 'fermer-scanner'){ fermerScanner(); }
 else if(action === 'connexion-depuis-scan'){ connexionDepuisScan(); }
 else if(action === 'vitrine-connexion'){ state.authError = ''; state.authNotice = ''; nav('/connexion'); window.scrollTo(0,0); }
 else if(action === 'vitrine-retour'){ nav('/'); window.scrollTo(0,0); }
+else if(action === 'vitrine-lang'){ vtToggleLang(); }
 else if(action === 'vitrine-scroll'){ vitrineScroll(t.dataset.cible); }
 else if(action === 'toggle-partage'){ actionTogglePartage(); }
 else if(action === 'regen-token'){ actionRegenererLienPublic(); }
