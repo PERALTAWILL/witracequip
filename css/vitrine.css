@@ -88,3 +88,7 @@ width:100%;background:var(--vt-bg);color:var(--vt-ink);font:16px/1.6 Lato,system
 .vt-lang:hover{background:rgba(255,255,255,.12)}
 .vt-lang+.vt-sm{margin-left:0}
 @media(min-width:760px){.vt-lang{margin-left:0}}
+
+.vt-wa{position:fixed;right:16px;bottom:84px;z-index:60;width:54px;height:54px;border-radius:50%;background:#25d366;display:flex;align-items:center;justify-content:center;box-shadow:0 6px 18px rgba(0,0,0,.28);transition:transform .15s}
+.vt-wa:hover{transform:scale(1.08)}
+@media(min-width:760px){.vt-wa{bottom:24px;right:24px}}
