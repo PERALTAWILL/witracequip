@@ -907,8 +907,8 @@ horsLigne: !!state.horsLigne || !navigator.onLine,
 /* ---------------------------------------------------------------------- */
 /* Une échéance = un champ « date » du type dont le libellé annonce une date
    à venir (« Prochain contrôle », « Prochaine inspection », « Prochain essai »,
-   « Prochaine révision décennale »…). Toutes les échéances renseignées sont listées,
-   de la plus proche (ou dépassée) à la plus lointaine. */
+   « Prochaine révision décennale »…). On affiche les retards et les échéances des 3 prochains mois ;
+   la bande d'en-tête donne toujours la date de la plus proche. */
 const RAPPELS_HORIZON_JOURS = 90;
 function calculerRappels(parc){
 const auj = new Date(); auj.setHours(0,0,0,0);
@@ -940,7 +940,8 @@ return `Dans ${Math.round(j / 365.25)} ans`;
 function renderRappels(){
 const c = accueilCache.chiffres;
 if(!c || !c.parc || !state.typesLoaded) return '';
-const l = calculerRappels(c.parc);
+const tous = calculerRappels(c.parc);
+const l = tous.filter(r => r.jours <= RAPPELS_HORIZON_JOURS);
 const MAX = 6;
 const ligne = r => {
 const cls = r.jours < 0 ? 'retard' : (r.jours <= 30 ? 'proche' : 'prevu');
@@ -958,7 +959,7 @@ const nbProche = l.filter(r => r.jours >= 0 && r.jours <= 30).length;
 // Coup d'œil : une bande qui dit tout de suite si quelque chose presse.
 const bande = (nbRetard || nbProche)
 ? `<div class="rappel-urgence ${nbRetard ? 'rappel-urgence-retard' : 'rappel-urgence-proche'}" role="status"><strong>${nbRetard ? nbRetard + ' échéance' + (nbRetard > 1 ? 's dépassées' : ' dépassée') : ''}${nbRetard && nbProche ? ' · ' : ''}${nbProche ? nbProche + ' à moins de 30 jours' : ''}</strong><span>À traiter en priorité</span></div>`
-: `<div class="rappel-urgence rappel-urgence-ok" role="status"><strong>Rien d'urgent</strong><span>${l.length ? 'Prochaine échéance : ' + fmtDate(l[0].date) : 'Aucune date d\u2019échéance renseignée'}</span></div>`;
+: `<div class="rappel-urgence rappel-urgence-ok" role="status"><strong>Rien d'urgent</strong><span>${tous.length ? 'Prochaine échéance : ' + fmtDate(tous[0].date) : 'Aucune date d\u2019échéance renseignée'}</span></div>`;
 return `
 <section class="rappels-zone" aria-label="Rappels de révision des équipements">
 ${bande}
@@ -1028,8 +1029,6 @@ return `
     <button type="button" class="dashboard-refresh" data-action="accueil-recharger" aria-label="Actualiser le tableau de bord" title="Actualiser">${iconeNav('undo',17)}</button>
   </header>
 
-  ${renderRappels()}
-
   <section class="dashboard-hero admin-hero" aria-label="Synthèse du parc">
     <div class="dashboard-hero-copy">
       <span class="hero-kicker">VOTRE ORGANISATION <b>✦</b></span>
@@ -1042,6 +1041,8 @@ return `
     </div>
     <div class="hero-orbit" aria-hidden="true"><i></i><i></i><i></i><span>W</span></div>
   </section>
+
+  ${renderRappels()}
 
   <section class="dashboard-stats" aria-label="Indicateurs de gestion">
     <button type="button" class="dashboard-stat" data-action="go" data-path="/equipements"><span class="stat-icon">${iconeNav('box',18)}</span><span class="stat-copy"><small>Équipements actifs</small><strong>${actifs}</strong></span>${iconeNav('chevron',16)}</button>
@@ -1087,8 +1088,6 @@ return `
     <button type="button" class="dashboard-refresh" data-action="accueil-recharger" aria-label="Actualiser le tableau de bord" title="Actualiser">${iconeNav('undo',17)}</button>
   </header>
 
-  ${renderRappels()}
-
   <section class="dashboard-hero client-hero" aria-label="Résumé du parc d’équipements">
     <div class="dashboard-hero-copy">
       <span class="hero-kicker">VOTRE PARC <b>✦</b> TOUJOURS À JOUR</span>
@@ -1102,8 +1101,9 @@ return `
     <div class="hero-orbit" aria-hidden="true"><i></i><i></i><i></i><span>W</span></div>
   </section>
 
+  ${renderRappels()}
+
   <section class="dashboard-stats" aria-label="Indicateurs du parc">
-    <button type="button" class="dashboard-stat" data-action="go" data-path="/equipements"><span class="stat-icon">${iconeNav('box',18)}</span><span class="stat-copy"><small>Équipements actifs</small><strong>${actifs}</strong></span>${iconeNav('chevron',16)}</button>
     <button type="button" class="dashboard-stat" data-action="go" data-path="${c.derniereEquipementId ? '/equip/' + esc(c.derniereEquipementId) : '/equipements'}"><span class="stat-icon">${iconeNav('journal',18)}</span><span class="stat-copy"><small>Dernière intervention</small><strong class="stat-date">${esc(derniere)}</strong></span>${iconeNav('chevron',16)}</button>
     <button type="button" class="dashboard-stat" data-action="go" data-path="${peutGererTypes() ? '/types' : '/equipements'}"><span class="stat-icon">${iconeNav('tag',18)}</span><span class="stat-copy"><small>Types disponibles</small><strong>${nbTypes}</strong></span>${iconeNav('chevron',16)}</button>
   </section>
