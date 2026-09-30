@@ -77,9 +77,6 @@ return `
 
   <div class="hz-section-heading"><span>ACCÈS DIRECT</span><h2>Avancer sans détour</h2></div>
   <div class="hz-shortcuts" aria-label="Applications et accès rapides">
-    <button type="button" data-action="go" data-path="/reglages/clients"><span>${iconeNav('briefcase',20)}</span><strong>Portefeuille clients</strong>${iconeNav('chevron',16)}</button>
-    <button type="button" data-action="go" data-path="/reglages/support"><span>${iconeNav('inbox',20)}</span><strong>Demandes de support</strong>${iconeNav('chevron',16)}</button>
-    <button type="button" data-action="ouvrir-scanner"><span>${iconeNav('scan',20)}</span><strong>Scanner un QR code</strong>${iconeNav('chevron',16)}</button>
     <button type="button" data-action="go" data-path="/reglages/support/rapports"><span>${iconeNav('wrench',20)}</span><strong>Rapports d’intervention</strong>${iconeNav('chevron',16)}</button>
     <button type="button" data-action="go" data-path="/reglages/support/stats"><span>${iconeNav('chart',20)}</span><strong>Statistiques & export</strong>${iconeNav('chevron',16)}</button>
     <button type="button" data-action="dossier-rapide"><span>${iconeNav('check',20)}</span><strong>Dossier de contrôle</strong>${iconeNav('chevron',16)}</button>
