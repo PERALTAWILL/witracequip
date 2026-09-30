@@ -698,6 +698,7 @@ ${sa ? `<div class="hz-sidebar-extras"><span>ACCÈS DIRECT</span>
 <button type="button" data-action="go" data-path="/reglages/profils">${iconeNav('users',16)} Profils & accès</button>
 <button type="button" data-action="go" data-path="/reglages/journal">${iconeNav('journal',16)} Journal d’activité</button>
 <button type="button" data-action="go" data-path="/reglages/support/stats">${iconeNav('chart',16)} Statistiques</button>
+<button type="button" data-action="dossier-rapide">${iconeNav('check',16)} Dossier de contrôle</button>
 </div>` : ''}
 <div class="sidebar-spacer"></div>
 ${sa ? `<div class="sidebar-fondateur">${iconeNav('crown', 16)}<div><strong>Espace fondateur</strong><span>${esc(state.orgName || 'WiDIAG MQ')}</span></div></div>` : ''}
