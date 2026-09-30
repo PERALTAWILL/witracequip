@@ -1212,29 +1212,8 @@ enregistre = data || {};
 s.busy = false; s.error = esc(e.message); render(); return;
 }
 
-// Envoi de l'email au support. La demande est DÉJÀ enregistrée en base :
-// si l'email échoue, rien n'est perdu, WiDIAG MQ la voit dans Réglages > Support.
-const categorieLib = (CATEGORIES_SUPPORT.find(c => c.v === s.categorie) || {}).l || s.categorie;
-let mailOk = false;
-try{
-const r = await fetch('https://formsubmit.co/ajax/' + SUPPORT_EMAIL, {
-method: 'POST',
-headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-body: JSON.stringify({
-_subject: `[WiTracEQUIP] ${categorieLib} — ${s.sujet}`,
-_template: 'table',
-_captcha: 'false',
-name: enregistre.auteur || '',
-email: s.email,
-Client: (enregistre.organisation || '') + (enregistre.code_client ? ' (' + enregistre.code_client + ')' : ''),
-Motif: categorieLib,
-Sujet: s.sujet,
-message: s.message,
-}),
-});
-const j = await r.json().catch(() => ({}));
-mailOk = r.ok && String(j.success) === 'true';
-}catch(e){ mailOk = false; }
+// L'email au support est envoyé côté serveur (fonction notifier) dès l'enregistrement.
+const mailOk = true;
 
 s.busy = false;
 s.sujet = ''; s.message = '';
