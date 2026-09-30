@@ -2094,6 +2094,7 @@ ${isSuperAdmin() ? `<label class="st-source"><span>Parc</span>
 <option value="${STATS_DEMO}" ${src === STATS_DEMO ? 'selected' : ''}>Démonstration — parc simulé</option>
 ${clients.map(c => `<option value="${c.id}" ${src === c.id ? 'selected' : ''}>${esc(c.nom)}</option>`).join('')}
 </select></label>` : ''}
+<button class="btn" data-action="dossier-ouvrir" ${!d || !d.equipements.length ? 'disabled' : ''}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><path d="M12 3l7.5 3v5.5c0 4.6-3.1 8.2-7.5 9.5-4.4-1.3-7.5-4.9-7.5-9.5V6z"/><path d="m8.6 12.2 2.4 2.4 4.4-4.6"/></svg> Dossier de contrôle</button>
 <button class="btn btn-primary" data-action="stats-export" ${!d || s.exportEnCours ? 'disabled' : ''}>${iconeNav('download', 16)} ${s.exportEnCours ? 'Préparation…' : 'Exporter en Excel'}</button>
 </div>
 </div>
