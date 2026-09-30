@@ -330,3 +330,7 @@ body[data-role="fondateur"] .hz-priority-launch:focus-visible{outline:2px solid 
 
 /* Accueil client : une seule tuile (Dernière intervention), sur toute la largeur */
 .dashboard-client .dashboard-stats{grid-template-columns:1fr;}
+
+/* Pastille « date du jour » de l'accueil */
+.dashboard-heading-side{display:flex;align-items:center;gap:8px;flex:none;}
+.dashboard-date{display:inline-flex;align-items:center;gap:6px;padding:7px 12px;border:1px solid var(--border);border-radius:999px;background:rgba(255,253,250,.88);color:var(--primary);font-size:12px;font-weight:700;white-space:nowrap;}
