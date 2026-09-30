@@ -842,16 +842,19 @@ return msg;
 let accueilCache = { chiffres: null, loading: false, error: '' };
 
 async function chargerChiffres(){
-const [eq, iv] = await Promise.all([
+const [eq, iv, pa] = await Promise.all([
 // Comptage exact côté serveur : pas de téléchargement de tout le parc ni de
 // troncature silencieuse quand l'organisation dépasse la limite Supabase.
 sb.from('equipements').select('id', { count:'exact', head:true }).eq('archived', false),
 // La page d'accueil n'utilise que la dernière intervention connue.
 sb.from('interventions').select('date,equipement_id').order('date', { ascending:false }).limit(1).maybeSingle(),
+// Rappels de révision : on ne charge que ce qu'il faut pour lire les dates d'échéance.
+sb.from('equipements').select('id,nom,type_id,valeurs').eq('archived', false).limit(1000),
 ]);
 if(eq.error) throw eq.error;
 if(iv.error) throw iv.error;
 return {
+parc: pa.error ? [] : (pa.data || []),
 actifs: eq.count ?? 0,
 derniere: iv.data?.date || null,
 derniereEquipementId: iv.data?.equipement_id || null,
@@ -899,6 +902,54 @@ horsLigne: !!state.horsLigne || !navigator.onLine,
 });
 }
 
+/* ---------------------------------------------------------------------- */
+/* Rappels de révision : échéances des équipements du parc                 */
+/* ---------------------------------------------------------------------- */
+/* Une échéance = un champ « date » du type dont le libellé annonce une date
+   à venir (« Prochain contrôle », « Prochaine inspection », « Prochain essai »,
+   « Prochaine révision décennale »…). On ne rappelle que les 90 prochains jours
+   et ce qui est en retard. */
+const RAPPELS_HORIZON_JOURS = 90;
+function calculerRappels(parc){
+const auj = new Date(); auj.setHours(0,0,0,0);
+const out = [];
+(parc || []).forEach(eq => {
+const t = state.types.find(t => t.id === eq.type_id);
+(t?.champs || []).forEach(c => {
+if(c.type !== 'date' || !/prochain|[ée]ch[ée]ance/i.test(c.label || '')) return;
+const brut = eq.valeurs?.[c.key || slugify(c.label)];
+if(!brut) return;
+const d = new Date(String(brut).slice(0, 10) + 'T00:00:00');
+if(isNaN(d)) return;
+const jours = Math.round((d - auj) / 86400000);
+if(jours <= RAPPELS_HORIZON_JOURS) out.push({ id:eq.id, nom:eq.nom, label:c.label, date:brut, jours });
+});
+});
+return out.sort((a, b) => a.jours - b.jours);
+}
+
+function renderRappels(){
+const c = accueilCache.chiffres;
+if(!c || !c.parc || !state.typesLoaded) return '';
+const l = calculerRappels(c.parc);
+const MAX = 6;
+const ligne = r => {
+const cls = r.jours < 0 ? 'retard' : (r.jours <= 30 ? 'proche' : 'prevu');
+const txt = r.jours < 0 ? `En retard de ${-r.jours} j` : (r.jours === 0 ? "Aujourd'hui" : `Dans ${r.jours} j`);
+return `<button type="button" class="rappel-ligne rappel-${cls}" data-action="go" data-path="/equip/${esc(r.id)}">
+<span class="rappel-badge">${txt}</span>
+<span class="rappel-corps"><strong>${esc(r.nom)}</strong><small>${esc(r.label)} · ${fmtDate(r.date)}</small></span>
+${iconeNav('chevron',16)}</button>`;
+};
+const nbRetard = l.filter(r => r.jours < 0).length;
+return `
+<div class="dashboard-section-title"><div><span>ÉCHÉANCES</span><h2>Rappels de révision</h2></div><small>${nbRetard ? nbRetard + ' en retard · ' : ''}${RAPPELS_HORIZON_JOURS} prochains jours</small></div>
+<section class="rappels-zone" aria-label="Rappels de révision des équipements">
+${l.length ? l.slice(0, MAX).map(ligne).join('') + (l.length > MAX ? `<button type="button" class="rappel-suite" data-action="go" data-path="/equipements">+ ${l.length - MAX} autre${l.length - MAX > 1 ? 's' : ''} échéance${l.length - MAX > 1 ? 's' : ''} — voir le parc</button>` : '')
+: `<div class="rappel-vide">Aucune révision à prévoir dans les ${RAPPELS_HORIZON_JOURS} prochains jours.</div>`}
+</section>`;
+}
+
 function viewAccueilAdmin(){
 if(accueilCache.chiffres === null && !accueilCache.loading && !accueilCache.error){
 accueilCache.loading = true;
@@ -942,6 +993,8 @@ return `
     <button type="button" class="dashboard-stat" data-action="go" data-path="${c.derniereEquipementId ? '/equip/' + esc(c.derniereEquipementId) : '/equipements'}"><span class="stat-icon">${iconeNav('journal',18)}</span><span class="stat-copy"><small>Dernière intervention</small><strong class="stat-date">${esc(derniere)}</strong></span>${iconeNav('chevron',16)}</button>
     <button type="button" class="dashboard-stat" data-action="go" data-path="/types"><span class="stat-icon">${iconeNav('tag',18)}</span><span class="stat-copy"><small>Types configurés</small><strong>${types}</strong></span>${iconeNav('chevron',16)}</button>
   </section>
+
+  ${renderRappels()}
 
   <div class="dashboard-section-title"><div><span>ESPACE DE TRAVAIL</span><h2>Raccourcis utiles</h2></div><small>Les actions de gestion, à portée de main</small></div>
   <section class="dashboard-quick-actions" aria-label="Actions d’administration">
@@ -999,6 +1052,8 @@ return `
     <button type="button" class="dashboard-stat" data-action="go" data-path="${c.derniereEquipementId ? '/equip/' + esc(c.derniereEquipementId) : '/equipements'}"><span class="stat-icon">${iconeNav('journal',18)}</span><span class="stat-copy"><small>Dernière intervention</small><strong class="stat-date">${esc(derniere)}</strong></span>${iconeNav('chevron',16)}</button>
     <button type="button" class="dashboard-stat" data-action="go" data-path="${peutGererTypes() ? '/types' : '/equipements'}"><span class="stat-icon">${iconeNav('tag',18)}</span><span class="stat-copy"><small>Types disponibles</small><strong>${nbTypes}</strong></span>${iconeNav('chevron',16)}</button>
   </section>
+
+  ${renderRappels()}
 
   <div class="dashboard-section-title"><div><span>POUR ALLER PLUS VITE</span><h2>Actions rapides</h2></div><small>Vos outils du quotidien</small></div>
   <section class="dashboard-quick-actions" aria-label="Actions rapides">
