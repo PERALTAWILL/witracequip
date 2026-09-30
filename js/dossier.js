@@ -236,7 +236,12 @@ function qr(url){
   try{
     if(typeof QRious === 'undefined') return null;
     var c = document.createElement('canvas');
-    new QRious({ element:c, value:url, size:240, level:'M', background:'white', foreground:'#141b1e' });
+    new QRious({ element:c, value:url, size:240, level:'H', background:'white', foreground:'#141b1e' });
+    /* Pastille « W » au centre, identique aux QR codes de l'application (badge W) */
+    var g = c.getContext('2d'), s = c.width, b = Math.round(s * 0.2), x0 = (s - b) / 2, r = b * 0.18;
+    g.fillStyle = '#ffffff'; g.fillRect(x0 - 3, x0 - 3, b + 6, b + 6);
+    g.fillStyle = '#141b1e'; g.beginPath(); g.moveTo(x0 + r, x0); g.arcTo(x0 + b, x0, x0 + b, x0 + b, r); g.arcTo(x0 + b, x0 + b, x0, x0 + b, r); g.arcTo(x0, x0 + b, x0, x0, r); g.arcTo(x0, x0, x0 + b, x0, r); g.closePath(); g.fill();
+    g.fillStyle = '#ffffff'; g.font = 'bold ' + Math.round(b * 0.74) + 'px Georgia, "Times New Roman", serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('W', s / 2, s / 2 + b * 0.04);
     return c.toDataURL('image/png');
   }catch(e){ return null; }
 }
