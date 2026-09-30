@@ -1026,7 +1026,7 @@ return `
       <h1>Bonjour${prenom ? ', ' + esc(prenom) : ''}.</h1>
       <p>Votre organisation, ses équipements et son équipe — au même endroit.</p>
     </div>
-    <button type="button" class="dashboard-refresh" data-action="accueil-recharger" aria-label="Actualiser le tableau de bord" title="Actualiser">${iconeNav('undo',17)}</button>
+    <div class="dashboard-heading-side"><span class="dashboard-date" role="status" aria-label="Date du jour">${iconeNav('calendar',15)}<span>${esc(dateCourteFondateur())}</span></span><button type="button" class="dashboard-refresh" data-action="accueil-recharger" aria-label="Actualiser le tableau de bord" title="Actualiser">${iconeNav('undo',17)}</button></div>
   </header>
 
   <section class="dashboard-hero admin-hero" aria-label="Synthèse du parc">
@@ -1085,7 +1085,7 @@ return `
       <h1>Bonjour${prenom ? ', ' + esc(prenom) : ''}.</h1>
       <p>Tout ce qui fait tourner votre parc, réuni au même endroit.</p>
     </div>
-    <button type="button" class="dashboard-refresh" data-action="accueil-recharger" aria-label="Actualiser le tableau de bord" title="Actualiser">${iconeNav('undo',17)}</button>
+    <div class="dashboard-heading-side"><span class="dashboard-date" role="status" aria-label="Date du jour">${iconeNav('calendar',15)}<span>${esc(dateCourteFondateur())}</span></span><button type="button" class="dashboard-refresh" data-action="accueil-recharger" aria-label="Actualiser le tableau de bord" title="Actualiser">${iconeNav('undo',17)}</button></div>
   </header>
 
   <section class="dashboard-hero client-hero" aria-label="Résumé du parc d’équipements">
