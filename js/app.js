@@ -818,11 +818,14 @@ const fd = new FormData(form);
 const email = fd.get('email').trim();
 const password = fd.get('password');
 try{
+// Marqué AVANT l'appel : l'événement de connexion arrive pendant la requête, et il
+// faut alors déjà viser l'accueil (sinon l'ancienne page, ex. Équipements, clignote).
+connexionFraiche = true;
 const { error } = await sb.auth.signInWithPassword({ email, password });
 if(error) throw error;
-connexionFraiche = true;
 // onAuthStateChange se charge de la suite (dont la vérification de l'appareil)
 }catch(e){
+connexionFraiche = false;
 state.authError = translateAuthError(e.message || String(e));
 }finally{
 state.authBusy = false; render();
@@ -3014,6 +3017,8 @@ if(event === 'SIGNED_OUT' && state.profile && !deconnexionVolontaire && !state.a
 if(event === 'SIGNED_OUT') deconnexionVolontaire = false;
 const memeUtilisateur = !!(session && state.session && state.profile && state.profile.id === session.user.id);
 state.session = session;
+// Connexion fraîche : on vise l'accueil tout de suite, avant le premier affichage connecté.
+if(session && connexionFraiche && !memeUtilisateur){ try{ nav('/'); state.route = parseHash(); }catch(e){} }
 // Rafraîchissement du jeton, retour au premier plan : même utilisateur, rien à recharger.
 if(session && memeUtilisateur && event !== 'INITIAL_SESSION') return;
 setTimeout(() => appliquerSession(session), 0);
