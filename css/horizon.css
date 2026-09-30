@@ -315,3 +315,15 @@ body[data-role="fondateur"] .hz-priority-launch:focus-visible{outline:2px solid 
 .rappel-suite{align-self:flex-start;border:0;background:none;color:var(--primary);font:inherit;font-size:13px;font-weight:700;padding:4px 2px;cursor:pointer;}
 .rappel-vide{padding:12px 14px;border:1px dashed var(--border);border-radius:14px;color:var(--muted);font-size:13px;}
 @media (max-width:520px){.rappel-badge{min-width:88px;font-size:11px;}}
+
+/* Rappels : ligne + bouton agenda, bande d'urgence */
+.rappel-item{display:flex;align-items:stretch;gap:8px;}
+.rappel-item .rappel-ligne{flex:1;width:auto;min-width:0;}
+.rappel-agenda{flex:none;display:inline-flex;align-items:center;gap:6px;padding:0 12px;min-height:44px;border:1px solid var(--border);border-radius:14px;background:rgba(255,253,250,.88);color:var(--primary);font:inherit;font-size:12px;font-weight:700;cursor:pointer;}
+.rappel-agenda:hover{border-color:color-mix(in srgb,var(--primary) 32%,var(--border));}
+.rappel-urgence{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:4px 12px;padding:12px 16px;border-radius:14px;font-size:14px;}
+.rappel-urgence span{font-size:12px;opacity:.85;}
+.rappel-urgence-retard{background:var(--danger-bg);color:var(--danger);border:1px solid var(--danger);}
+.rappel-urgence-proche{background:var(--warn-bg);color:var(--warn);border:1px solid var(--warn);}
+.rappel-urgence-ok{background:var(--success-bg);color:var(--success);border:1px solid var(--success);}
+@media (max-width:520px){.rappel-agenda span{display:none;}.rappel-agenda{padding:0 11px;}}
