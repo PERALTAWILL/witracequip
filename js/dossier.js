@@ -601,4 +601,18 @@ async function generer(){
 }
 
 window.dossierControle = { ouvrir:ouvrir, fermer:fermer, modele:modele, fabriquer:fabriquerPdf, options:OPT, preparerDemo:preparerDemo };
+
+/* Accès rapide (accueil et menu du fondateur) : ouvre les statistiques puis la fenêtre du dossier. */
+document.addEventListener('click', function(e){
+  var b = e.target && e.target.closest ? e.target.closest('[data-action="dossier-rapide"]') : null;
+  if(!b) return;
+  try{ nav('/reglages/support/stats'); }catch(err){ return; }
+  var essais = 0;
+  var tempo = setInterval(function(){
+    essais++;
+    var pret = (typeof statsState !== 'undefined') && statsState.data && document.querySelector('[data-action="dossier-ouvrir"]');
+    if(pret){ clearInterval(tempo); ouvrir(); }
+    else if(essais > 40) clearInterval(tempo);
+  }, 250);
+});
 })();
