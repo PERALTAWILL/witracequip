@@ -1356,7 +1356,7 @@ list = (dashboardCache.search || dashboardCache.typeId)
 ? `<div class="card empty"><div class="empty-icone">${iconeNav('box', 30)}</div><strong>Aucun résultat</strong><br><span class="small">Aucun équipement ne correspond à « ${esc(dashboardCache.search)} ». Essayez le n° de série ou la plaque.</span></div>`
 : `<div class="card empty"><div class="empty-icone">${iconeNav('box', 30)}</div><strong>Aucun équipement pour l'instant</strong><br><span class="small">Ajoutez votre premier équipement pour générer son QR code.</span></div>`;
 } else {
-const selection = peutSupprimer();
+const selection = true; // tous les profils peuvent cocher (impression des QR) ; archivage/suppression restent réservés
 const sel = dashboardCache.sel;
 const tousCoches = dashboardCache.items.filter(e => !e.en_attente).every(e => sel.includes(e.id));
 list = `<div class="card liste-select ${dashboardCache.loading ? 'rafraichit' : ''}">`
@@ -1383,11 +1383,12 @@ ${isAdmin() && !attente ? `<button class="icon-btn btn-poubelle" data-action="su
 }
 
 const selItems = (dashboardCache.items || []).filter(e => dashboardCache.sel.includes(e.id));
-const barre = (peutSupprimer() && selItems.length) ? `
+const barre = selItems.length ? `
 <div class="barre-selection">
 <strong>${selItems.length} sélectionné${selItems.length > 1 ? 's' : ''}</strong>
-${selItems.some(e => !e.archived) ? `<button class="btn btn-sm" data-action="equip-archiver-sel">Archiver</button>` : ''}
-${selItems.some(e => e.archived) ? `<button class="btn btn-sm" data-action="equip-restaurer-sel">Restaurer</button>` : ''}
+<button class="btn btn-sm" data-action="imprimer-qr-sel">🖨️ Imprimer les QR</button>
+${peutSupprimer() && selItems.some(e => !e.archived) ? `<button class="btn btn-sm" data-action="equip-archiver-sel">Archiver</button>` : ''}
+${peutSupprimer() && selItems.some(e => e.archived) ? `<button class="btn btn-sm" data-action="equip-restaurer-sel">Restaurer</button>` : ''}
 ${isAdmin() ? `<button class="btn btn-sm btn-danger" data-action="equip-supprimer-sel">Supprimer définitivement</button>` : ''}
 <button class="btn btn-sm btn-lien" data-action="equip-desel">Annuler</button>
 </div>` : '';
