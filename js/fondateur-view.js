@@ -82,6 +82,7 @@ return `
     <button type="button" data-action="ouvrir-scanner"><span>${iconeNav('scan',20)}</span><strong>Scanner un QR code</strong>${iconeNav('chevron',16)}</button>
     <button type="button" data-action="go" data-path="/reglages/support/rapports"><span>${iconeNav('wrench',20)}</span><strong>Rapports d’intervention</strong>${iconeNav('chevron',16)}</button>
     <button type="button" data-action="go" data-path="/reglages/support/stats"><span>${iconeNav('chart',20)}</span><strong>Statistiques & export</strong>${iconeNav('chevron',16)}</button>
+    <button type="button" data-action="dossier-rapide"><span>${iconeNav('check',20)}</span><strong>Dossier de contrôle</strong>${iconeNav('chevron',16)}</button>
     <button type="button" data-action="go" data-path="/reglages/profils"><span>${iconeNav('users',20)}</span><strong>Profils & accès</strong>${iconeNav('chevron',16)}</button>
     <button type="button" data-action="go" data-path="/reglages/journal"><span>${iconeNav('journal',20)}</span><strong>Journal d’activité</strong>${iconeNav('chevron',16)}</button>
   </div>
