@@ -3008,6 +3008,17 @@ setInterval(() => { if(posteState.mode === 'ordinateur') verifierSession(); }, 1
 document.addEventListener('visibilitychange', () => { if(document.visibilityState === 'visible'){ verifierSession(); if(state.profile && !state.superAdmin) chargerActivite(true); } });
 window.addEventListener('online', () => setTimeout(verifierSession, 1500));
 
+// Reprise après une longue absence (appli restée en arrière-plan plus de 30 min) :
+// on revient à la vue principale, comme à une ouverture. Les liens QR, invitations,
+// fiches et l'écran de connexion restent en place.
+let masqueLe = 0;
+document.addEventListener('visibilitychange', () => {
+  if(document.visibilityState === 'hidden'){ masqueLe = Date.now(); return; }
+  const absent = masqueLe ? Date.now() - masqueLe : 0;
+  masqueLe = 0;
+  if(absent > 30 * 60 * 1000 && !ROUTES_A_GARDER.includes(state.route.name)) nav('/');
+});
+
 // Tableau de bord Fondateur : la date affichée dans « Votre priorité » se
 // tient à jour toute seule (changement de jour à minuit) sans navigation.
 setInterval(() => { if(isSuperAdmin() && state.route.name === 'accueil') render(); }, 30000);
