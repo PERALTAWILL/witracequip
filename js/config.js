@@ -289,6 +289,19 @@ return { name: parts[0] || 'accueil', param: parts[1] || null, sub: parts[2] || 
 
 function nav(path){ location.hash = path; }
 
+/* À chaque ouverture de l'application, on arrive sur la vue principale (l'accueil),
+   pas sur la dernière page consultée que le téléphone a gardée en mémoire.
+   Restent tels quels : le lien d'un QR code (#/p/…), une invitation (#/join/…),
+   une fiche ouverte par lien (#/equip/…) et l'écran de connexion. */
+const ROUTES_A_GARDER = ['accueil', 'p', 'join', 'equip', 'connexion'];
+(function revenirAccueilAlOuverture(){
+  const h = location.hash;
+  if(ROUTES_A_GARDER.includes(parseHash().name)) return;
+  if(/access_token|error_description|type=/.test(h)) return; // jetons de connexion : ne pas toucher
+  try{ history.replaceState(null, '', location.pathname + location.search + '#/'); }catch(e){ return; }
+  state.route = parseHash();
+})();
+
 window.addEventListener('hashchange', () => {
 state.route = parseHash();
 if(typeof fermerCommandesFondateur === 'function') fermerCommandesFondateur();
