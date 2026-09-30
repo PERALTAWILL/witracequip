@@ -126,7 +126,7 @@ return `
 <label>${vt(`Votre secteur`,`Your sector`)}<select name="secteur"><option value="Hôtellerie">${vt(`Hôtellerie`,`Hospitality`)}</option><option value="Santé">${vt(`Santé`,`Healthcare`)}</option><option value="BTP">${vt(`BTP`,`Construction`)}</option><option value="Industrie">${vt(`Industrie`,`Industry`)}</option><option value="Flotte / location">${vt(`Flotte / location`,`Fleet / rental`)}</option><option value="Autre">${vt(`Autre`,`Other`)}</option></select></label>
 <label>${vt(`Votre besoin`,`Your needs`)}<textarea name="message" rows="4" maxlength="2000" placeholder="${vt(`Nombre approximatif d'équipements, contrôles à suivre…`,`Approximate number of items, inspections to track…`)}"></textarea></label>
 <label class="vt-hp" aria-hidden="true">Site<input name="site" tabindex="-1" autocomplete="off"></label>
-<label class="vt-chk"><input type="checkbox" name="rgpd" required> ${vt(`J'accepte que mes informations soient utilisées pour répondre à ma demande (RGPD).`,`I agree that my information may be used to answer my request (GDPR).`)}</label>
+<label class="vt-chk"><input type="checkbox" name="rgpd" required> ${vt(`J'accepte que mes informations soient utilisées pour répondre à ma demande (<a href="confidentialite.html" target="_blank" rel="noopener">RGPD</a>).`,`I agree that my information may be used to answer my request (<a href="confidentialite.html" target="_blank" rel="noopener">GDPR</a>).`)}</label>
 <div class="vt-err" id="vt-err"></div>
 <button class="vt-btn vt-gold" type="submit" id="vt-envoi" style="font-size:17px;padding:16px">${vt(`Envoyer ma demande`,`Send my request`)}</button>
 </form>
@@ -134,7 +134,7 @@ return `
 </div>
 </div></section>
 
-<footer><div class="vt-wrap"><b>WiDIAG MQ</b> · Habitation Gondeau, Le Lamentin — Martinique<br>${esc(SUPPORT_EMAIL)} · 06 96 20 93 19<br>SIRET 841 516 800 00031<br><br>${vt(`<i>Vos équipements ont une histoire. Gardez-en la trace.</i>`,`<i>Your equipment has a story. Keep track of it.</i>`)}</div></footer>
+<footer><div class="vt-wrap"><b>WiDIAG MQ</b> · Habitation Gondeau, Le Lamentin — Martinique<br>${esc(SUPPORT_EMAIL)} · 06 96 20 93 19<br>SIRET 841 516 800 00031<br><a href="mentions.html">${vt(`Mentions légales`,`Legal notice`)}</a> · <a href="confidentialite.html">${vt(`Confidentialité`,`Privacy`)}</a><br><br>${vt(`<i>Vos équipements ont une histoire. Gardez-en la trace.</i>`,`<i>Your equipment has a story. Keep track of it.</i>`)}</div></footer>
 
 <div class="vt-dock"><button type="button" class="vt-btn vt-gold" ${vt(`data-action="vitrine-connexion">Se connecter</button><button type="button" class="vt-btn vt-ghost" data-action="vitrine-scroll" data-cible="contact">Demander une démo</button>`,`data-action="vitrine-connexion">Log in</button><button type="button" class="vt-btn vt-ghost" data-action="vitrine-scroll" data-cible="contact">Request a demo</button>`)}</div>
 </div>`;
