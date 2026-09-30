@@ -1105,7 +1105,6 @@ return `
 
   <section class="dashboard-stats" aria-label="Indicateurs du parc">
     <button type="button" class="dashboard-stat" data-action="go" data-path="${c.derniereEquipementId ? '/equip/' + esc(c.derniereEquipementId) : '/equipements'}"><span class="stat-icon">${iconeNav('journal',18)}</span><span class="stat-copy"><small>Dernière intervention</small><strong class="stat-date">${esc(derniere)}</strong></span>${iconeNav('chevron',16)}</button>
-    <button type="button" class="dashboard-stat" data-action="go" data-path="${peutGererTypes() ? '/types' : '/equipements'}"><span class="stat-icon">${iconeNav('tag',18)}</span><span class="stat-copy"><small>Types disponibles</small><strong>${nbTypes}</strong></span>${iconeNav('chevron',16)}</button>
   </section>
 
   <div class="dashboard-section-title"><div><span>POUR ALLER PLUS VITE</span><h2>Actions rapides</h2></div><small>Vos outils du quotidien</small></div>
