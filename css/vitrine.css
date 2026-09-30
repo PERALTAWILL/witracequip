@@ -83,3 +83,8 @@ width:100%;background:var(--vt-bg);color:var(--vt-ink);font:16px/1.6 Lato,system
  .vt-access{flex-direction:row;justify-content:space-between;text-align:left;max-width:600px}.vt-access .vt-btn{width:auto;padding:14px 26px}
 }
 .auth-retour{display:block;margin:0 auto 14px;background:none;border:0;color:var(--text-dim,#777);font-size:13px;cursor:pointer;padding:6px}
+
+.vt-lang{margin-left:auto;background:transparent;color:#fff;border:1px solid rgba(255,255,255,.35);border-radius:8px;padding:6px 10px;font-size:13px;font-weight:700;cursor:pointer;letter-spacing:.04em}
+.vt-lang:hover{background:rgba(255,255,255,.12)}
+.vt-lang+.vt-sm{margin-left:0}
+@media(min-width:760px){.vt-lang{margin-left:0}}
