@@ -699,7 +699,10 @@ ${sa ? `<div class="hz-sidebar-extras"><span>ACCÈS DIRECT</span>
 <button type="button" data-action="go" data-path="/reglages/journal">${iconeNav('journal',16)} Journal d’activité</button>
 <button type="button" data-action="go" data-path="/reglages/support/stats">${iconeNav('chart',16)} Statistiques</button>
 <button type="button" data-action="dossier-rapide">${iconeNav('check',16)} Dossier de contrôle</button>
-</div>` : ''}
+<button type="button" data-action="import-parc">${iconeNav('box',16)} Importer un parc Excel</button>
+</div>` : (isAdmin() ? `<div class="hz-sidebar-extras"><span>ACCÈS RAPIDE</span>
+<button type="button" data-action="import-parc">${iconeNav('box',16)} Importer un parc Excel</button>
+</div>` : '')}
 <div class="sidebar-spacer"></div>
 ${sa ? `<div class="sidebar-fondateur">${iconeNav('crown', 16)}<div><strong>Espace fondateur</strong><span>${esc(state.orgName || 'WiDIAG MQ')}</span></div></div>` : ''}
 ${state.enAttenteCount > 0 ? `<div class="sidebar-sync" title="${state.enAttenteCount} saisie${state.enAttenteCount>1?'s':''} en attente d'envoi (sans réseau)">${iconeNav('clock',15)}<span>${state.enAttenteCount} en attente</span></div>` : ''}
@@ -848,7 +851,7 @@ return msg;
 let accueilCache = { chiffres: null, loading: false, error: '' };
 
 async function chargerChiffres(){
-const [eq, iv, pa] = await Promise.all([
+const [eq, iv, pa, pn] = await Promise.all([
 // Comptage exact côté serveur : pas de téléchargement de tout le parc ni de
 // troncature silencieuse quand l'organisation dépasse la limite Supabase.
 sb.from('equipements').select('id', { count:'exact', head:true }).eq('archived', false),
@@ -856,10 +859,18 @@ sb.from('equipements').select('id', { count:'exact', head:true }).eq('archived',
 sb.from('interventions').select('date,equipement_id').order('date', { ascending:false }).limit(1).maybeSingle(),
 // Rappels de révision : on ne charge que ce qu'il faut pour lire les dates d'échéance.
 sb.from('equipements').select('id,nom,type_id,valeurs').eq('archived', false).limit(1000),
+// Pannes signalées : dernières interventions, la plus récente de chaque équipement décide.
+sb.from('interventions').select('equipement_id,date,type,technicien,description').order('date', { ascending:false }).limit(1500),
 ]);
 if(eq.error) throw eq.error;
 if(iv.error) throw iv.error;
+const vus = {}, pannes = [];
+(pn.error ? [] : (pn.data || [])).forEach(x => {
+if(vus[x.equipement_id]) return; vus[x.equipement_id] = 1;
+if(/^signalement de panne/i.test(x.type || '')) pannes.push(x);
+});
 return {
+pannes,
 parc: pa.error ? [] : (pa.data || []),
 actifs: eq.count ?? 0,
 derniere: iv.data?.date || null,
@@ -941,6 +952,16 @@ if(j <= 60) return `Dans ${j} j`;
 const mois = Math.round(j / 30.44);
 if(mois < 24) return `Dans ${mois} mois`;
 return `Dans ${Math.round(j / 365.25)} ans`;
+}
+
+function renderPannes(){
+const c = accueilCache.chiffres;
+if(!c || !c.pannes || !c.pannes.length || !peutStats()) return '';
+const nom = id => (c.parc.find(e => e.id === id) || {}).nom || 'Équipement';
+return `<section class="rappels-zone" aria-label="Pannes signalées">
+<div class="rappel-urgence rappel-urgence-retard" role="status"><strong>${c.pannes.length} panne${c.pannes.length>1?'s':''} signalée${c.pannes.length>1?'s':''}</strong><span>À traiter</span></div>
+${c.pannes.slice(0,6).map(x => `<div class="rappel-item rappel-retard"><button type="button" class="rappel-ligne" data-action="go" data-path="/equip/${esc(x.equipement_id)}"><span class="rappel-badge">Panne</span><span class="rappel-corps"><strong>${esc(nom(x.equipement_id))}</strong><small>${esc(x.description || '')}</small></span>${iconeNav('chevron',16)}</button></div>`).join('')}
+</section>`;
 }
 
 function renderRappels(){
@@ -1043,11 +1064,13 @@ return `
       <div class="hero-actions">
         <button type="button" class="btn hero-cta" data-action="go" data-path="/equip-new">${iconeNav('plus',17)} Ajouter un équipement</button>
         <button type="button" class="btn hero-secondary" data-action="ouvrir-scanner">${iconeNav('scan',17)} Scanner un QR</button>
+        <button type="button" class="btn hero-secondary" data-action="import-parc">${iconeNav('box',17)} Importer un parc Excel</button>
       </div>
     </div>
     <div class="hero-orbit" aria-hidden="true"><i></i><i></i><i></i><span>W</span></div>
   </section>
 
+  ${renderPannes()}
   ${renderRappels()}
 
   <section class="dashboard-stats" aria-label="Indicateurs de gestion">
@@ -1107,6 +1130,7 @@ return `
     <div class="hero-orbit" aria-hidden="true"><i></i><i></i><i></i><span>W</span></div>
   </section>
 
+  ${renderPannes()}
   ${renderRappels()}
 
   <section class="dashboard-stats" aria-label="Indicateurs du parc">
@@ -1868,7 +1892,7 @@ equipForm.busy = false; equipForm.error = e.message; render();
 /* View: Détail équipement (QR + historique) */
 /* ---------------------------------------------------------------------- */
 
-let equipDetail = { id:null, item:null, interventions:null, loading:false, error:'',
+let equipDetail = { id:null, item:null, interventions:null, loading:false, error:'', modePanne:false,
 showIvForm:false, ivBusy:false, ivError:'', ivNotice:'',
 showEditForm:false, editBusy:false, editError:'',
 editIvId:null, editIvBusy:false, editIvError:'',
@@ -1966,6 +1990,7 @@ ${eq.en_attente ? `<div class="alert alert-info bandeau-hl">${iconeNav('clock',1
 : (equipDetail.horsLigne ? `<div class="alert alert-info bandeau-hl">${iconeNav('clock',16)} <span>Pas de réseau : fiche de la dernière consultation. Vous pouvez saisir une intervention, elle partira au retour du réseau. L'historique complet s'affichera à la reconnexion.</span></div>` : '')}
 ${equipDetail.showEditForm && !eq.archived && surServeur ? renderEditEquipForm(eq, champs) : ''}
 ${renderVisionneuse()}
+${renderBandeauPanne(eq)}
 
 <div class="grid-2" style="align-items:start;">
 <div class="card">
@@ -2124,6 +2149,51 @@ if(!canvas || typeof QRious === 'undefined' || !url) return;
 new QRious({ element: canvas, value: url, size: 200, background: 'white', foreground: '#141b1e', level: 'H' }); (function(c){ const g=c.getContext('2d'), s=c.width, b=Math.round(s*0.2), x=(s-b)/2, r=b*0.18; g.fillStyle='#ffffff'; g.fillRect(x-3,x-3,b+6,b+6); g.fillStyle='#141b1e'; g.beginPath(); g.moveTo(x+r,x); g.arcTo(x+b,x,x+b,x+b,r); g.arcTo(x+b,x+b,x,x+b,r); g.arcTo(x,x+b,x,x,r); g.arcTo(x,x,x+b,x,r); g.closePath(); g.fill(); g.fillStyle='#ffffff'; g.font='bold '+Math.round(b*0.74)+'px Georgia, "Times New Roman", serif'; g.textAlign='center'; g.textBaseline='middle'; g.fillText('W', s/2, s/2+b*0.04); })(canvas);
 }
 
+/* Signalement de panne : ouvert à tous les rôles. Le nom du déclarant est obligatoire ;
+   la date et l'heure s'affichent en direct et sont figées à l'envoi. */
+function panneOuverte(liste){
+const iv = (liste || [])[0];
+return iv && /^signalement de panne/i.test(iv.type || '') ? iv : null;
+}
+function renderBandeauPanne(eq){
+if(eq.archived) return '';
+const ouverte = panneOuverte(equipDetail.interventions);
+const btn = `<button type="button" class="btn" data-action="signaler-panne" style="background:#c0392b;border-color:#c0392b;color:#fff;font-weight:700;">⚠ Signaler une panne</button>`;
+if(!ouverte) return `<div class="row" style="margin:0 0 14px;">${btn}</div>`;
+return `<div class="alert alert-error" style="margin:0 0 14px;display:flex;gap:12px;align-items:center;flex-wrap:wrap;justify-content:space-between;">
+<span><strong>Panne signalée, en attente de réparation.</strong><br><span class="small">${esc(ouverte.description || '')}</span></span>
+<span class="row" style="gap:8px;flex-wrap:wrap;"><button type="button" class="btn btn-sm btn-primary" data-action="panne-reparee">Marquer comme réparée</button>${btn}</span></div>`;
+}
+function heureNow(){
+const n = new Date();
+return `${String(n.getDate()).padStart(2,'0')}/${String(n.getMonth()+1).padStart(2,'0')}/${n.getFullYear()} à ${String(n.getHours()).padStart(2,'0')}h${String(n.getMinutes()).padStart(2,'0')}`;
+}
+function renderPanneForm(b, v){
+const d = new Date();
+const today = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+setTimeout(() => {
+clearInterval(window.__horlPanne);
+window.__horlPanne = setInterval(() => { const e = document.getElementById('panne-horloge'); if(e) e.textContent = heureNow(); else clearInterval(window.__horlPanne); }, 15000);
+}, 0);
+return `
+<form class="card" id="panne-form" style="background:#fdf1ef;border:1px solid #e8b4ad;margin:12px 0;" data-action="submit-iv">
+<div style="font-weight:700;color:#c0392b;margin-bottom:8px;">⚠ Signaler une panne</div>
+${equipDetail.ivError ? `<div class="alert alert-error">${esc(equipDetail.ivError)}</div>` : ''}
+<input type="hidden" name="panne" value="1"><input type="hidden" name="type" value="Signalement de panne"><input type="hidden" name="date" value="${today}">
+<div class="field"><label>Date et heure du signalement</label>
+<div style="padding:10px 12px;background:#fff;border:1px solid var(--border,#d5dbe0);border-radius:8px;font-weight:650;" id="panne-horloge">${heureNow()}</div>
+<div class="hint">Renseignées automatiquement, non modifiables : l'heure retenue est celle de l'envoi.</div></div>
+<div class="field"><label>Nom de la personne qui signale <span class="oblig">obligatoire</span></label>
+<input type="text" name="technicien" value="${esc(v('technicien', state.profile?.full_name || ''))}" required placeholder="Nom et prénom"></div>
+<div class="field"><label>Que se passe-t-il ? <span class="oblig">obligatoire</span></label>
+<textarea name="description" required placeholder="Ex : ne démarre plus, fuite, bruit anormal, voyant rouge…">${esc(v('description', ''))}</textarea></div>
+${renderChampPhotos(null)}
+<div class="row wrap">
+<button class="btn btn-primary" type="submit" style="background:#c0392b;border-color:#c0392b;" ${equipDetail.ivBusy || equipDetail.photosBusy?'disabled':''}>${equipDetail.ivBusy?'Envoi…':'Envoyer le signalement'}</button>
+<button class="btn" type="button" data-action="toggle-iv-form">Annuler</button></div>
+</form>`;
+}
+
 function renderIvForm(iv){
 // iv fourni = modification d'une intervention existante ; sinon, nouvelle saisie.
 // Date du jour en heure LOCALE (toISOString donnerait la date UTC : le lendemain en soirée aux Antilles).
@@ -2134,6 +2204,7 @@ const err = modif ? equipDetail.editIvError : equipDetail.ivError;
 // Brouillon : ce qui a été tapé survit à un réaffichage (ajout d'une photo…).
 const b = modif ? (equipDetail.brouillonEdit && equipDetail.brouillonEdit.id === iv.id ? equipDetail.brouillonEdit : {}) : (equipDetail.brouillon || {});
 const v = (cle, defaut) => b[cle] !== undefined ? b[cle] : defaut;
+if(!modif && equipDetail.modePanne) return renderPanneForm(b, v);
 return `
 <form class="card" style="background:var(--surface-2);margin:12px 0;" data-action="${modif ? 'submit-iv-edit' : 'submit-iv'}" ${modif ? `data-id="${iv.id}"` : ''}>
 ${modif ? `<div style="font-weight:650;margin-bottom:8px;">Modifier l'intervention</div>` : ''}
@@ -2176,7 +2247,15 @@ const fd = new FormData(form);
 const date = (fd.get('date') || '').trim();
 const type = (fd.get('type') || '').trim();
 const technicien = (fd.get('technicien') || '').trim();
-const description = (fd.get('description') || '').trim();
+let description = (fd.get('description') || '').trim();
+const estPanne = fd.get('panne') === '1';
+if(estPanne){
+if(!technicien){ equipDetail.ivError = "Le nom de la personne qui signale la panne est obligatoire."; render(); return; }
+if(!description){ equipDetail.ivError = "Décrivez la panne en quelques mots : c'est ce que verra le responsable."; render(); return; }
+// Horodatage pris à l'instant de l'envoi, non modifiable.
+const n = new Date();
+description = `[Signalée le ${String(n.getDate()).padStart(2,'0')}/${String(n.getMonth()+1).padStart(2,'0')}/${n.getFullYear()} à ${String(n.getHours()).padStart(2,'0')}h${String(n.getMinutes()).padStart(2,'0')} par ${technicien}] ${description}`;
+}
 
 if(!date){
 equipDetail.ivError = "La date de l'intervention est obligatoire.";
@@ -2658,7 +2737,17 @@ else if(action === 'champ-add'){ typeForm.champs.push({label:'', type:'text'}); 
 else if(action === 'champ-remove'){ typeForm.champs.splice(+t.dataset.i, 1); render(); }
 else if(action === 'save-type'){ saveType(); }
 else if(action === 'save-equip'){ saveEquip(); }
+else if(action === 'signaler-panne'){
+equipDetail.modePanne = true; equipDetail.showIvForm = true; equipDetail.editIvId = null; equipDetail.ivNotice = ''; equipDetail.ivError = '';
+equipDetail.brouillon = { type:'Signalement de panne' }; render();
+setTimeout(() => { const f = document.getElementById('panne-form'); if(f) f.scrollIntoView({behavior:'smooth', block:'center'}); }, 60);
+}
+else if(action === 'panne-reparee'){
+equipDetail.modePanne = false; equipDetail.showIvForm = true; equipDetail.editIvId = null; equipDetail.ivNotice = ''; equipDetail.ivError = '';
+equipDetail.brouillon = { type:'Réparation (panne signalée)' }; render();
+}
 else if(action === 'toggle-iv-form'){
+equipDetail.modePanne = false;
 equipDetail.showIvForm = !equipDetail.showIvForm; equipDetail.editIvId = null; equipDetail.ivNotice = '';
 if(!equipDetail.showIvForm){ viderPhotos('nouv'); equipDetail.brouillon = {}; equipDetail.ivError = ''; }
 render();
