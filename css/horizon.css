@@ -301,3 +301,17 @@ body[data-role="fondateur"] .hz-priority-launch:focus-visible{outline:2px solid 
   .hz-identity-copy small{font-size:7px;}
 }
 @media(prefers-reduced-motion:reduce){.hz-number-pending{animation:none;}}
+/* Rappels de révision (accueil client) */
+.rappels-zone{display:flex;flex-direction:column;gap:8px;margin-bottom:6px;}
+.rappel-ligne{display:flex;align-items:center;gap:12px;padding:11px 14px;border:1px solid var(--border);border-radius:14px;background:rgba(255,253,250,.88);color:var(--text);text-align:left;cursor:pointer;width:100%;font:inherit;}
+.rappel-ligne:hover{border-color:color-mix(in srgb,var(--primary) 32%,var(--border));}
+.rappel-badge{flex:none;min-width:104px;padding:4px 9px;border-radius:999px;font-size:12px;font-weight:700;text-align:center;}
+.rappel-retard .rappel-badge{background:var(--danger-bg);color:var(--danger);}
+.rappel-proche .rappel-badge{background:var(--warn-bg);color:var(--warn);}
+.rappel-prevu .rappel-badge{background:var(--success-bg);color:var(--success);}
+.rappel-corps{display:flex;flex-direction:column;flex:1;min-width:0;gap:2px;}
+.rappel-corps strong{font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.rappel-corps small{font-size:12px;color:var(--muted);}
+.rappel-suite{align-self:flex-start;border:0;background:none;color:var(--primary);font:inherit;font-size:13px;font-weight:700;padding:4px 2px;cursor:pointer;}
+.rappel-vide{padding:12px 14px;border:1px dashed var(--border);border-radius:14px;color:var(--muted);font-size:13px;}
+@media (max-width:520px){.rappel-badge{min-width:88px;font-size:11px;}}
