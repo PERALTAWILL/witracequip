@@ -872,9 +872,19 @@ const vus = {}, pannes = [];
 if(vus[x.equipement_id]) return; vus[x.equipement_id] = 1;
 if(/^signalement de panne/i.test(x.type || '')) pannes.push(x);
 });
+// Maintenance préventive : date de la dernière intervention (hors signalement
+// de panne) des seuls équipements qui ont une périodicité.
+const parcListe = pa.error ? [] : (pa.data || []);
+const idsPeriodiques = parcListe.filter(e => periodiciteMois(e.valeurs)).map(e => e.id);
+const maint = {};
+if(idsPeriodiques.length){
+const { data:ivs, error:ivErr } = await sb.from('interventions').select('equipement_id,date,type').in('equipement_id', idsPeriodiques).order('date', { ascending:false }).limit(5000);
+if(!ivErr) (ivs || []).forEach(x => { if(!/^signalement de panne/i.test(x.type || '') && !maint[x.equipement_id]) maint[x.equipement_id] = x.date; });
+}
 return {
 pannes,
-parc: pa.error ? [] : (pa.data || []),
+maint,
+parc: parcListe,
 actifs: eq.count ?? 0,
 derniere: iv.data?.date || null,
 derniereEquipementId: iv.data?.equipement_id || null,
@@ -930,10 +940,72 @@ horsLigne: !!state.horsLigne || !navigator.onLine,
    « Prochaine révision décennale »…). On affiche les retards et les échéances des 3 prochains mois ;
    la bande d'en-tête donne toujours la date de la plus proche. */
 const RAPPELS_HORIZON_JOURS = 90;
-function calculerRappels(parc){
+/* Maintenance préventive : périodicité facultative, stockée dans les valeurs de
+   la fiche (_periodicite = nombre de mois, _debut_suivi = point de départ).
+   Échéance = dernière intervention (ou point de départ si plus récent) + période. */
+const PERIODES_MAINTENANCE = [['', 'Aucune (pas de rappel automatique)'], ['1', 'Tous les mois'], ['3', 'Tous les 3 mois'], ['6', 'Tous les 6 mois'], ['12', 'Tous les ans'], ['24', 'Tous les 2 ans'], ['60', 'Tous les 5 ans']];
+function periodiciteMois(v){
+const n = parseInt(v && v._periodicite, 10);
+return n > 0 && n <= 120 ? n : 0;
+}
+function ajouterMois(iso, n){
+const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso || ''));
+if(!m) return null;
+const y = +m[1], mo = +m[2] - 1, j = +m[3];
+const fin = new Date(y, mo + n + 1, 0).getDate();
+const d = new Date(y, mo + n, Math.min(j, fin));
+return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+function aujourdhuiIso(){
+const d = new Date();
+return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+// Champs périodicité à ajouter aux formulaires (création : data-action ; fiche : name).
+function blocPeriodicite(valeurs, edition){
+const v = valeurs || {};
+const per = String(periodiciteMois(v) || '');
+const attr = k => edition ? `name="champ__${k}"` : `data-action="equip-valeur" data-key="${k}"`;
+const dernier = String(v._debut_suivi || '').slice(0, 10);
+return `
+<label style="margin-top:6px;">Maintenance préventive (optionnel)</label>
+<div class="grid-2">
+<div class="field">
+<label style="text-transform:none;font-weight:600;color:var(--text);">Périodicité</label>
+<select ${attr('_periodicite')}>${PERIODES_MAINTENANCE.map(([val, lib]) => `<option value="${val}" ${val === per ? 'selected' : ''}>${lib}</option>`).join('')}</select>
+</div>
+<div class="field">
+<label style="text-transform:none;font-weight:600;color:var(--text);">Dernière maintenance effectuée</label>
+<input type="date" value="${esc(dernier)}" ${attr('_debut_suivi')}>
+</div>
+</div>
+<div class="small muted" style="margin:-4px 0 10px;">Une alerte apparaît sur l'accueil 1 mois avant chaque échéance. Sans date, le décompte démarre aujourd'hui ; chaque intervention enregistrée relance le compteur.</div>`;
+}
+// Avant enregistrement : sans périodicité, on ne garde rien ; avec, le décompte démarre aujourd'hui par défaut.
+function normaliserPeriodicite(v){
+if(periodiciteMois(v)){
+v._periodicite = String(periodiciteMois(v));
+if(!/^\d{4}-\d{2}-\d{2}$/.test(String(v._debut_suivi || ''))) v._debut_suivi = aujourdhuiIso();
+}else{
+delete v._periodicite; delete v._debut_suivi;
+}
+return v;
+}
+
+function calculerRappels(parc, maint){
 const auj = new Date(); auj.setHours(0,0,0,0);
 const out = [];
 (parc || []).forEach(eq => {
+const mois = periodiciteMois(eq.valeurs);
+if(mois){
+const debut = String(eq.valeurs._debut_suivi || '').slice(0, 10);
+const der = String((maint || {})[eq.id] || '').slice(0, 10);
+const base = [debut, der].filter(Boolean).sort().pop();
+const proch = base ? ajouterMois(base, mois) : null;
+if(proch){
+const d = new Date(proch + 'T00:00:00');
+out.push({ id:eq.id, nom:eq.nom, label:'Maintenance préventive', date:proch, jours:Math.round((d - auj) / 86400000) });
+}
+}
 const t = state.types.find(t => t.id === eq.type_id);
 (t?.champs || []).forEach(c => {
 if(c.type !== 'date' || !/prochain|[ée]ch[ée]ance/i.test(c.label || '')) return;
@@ -970,7 +1042,7 @@ ${c.pannes.slice(0,6).map(x => `<div class="rappel-item rappel-retard"><button t
 function renderRappels(){
 const c = accueilCache.chiffres;
 if(!c || !c.parc || !state.typesLoaded) return '';
-const tous = calculerRappels(c.parc);
+const tous = calculerRappels(c.parc, c.maint);
 const l = tous.filter(r => r.jours <= RAPPELS_HORIZON_JOURS);
 const MAX = 6;
 const ligne = r => {
@@ -1837,6 +1909,7 @@ ${c.type==='textarea'
 </div>
 `).join('')}
 </div>
+${blocPeriodicite(equipForm.valeurs, false)}
 <div class="row" style="margin-top:8px;">
 <button class="btn btn-primary" data-action="save-equip" ${equipForm.busy?'disabled':''}>${equipForm.busy?'Enregistrement…':"Créer l'équipement"}</button>
 <button class="btn" data-action="go" data-path="${retour}">Annuler</button>
@@ -1860,7 +1933,7 @@ organization_id: isSuperAdmin() ? equipForm.orgId : state.profile.organization_i
 type_id: equipForm.typeId,
 nom,
 serial_value: equipForm.serial_value.trim() || null,
-valeurs: { ...equipForm.valeurs },
+valeurs: normaliserPeriodicite({ ...equipForm.valeurs }),
 archived: false
 };
 const enAttente = async () => {
@@ -2095,6 +2168,7 @@ ${c.type==='textarea'
 </div>`;
 }).join('')}
 </div>
+${blocPeriodicite(eq.valeurs, true)}
 <div class="row wrap" style="margin-top:8px;">
 <button class="btn btn-primary" type="submit" ${equipDetail.editBusy?'disabled':''}>
 ${equipDetail.editBusy ? 'Enregistrement…' : 'Enregistrer les modifications'}
@@ -2114,6 +2188,7 @@ const valeurs = Object.assign({}, equipDetail.item?.valeurs || {});
 for(const [k, v] of fd.entries()){
 if(k.startsWith('champ__')) valeurs[k.slice(7)] = v;
 }
+normaliserPeriodicite(valeurs);
 
 equipDetail.editError = ''; equipDetail.editBusy = true; render();
 try{
