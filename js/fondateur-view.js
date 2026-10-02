@@ -83,6 +83,8 @@ return `
     <button type="button" data-action="import-parc"><span>${iconeNav('box',20)}</span><strong>Importer un parc Excel</strong>${iconeNav('chevron',16)}</button>
     <button type="button" data-action="go" data-path="/reglages/profils"><span>${iconeNav('users',20)}</span><strong>Profils & accès</strong>${iconeNav('chevron',16)}</button>
     <button type="button" data-action="go" data-path="/reglages/journal"><span>${iconeNav('journal',20)}</span><strong>Journal d’activité</strong>${iconeNav('chevron',16)}</button>
+    <button type="button" data-action="fondateur-code-signalement"><span>${iconeNav('key',20)}</span><strong>Code de signalement</strong>${iconeNav('chevron',16)}</button>
+    <button type="button" data-action="go" data-path="/signalements"><span>${iconeNav('inbox',20)}</span><strong>Signalements de panne</strong>${iconeNav('chevron',16)}</button>
   </div>
   <button type="button" class="hz-scan-card" data-action="ouvrir-scanner" aria-label="Scanner un QR code pour ouvrir directement une fiche équipement">
     <span class="hz-scan-frame" aria-hidden="true"><i></i><i></i><i></i><i></i>${iconeNav('scan',24)}</span>
@@ -105,6 +107,10 @@ return `<div class="hz-tools-page">
     <section class="hz-tools-group"><div class="hz-tools-label">ÉQUIPES & HISTORIQUE</div>
       ${ligneOutilFondateur('users', 'Profils & accès', 'Membres, rôles et appareils', '/reglages/profils')}
       ${ligneOutilFondateur('journal', 'Journal d’activité', 'Historique et traçabilité', '/reglages/journal')}
+    </section>
+    <section class="hz-tools-group"><div class="hz-tools-label">PANNES</div>
+      ${ligneOutilFondateur('key', 'Code de signalement', 'Code commun à tous les clients', null, 'fondateur-code-signalement')}
+      ${ligneOutilFondateur('inbox', 'Signalements de panne', 'Pannes signalées par le personnel', '/signalements')}
     </section>
   </div>
   <div class="hz-tools-scan">${ligneOutilFondateur('scan','Scanner un QR code','Ouvrir une fiche équipement',null,'ouvrir-scanner')}</div>
@@ -170,6 +176,8 @@ return `<div class="hz-sheet-handle" aria-hidden="true"></div>
       ${carte('tag','Modèles métier','Préparer les secteurs clients','go','data-path="/reglages/support/modeles"')}
       ${carte('users','Profils & accès','Comptes, rôles et accès','go','data-path="/reglages/profils"')}
       ${carte('journal','Journal d’activité','Historique des opérations','go','data-path="/reglages/journal"')}
+      ${carte('key','Code de signalement','Code de panne commun à tous les clients','fondateur-code-signalement')}
+      ${carte('inbox','Signalements de panne','Pannes signalées par le personnel','go','data-path="/signalements"')}
     </div>`}
   <p class="hz-sheet-foot">${enLigne ? 'Les raccourcis respectent les permissions et confirmations de l’application.' : 'Hors connexion : les fonctions d’administration sont indisponibles.'}</p>`;
 }

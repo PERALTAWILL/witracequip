@@ -300,6 +300,8 @@ ${d.archived ? `<span class="pub-lecture pub-retire">⚠️ Retiré du service</
 </div>
 </div>
 
+${(!d.archived && typeof blocSignalementPublic === 'function') ? blocSignalementPublic(token) : ''}
+
 <div class="card" style="margin-top:14px;">
 <h3 class="small" style="text-transform:uppercase;letter-spacing:.02em;color:var(--text-dim);">Informations</h3>
 <div style="overflow-x:auto;">
@@ -344,7 +346,7 @@ function piedPublic(){
 return `
 <div class="pub-pied">
 Carnet d'entretien tenu avec WiTracEQUIP — by WiDIAG MQ.<br>
-Cette page est une consultation libre : elle ne permet aucune modification.<br>
+Cette page est une consultation libre : seul le signalement d'une panne est possible, avec le code de votre établissement.<br>
 Technicien de l'équipe ? « Se connecter » en haut de page ouvre la fiche complète.
 </div>
 ${piedSupport()}`;
@@ -415,6 +417,7 @@ return [
 { path:'/', icone:'home', label:'Accueil', actif: r.name === 'accueil' },
 { path:'/equipements', icone:'box', label:'Équipements', court:'Équip.', actif: equipementsActif },
 ...(peutGererTypes() ? [{ path:'/types', icone:'tag', label:"Types d'équipement", court:'Types', actif: r.name === 'types' }] : []),
+{ path:'/signalements', icone:'inbox', label:'Signalements', court:'Pannes', actif: r.name === 'signalements', badge: (typeof nbSignalementsNouveaux === 'function' ? nbSignalementsNouveaux() : 0) || '' },
 { path:'/journal', icone:'journal', label:'Journal', actif: r.name === 'journal', badge: nbActiviteNonLue() || '' },
 ...(peutGererEquipe() ? [{ path: estResponsableSeul() ? '/reglages/equipe' : '/reglages', icone: estResponsableSeul() ? 'users' : 'gear', label: estResponsableSeul() ? 'Mon équipe' : 'Réglages', court: estResponsableSeul() ? 'Équipe' : undefined, actif: r.name === 'reglages' || r.name === 'equipe' }] : []),
 { path:'/support', icone:'help', label:'Support', actif: r.name === 'support' },
@@ -674,6 +677,7 @@ else if(r.name === 'support') content = sa ? viewReglages('support', r.param)
 : !peutStats() ? viewSupport()
 : sousMenuSupportClient(r.param === 'stats' ? 'stats' : 'demandes') + (r.param === 'stats' ? viewStats() : viewSupport());
 else if(r.name === 'journal') content = sa ? viewReglages('journal') : viewActivite();
+else if(r.name === 'signalements') content = viewSignalements();
 else content = sa ? viewReglages('clients') : viewDashboard();
 }catch(e){
 content = `<div class="alert alert-error">Erreur d'affichage : ${esc(e.message||e)}</div>`;
@@ -1985,6 +1989,7 @@ showEditForm:false, editBusy:false, editError:'',
 editIvId:null, editIvBusy:false, editIvError:'',
 photosNouvelles:[], photosEdit:[], photosUrls:{}, photoOuverte:null, photosBusy:false,
 brouillon:{}, brouillonEdit:null };
+if(typeof appliquerPrefillSignalement === 'function') appliquerPrefillSignalement(id);
 chargerIvEnAttente();
 Promise.all([getEquipement(id), listInterventions(id)])
 .then(async ([item, ivs]) => {
