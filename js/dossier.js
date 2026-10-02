@@ -199,6 +199,8 @@ function changerClient(v){
 
 function rendreModale(){
   var el = document.getElementById('dc-fond'); if(!el) return;
+  /* La fenêtre est redessinée à chaque choix : on mémorise la position de défilement pour ne pas remonter en haut. */
+  var ancienne = el.querySelector('.dc-carte'), defil = ancienne ? ancienne.scrollTop : 0;
   var d = ETAT.d, m = modele(d, OPT);
   var actifsTous = (d.equipements || []).filter(function(e){ return !e.archived; });
   var parType = {}; actifsTous.forEach(function(e){ parType[e.type_id] = (parType[e.type_id] || 0) + 1; });
@@ -233,6 +235,7 @@ selectClient() +
 '</div>' +
 '<div class="dc-pied"><button type="button" class="dc-btn s" data-dc-act="fermer">Annuler</button><button type="button" class="dc-btn p" data-dc-act="generer"' + ((ETAT.enCours || ETAT.chargeClient || !t.n) ? ' disabled' : '') + '>' + (ETAT.enCours ? 'Génération en cours…' : 'Générer le dossier PDF') + '</button></div>' +
 '</div>';
+  var nouvelle = el.querySelector('.dc-carte'); if(nouvelle && defil) nouvelle.scrollTop = defil;
 }
 
 function ouvrir(){
