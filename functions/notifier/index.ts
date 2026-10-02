@@ -1,4 +1,4 @@
-// WiTracEQUIP — fonction « notifier » (v7)
+// WiTracEQUIP — fonction « notifier » (v8)
 // Envoie par Brevo l'alerte e-mail correspondant à une ligne qui vient d'être créée :
 //   - demandes_support   → e-mail au support (comportement inchangé)
 //   - demandes_contact   → e-mail au support + accusé de réception au visiteur (inchangé)
@@ -83,6 +83,7 @@ async function alertePanne(d: any) {
     "<table cellpadding='4'>" +
     lignes.map(([a, b]) => "<tr><td><b>" + a + "</b></td><td>" + esc(b) + "</td></tr>").join("") +
     "</table><p style='white-space:pre-wrap'>" + esc(d.description) + "</p>" +
+    (d.photo ? "<p><b>Photo jointe.</b></p>" : "") +
     "<p><a href='" + APP + "#/equip/" + esc(d.equipement_id) + "'>Ouvrir la fiche dans WiTracEQUIP</a></p>";
 
   return brevo({
@@ -91,7 +92,14 @@ async function alertePanne(d: any) {
     replyTo: { email: SUPPORT },
     subject: "[Panne] " + (eq.nom || "Equipement") + (org.nom ? " - " + org.nom : ""),
     htmlContent: html,
+    attachment: photoJointe(d.photo),
   });
+}
+
+// Photo facultative (data URL JPEG) -> pièce jointe Brevo.
+function photoJointe(photo: unknown) {
+  const m = typeof photo === "string" ? photo.match(/^data:image\/jpeg;base64,([A-Za-z0-9+\/=]+)$/) : null;
+  return m ? [{ name: "photo-panne.jpg", content: m[1] }] : undefined;
 }
 
 Deno.serve(async (req) => {

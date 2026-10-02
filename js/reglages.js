@@ -28,6 +28,10 @@ archivage_equipement: 'Équipement archivé',
 restauration_equipement: 'Équipement restauré',
 modification_intervention: 'Intervention modifiée',
 suppression_intervention: 'Intervention supprimée',
+signalement_pris_en_charge: 'Panne prise en charge',
+signalement_traite: 'Panne traitée',
+signalement_rejete: 'Panne rejetée',
+signalement_retracte: 'Prise en charge retirée',
 suppression_membre: 'Membre supprimé',
 deplacement_membre: 'Profil changé de client',
 reinitialisation_mdp: 'Mot de passe réinitialisé',
@@ -1791,6 +1795,10 @@ restauration_equipement:   { l:'Équipement restauré',    ico:'undo',   c:'vert
 suppression_equipement:    { l:'Équipement supprimé',    ico:'trash',  c:'rouge' },
 modification_intervention: { l:'Intervention modifiée',  ico:'pencil', c:'bleu' },
 suppression_intervention:  { l:'Intervention supprimée', ico:'trash',  c:'rouge' },
+signalement_pris_en_charge:{ l:'Panne prise en charge',  ico:'wrench', c:'or' },
+signalement_traite:        { l:'Panne traitée',          ico:'wrench', c:'vert' },
+signalement_rejete:        { l:'Panne rejetée',          ico:'trash',  c:'rouge' },
+signalement_retracte:      { l:'Prise en charge retirée',ico:'undo',   c:'or' },
 };
 
 function nbActiviteNonLue(){ return (activite.items || []).filter(a => !a.archivee).length; }

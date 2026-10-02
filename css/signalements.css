@@ -13,3 +13,11 @@
 .sp-tete{display:flex; align-items:center; gap:8px; flex-wrap:wrap;}
 .sp-texte{white-space:pre-wrap; overflow-wrap:anywhere; margin:8px 0;}
 .sp-actions{margin-top:8px;}
+
+.sp-photo-apercu{display:flex; align-items:center; gap:12px; margin-bottom:8px;}
+.sp-photo-apercu img{max-width:120px; max-height:120px; border-radius:8px; border:1px solid var(--border,#ccc);}
+.sp-visionneuse{position:fixed; inset:0; z-index:9999; background:rgba(0,0,0,.85); display:flex; align-items:center; justify-content:center; padding:12px; cursor:zoom-out;}
+.sp-visionneuse img{max-width:100%; max-height:100%; object-fit:contain;}
+
+.sp-accueil-titre{width:100%; text-align:left; cursor:pointer; font:inherit;}
+.sp-accueil-actions{padding:0 12px 10px; gap:8px;}
