@@ -64,3 +64,39 @@ $$;
 
 revoke execute on function public.supprimer_intervention(uuid, text) from public, anon;
 grant execute on function public.supprimer_intervention(uuid, text) to authenticated;
+
+-- Modifier une intervention : motif obligatoire pour l'utilisateur ; le responsable, l'administrateur
+-- et le fondateur n'ont pas à justifier (un motif facultatif est gardé au journal s'il est donné).
+-- SECURITY INVOKER : les règles d'accès habituelles (entreprise, types autorisés) s'appliquent.
+-- Le motif est transmis au déclencheur de journal (étape 16) par un réglage valable le temps de la requête.
+-- Tant que l'étape 16 n'est pas lancée, le motif est simplement ignoré : sans danger.
+create or replace function public.modifier_intervention(
+  p_id uuid, p_date date, p_type text, p_technicien text,
+  p_description text, p_photos jsonb, p_motif text)
+returns void
+language plpgsql
+security invoker
+set search_path = public
+as $$
+declare
+  v_motif text := nullif(trim(coalesce(p_motif, '')), '');
+  n int;
+begin
+  if v_motif is null and not is_super_admin() and coalesce(current_profile_role(), '') not in ('admin', 'responsable') then
+    raise exception 'Le motif de la modification est obligatoire.' using errcode = '22023';
+  end if;
+  perform set_config('wte.motif_modification', coalesce(v_motif, ''), true);
+  update interventions
+     set date = p_date, type = p_type, technicien = p_technicien,
+         description = p_description, photos = coalesce(p_photos, photos)
+   where id = p_id;
+  get diagnostics n = row_count;
+  perform set_config('wte.motif_modification', '', true);
+  if n = 0 then
+    raise exception 'Modification refusée ou intervention introuvable.' using errcode = '42501';
+  end if;
+end;
+$$;
+
+revoke execute on function public.modifier_intervention(uuid, date, text, text, text, jsonb, text) from public, anon;
+grant execute on function public.modifier_intervention(uuid, date, text, text, text, jsonb, text) to authenticated;
