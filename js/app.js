@@ -1984,7 +1984,7 @@ equipForm.busy = false; equipForm.error = e.message; render();
 /* ---------------------------------------------------------------------- */
 
 let equipDetail = { id:null, item:null, interventions:null, loading:false, error:'', modePanne:false,
-showIvForm:false, ivBusy:false, ivError:'', ivNotice:'',
+showIvForm:false, ivBusy:false, ivError:'', ivNotice:'', ivOnglet:'intervention',
 showEditForm:false, editBusy:false, editError:'',
 editIvId:null, editIvBusy:false, editIvError:'',
 photosNouvelles:[], photosEdit:[], photosUrls:{}, photoOuverte:null, photosBusy:false,
@@ -1994,7 +1994,7 @@ function viewEquipDetail(id){
 if(isSuperAdmin()) chargerClients(false); // pour afficher le nom du client
 if(equipDetail.id !== id){
 equipDetail = { id, item:null, interventions:null, loading:true, error:'',
-showIvForm:false, ivBusy:false, ivError:'', ivNotice:'',
+showIvForm:false, ivBusy:false, ivError:'', ivNotice:'', ivOnglet:'intervention',
 showEditForm:false, editBusy:false, editError:'',
 editIvId:null, editIvBusy:false, editIvError:'',
 photosNouvelles:[], photosEdit:[], photosUrls:{}, photoOuverte:null, photosBusy:false,
@@ -2040,7 +2040,13 @@ const val = !brut ? '—' : (c.type === 'date' ? fmtDate(brut) : brut);
 return `<tr><td class="muted">${esc(c.label)}</td><td>${esc(val)}</td></tr>`;
 }).join('');
 
-const ivRows = (equipDetail.interventions||[]).map(iv => equipDetail.editIvId === iv.id ? `
+const ongletIv = equipDetail.ivOnglet === 'revision' ? 'revision' : 'intervention';
+const tousIv = equipDetail.interventions || [];
+const nbRevisions = tousIv.filter(estRevision).length + (equipDetail.ivEnAttente || []).filter(estRevision).length;
+const nbInterventions = tousIv.length + (equipDetail.ivEnAttente || []).length - nbRevisions;
+const ivsOnglet = tousIv.filter(iv => (ongletIv === 'revision') === estRevision(iv));
+const ivAttenteOnglet = (equipDetail.ivEnAttente || []).filter(iv => (ongletIv === 'revision') === estRevision(iv));
+const ivRows = ivsOnglet.map(iv => equipDetail.editIvId === iv.id ? `
 <tr class="iv-edition"><td colspan="5">${renderIvForm(iv)}</td></tr>` : `
 <tr>
 <td class="iv-date">${fmtDate(iv.date)}</td>
@@ -2126,31 +2132,42 @@ ${infoRows}
 
 <div class="card" style="margin-top:14px;">
 <div class="row between">
-<h3>Historique des interventions</h3>
+<h3>Historique</h3>
 <button class="btn btn-sm" data-action="toggle-iv-form">${equipDetail.showIvForm?'Annuler':'+ Ajouter'}</button>
+</div>
+<div class="segment iv-onglets" role="tablist" aria-label="Type d'historique">
+<button type="button" role="tab" aria-selected="${ongletIv === 'intervention'}" class="${ongletIv === 'intervention' ? 'active' : ''}" data-action="iv-onglet" data-v="intervention">Interventions <span class="onglet-compteur">${nbInterventions}</span></button>
+<button type="button" role="tab" aria-selected="${ongletIv === 'revision'}" class="${ongletIv === 'revision' ? 'active' : ''}" data-action="iv-onglet" data-v="revision">Révisions <span class="onglet-compteur">${nbRevisions}</span></button>
 </div>
 
 ${equipDetail.showIvForm ? renderIvForm(null) : ''}
 ${equipDetail.ivNotice ? `<div class="alert alert-info" style="margin-top:10px;">${esc(equipDetail.ivNotice)}</div>` : ''}
 
-${(equipDetail.ivEnAttente || []).length ? `
+${ivAttenteOnglet.length ? `
 <div class="iv-attente-liste">
-${equipDetail.ivEnAttente.map(iv => `<div class="iv-attente">
+${ivAttenteOnglet.map(iv => `<div class="iv-attente">
 <div><strong>${fmtDate(iv.date)} · ${esc(iv.type)}</strong> <span class="badge badge-attente">⏳ en attente d'envoi</span></div>
 <div class="small muted">${esc(iv.technicien)}${iv.description ? ' — ' + esc(iv.description) : ''}</div>
 </div>`).join('')}
 </div>` : ''}
-${equipDetail.interventions && equipDetail.interventions.length ? `
+${ivsOnglet.length ? `
 <div style="overflow-x:auto;">
 <table class="table-iv">
 <thead><tr><th>Date</th><th>Type</th><th>Intervenant</th><th>Description</th><th></th></tr></thead>
 <tbody>${ivRows}</tbody>
 </table>
 </div>
-` : ((equipDetail.ivEnAttente || []).length ? '' : `<div class="empty small">${equipDetail.horsLigne ? 'Historique indisponible sans réseau.' : 'Aucune intervention enregistrée.'}</div>`)}
+` : (ivAttenteOnglet.length ? '' : `<div class="empty small">${equipDetail.horsLigne ? 'Historique indisponible sans réseau.' : (ongletIv === 'revision' ? 'Aucune révision enregistrée.' : 'Aucune intervention enregistrée.')}</div>`)}
 </div>
 
 `;
+}
+
+/* Une ligne d'historique est une « révision » si son type est de l'entretien programmé
+   (révision, maintenance préventive, contrôle, étalonnage, vidange…) ; tout le reste — réparation,
+   dépannage, panne signalée — est une « intervention ». */
+function estRevision(iv){
+return /r[ée]vision|maintenance pr[ée]ventive|pr[ée]ventif|contr[oô]le|[ée]talonnage|entretien|vidange|nettoyage|recharge|inspection|visite/i.test((iv && iv.type) || '');
 }
 
 function renderEditEquipForm(eq, champs){
@@ -2857,9 +2874,11 @@ else if(action === 'panne-reparee'){
 equipDetail.modePanne = false; equipDetail.showIvForm = true; equipDetail.editIvId = null; equipDetail.ivNotice = ''; equipDetail.ivError = '';
 equipDetail.brouillon = { type:'Réparation (panne signalée)' }; render();
 }
+else if(action === 'iv-onglet'){ equipDetail.ivOnglet = t.dataset.v === 'revision' ? 'revision' : 'intervention'; render(); }
 else if(action === 'toggle-iv-form'){
 equipDetail.modePanne = false;
 equipDetail.showIvForm = !equipDetail.showIvForm; equipDetail.editIvId = null; equipDetail.ivNotice = '';
+if(equipDetail.showIvForm && equipDetail.ivOnglet === 'revision' && !(equipDetail.brouillon && equipDetail.brouillon.type)) equipDetail.brouillon = { ...(equipDetail.brouillon || {}), type:'Révision' };
 if(!equipDetail.showIvForm){ viderPhotos('nouv'); equipDetail.brouillon = {}; equipDetail.ivError = ''; }
 render();
 }
