@@ -1,0 +1,15 @@
+/* WiTracEQUIP — Signalement de panne (page publique + liste des signalements) */
+
+.sp-carte{margin-top:14px;}
+.sp-bouton{
+  display:flex; align-items:center; justify-content:center; gap:8px; width:100%;
+  min-height:52px; margin-bottom:8px; font-size:16px; font-weight:700;
+  background:var(--danger); border-color:var(--danger); color:#fff;
+}
+.sp-bouton:hover{filter:brightness(.92); background:var(--danger);}
+.sp-carte textarea{min-height:110px;}
+
+.sp-ligne{margin-bottom:12px;}
+.sp-tete{display:flex; align-items:center; gap:8px; flex-wrap:wrap;}
+.sp-texte{white-space:pre-wrap; overflow-wrap:anywhere; margin:8px 0;}
+.sp-actions{margin-top:8px;}
