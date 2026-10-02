@@ -48,8 +48,9 @@ function nomModele(cle){ return (modelesMetiers().find(m => m.cle === cle) || {}
 /* Peu d'onglets, chacun avec une seule mission. Les membres et les invitations
    d'un client se gèrent DANS sa fiche : plus d'onglet Membres ni Invitations
    séparés pour le super-admin (même contenu, deux chemins = on s'y perd). */
+const journalAide = "Historique complet des suppressions, archivages et modifications : qui, quand et pourquoi. Conservé sans limite de durée.";
 function ongletsReglages(){
-const journal = { cle:'journal', l: isSuperAdmin() ? 'Journal' : 'Historique complet', aide:"Historique complet des suppressions, archivages et modifications : qui, quand et pourquoi. Conservé sans limite de durée." };
+const journal = { cle:'journal', l: isSuperAdmin() ? 'Journal' : 'Historique complet', aide: journalAide };
 if(isSuperAdmin()){
 const aTraiter = (reglages.support || []).filter(d => d.statut !== 'traite').length;
 return [
@@ -62,6 +63,7 @@ journal,
 }
 if(estResponsableSeul()) return [
 { cle:'equipe', l:'Mon équipe', aide:"Vos collaborateurs : consultez leurs profils et suspendez ou réactivez leur accès à l'application." },
+journal,
 ];
 return [
 { cle:'equipe', l:'Mon équipe', aide:"Les membres de votre organisation, leurs rôles et ce qu'ils peuvent voir." },
@@ -164,7 +166,13 @@ if(isSuperAdmin()) chargerClients(true);
 /* ---------------------------------------------------------------------- */
 
 function viewReglages(onglet, sous){
-if(!peutVoirReglages()) return viewNonAutorise();
+if(!peutVoirReglages()){
+// Utilisateur simple : accès au seul historique complet (lecture seule) de son entreprise.
+if(onglet !== 'journal') return viewNonAutorise();
+return `<div class="row between wrap" style="margin-bottom:6px;"><h2>Historique complet</h2></div>
+<div class="reglages-aide">${esc(journalAide)}</div>
+${viewJournal()}`;
+}
 if(isSuperAdmin()){ chargerSupport(false); chargerClients(false); } // compteurs des onglets
 onglet = ongletReglagesValide(onglet);
 const onglets = ongletsReglages();
@@ -1872,7 +1880,8 @@ title="${a.archivee ? 'Remettre dans les récentes' : 'Archiver'}" aria-label="$
 
 return `
 <div class="row between wrap" style="margin-bottom:6px;"><h2>Journal</h2>
-<button class="btn btn-sm" data-action="activite-rafraichir">Actualiser</button></div>
+<div class="row" style="gap:8px;"><button class="btn btn-sm" data-action="go" data-path="/reglages/journal">Historique complet</button>
+<button class="btn btn-sm" data-action="activite-rafraichir">Actualiser</button></div></div>
 <div class="reglages-aide">Ce qui s'est passé sur votre parc ces 7 derniers jours. Archivez une notification pour la retirer, retrouvez-la dans « Archivées ». Chaque notification s'efface automatiquement au bout d'une semaine.</div>
 <div class="row between wrap" style="margin-bottom:12px;gap:10px;">
 <div class="segment">

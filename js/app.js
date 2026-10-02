@@ -2037,7 +2037,7 @@ ${vignettesIv(iv)}
 </td>
 <td class="iv-actions">
 <button class="btn btn-sm" data-action="iv-modifier" data-id="${iv.id}">Modifier</button>
-${isAdmin() ? `<button class="btn btn-sm btn-danger" data-action="iv-supprimer" data-id="${iv.id}">Supprimer</button>` : ''}
+${peutSupprimerIntervention() ? `<button class="btn btn-sm btn-danger" data-action="iv-supprimer" data-id="${iv.id}">Supprimer</button>` : ''}
 </td>
 </tr>
 `).join('');
@@ -2309,7 +2309,9 @@ saisissez pour un collègue.</div>
 <div class="field"><label>Description</label><textarea name="description" placeholder="Détails de l'intervention…">${esc(v('description', modif ? (iv.description || '') : ''))}</textarea></div>
 ${renderChampPhotos(iv)}
 ${modif ? `
-<div class="hint" style="margin-bottom:10px;">La modification est horodatée à votre nom et l'ancienne version est conservée dans le journal.</div>
+${motifModifRequis() ? `<div class="field"><label>Motif de la modification <span class="oblig">obligatoire</span></label>
+<input type="text" name="motif" value="${esc(v('motif', ''))}" placeholder="Ex : erreur de date, intervenant mal renseigné…" required></div>` : ''}
+<div class="hint" style="margin-bottom:10px;">La modification est horodatée à votre nom ; l'ancienne version${motifModifRequis() ? ' et le motif sont conservés' : ' est conservée'} dans le journal.</div>
 <div class="row wrap">
 <button class="btn btn-primary" type="submit" ${equipDetail.editIvBusy || equipDetail.photosBusy?'disabled':''}>${equipDetail.editIvBusy?'Enregistrement…':'Enregistrer les modifications'}</button>
 <button class="btn" type="button" data-action="iv-annuler-modif">Annuler</button>
@@ -2410,7 +2412,7 @@ equipDetail.ivBusy = false; equipDetail.ivError = e.message; render();
 }
 }
 
-/* Modifier une intervention : ouvert à tous les rôles, mais la date et le nom
+/* Modifier une intervention : ouvert à tous les rôles ; l'utilisateur doit donner un motif ; la date et le nom
 de l'intervenant restent obligatoires (la base le vérifie aussi). La base
 horodate la modification au nom de l'auteur et garde l'ancienne version au
 journal : on peut corriger une saisie, pas effacer une trace. */
@@ -2421,6 +2423,8 @@ const date = (fd.get('date') || '').trim();
 const type = (fd.get('type') || '').trim();
 const technicien = (fd.get('technicien') || '').trim();
 const description = (fd.get('description') || '').trim();
+const motif = (fd.get('motif') || '').trim();
+if(motifModifRequis() && motif.length < 3){ equipDetail.editIvError = "Le motif de la modification est obligatoire."; render(); return; }
 if(!date){ equipDetail.editIvError = "La date de l'intervention est obligatoire."; render(); return; }
 if(!type){ equipDetail.editIvError = "Le type d'intervention est obligatoire."; render(); return; }
 if(!technicien){ equipDetail.editIvError = "Le nom de l'intervenant est obligatoire."; render(); return; }
@@ -2436,7 +2440,9 @@ if(blobs.length){
 nouvelles = await televerserPhotos(equipDetail.item.organization_id, equipDetail.id, id, blobs);
 maj.photos = [...(iv.photos || []), ...nouvelles];
 }
-const { error } = await sb.from('interventions').update(maj).eq('id', id);
+const { error } = await sb.rpc('modifier_intervention', {
+p_id: id, p_date: maj.date, p_type: maj.type, p_technicien: maj.technicien,
+p_description: maj.description, p_photos: maj.photos ?? null, p_motif: motif || null });
 if(error) throw error;
 nouvelles = [];
 viderPhotos('edit'); equipDetail.brouillonEdit = null;
@@ -2455,11 +2461,20 @@ equipDetail.editIvBusy = false; render();
 async function supprimerIntervention(id){
 const iv = (equipDetail.interventions || []).find(x => x.id === id);
 if(!iv) return;
-if(!await confirmer(`Supprimer l'intervention « ${iv.type} » du ${fmtDate(iv.date)} ?\n\nElle disparaît du carnet de cet équipement. Une copie est conservée dans le journal.${(iv.photos||[]).length ? ' Ses photos sont supprimées.' : ''}`)) return;
+if(!peutSupprimerIntervention()) return;
+const question = `Supprimer l'intervention « ${iv.type} » du ${fmtDate(iv.date)} ?\n\nElle disparaît du carnet de cet équipement. Une copie et le motif sont conservés dans le journal.${(iv.photos||[]).length ? ' Ses photos sont supprimées.' : ''}`;
+let motif = null;
+if(!estResponsableSeul()){
+if(!await confirmer(question, { ok:'Supprimer', danger:true })) return;
+}else while(true){
+const saisie = await demander(question, { ok:'Supprimer', danger:true, placeholder:'Motif de la suppression (obligatoire)' });
+if(saisie === null || saisie === undefined) return;
+if(saisie.trim().length >= 3){ motif = saisie.trim(); break; }
+toast('Le motif est obligatoire.', 'erreur');
+}
 try{
-const { data, error } = await sb.from('interventions').delete().eq('id', id).select('id');
+const { error } = await sb.rpc('supprimer_intervention', { p_id: id, p_motif: motif || null });
 if(error) throw error;
-if(!data || !data.length) throw new Error("Suppression refusée : seul un administrateur peut supprimer une intervention.");
 if((iv.photos || []).length) supprimerFichiersPhotos(iv.photos).catch(()=>{});
 await rechargerInterventions();
 reglages.journal = null;
@@ -2552,6 +2567,7 @@ function memoriserBrouillon(form){
 if(!form) return;
 const fd = new FormData(form);
 const b = { date: fd.get('date'), type: fd.get('type'), technicien: fd.get('technicien'), description: fd.get('description') };
+if(form.dataset.action === 'submit-iv-edit') b.motif = fd.get('motif') || '';
 if(form.dataset.action === 'submit-iv-edit') equipDetail.brouillonEdit = { id: form.dataset.id, ...b };
 else equipDetail.brouillon = b;
 }
@@ -2683,8 +2699,9 @@ if(!iv) return;
 if(!await confirmer("Supprimer cette photo ?\n\nElle ne pourra plus servir de preuve pour cette intervention.", { danger:true, ok:'Supprimer' })) return;
 try{
 const reste = (iv.photos || []).filter(p => p !== o.path);
-const { error } = await sb.from('interventions').update({ photos: reste }).eq('id', iv.id);
+const { data: modifiees, error } = await sb.from('interventions').update({ photos: reste }).eq('id', iv.id).select('id');
 if(error) throw error;
+if(!modifiees || !modifiees.length) throw new Error("Modification refusée : vous n'avez pas le droit de retirer cette photo.");
 await supprimerFichiersPhotos([o.path]).catch(() => {});
 iv.photos = reste;
 equipDetail.photoOuverte = null;
@@ -2856,7 +2873,7 @@ else if(action === 'modal-fond'){ if(e.target === t) fermerModal(); }
 else if(action === 'modal-valider'){ validerModal(); }
 else if(action === 'iv-modifier'){ equipDetail.editIvId = t.dataset.id; equipDetail.editIvError = ''; equipDetail.showIvForm = false; viderPhotos('edit'); equipDetail.brouillonEdit = null; render(); }
 else if(action === 'iv-annuler-modif'){ equipDetail.editIvId = null; equipDetail.editIvError = ''; viderPhotos('edit'); equipDetail.brouillonEdit = null; render(); }
-else if(action === 'iv-supprimer'){ supprimerIntervention(t.dataset.id); }
+else if(action === 'iv-supprimer'){ if(!peutSupprimerIntervention()) return; supprimerIntervention(t.dataset.id); }
 else if(action === 'nouveau-client'){ ouvrirClientForm(null); }
 else if(action === 'modifier-client'){ const c = (reglages.clients||[]).find(x => x.id === t.dataset.id); if(c) ouvrirClientForm(c); }
 else if(action === 'fermer-client-form'){ reglages.clientForm = null; render(); }
