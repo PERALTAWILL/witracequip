@@ -290,10 +290,11 @@ ${x.a_photo ? `<div><button type="button" class="btn btn-sm" data-action="signal
 ${x.traite_par && x.statut !== 'nouveau' ? `<div class="small muted">${esc(x.traite_par)}${x.traite_le ? ' · ' + esc(fmtDateTime(x.traite_le)) : ''}</div>` : ''}
 <div class="row wrap sp-actions">
 <button type="button" class="btn btn-sm" data-action="go" data-path="/equip/${esc(x.equipement_id)}">Ouvrir la fiche</button>
-${agir && x.statut === 'nouveau' ? `<button type="button" class="btn btn-sm" data-action="signal-statut" data-id="${esc(x.id)}" data-statut="pris_en_charge">Prendre en charge</button>` : ''}
+${x.statut === 'nouveau' ? `<button type="button" class="btn btn-sm" data-action="signal-statut" data-id="${esc(x.id)}" data-statut="pris_en_charge">Prendre en charge</button>` : ''}
 ${agir && ouvert ? `<button type="button" class="btn btn-sm btn-primary" data-action="signal-intervention" data-id="${esc(x.id)}">Créer l'intervention</button>
 <button type="button" class="btn btn-sm" data-action="signal-statut" data-id="${esc(x.id)}" data-statut="traite">Marquer traité</button>
 <button type="button" class="btn btn-sm" data-action="signal-statut" data-id="${esc(x.id)}" data-statut="rejete">Rejeter</button>` : ''}
+${x.statut === 'pris_en_charge' ? `<button type="button" class="btn btn-sm" data-action="signal-statut" data-id="${esc(x.id)}" data-statut="nouveau">Se rétracter</button>` : ''}
 ${agir && !ouvert ? `<button type="button" class="btn btn-sm" data-action="signal-statut" data-id="${esc(x.id)}" data-statut="nouveau">Rouvrir</button>` : ''}
 ${agir ? `<button type="button" class="btn btn-sm" data-action="signal-supprimer" data-id="${esc(x.id)}" aria-label="Supprimer le signalement" title="Supprimer">${iconeNav('trash', 15)}</button>` : ''}
 </div>
@@ -344,6 +345,25 @@ const x = (signalListe.items || []).find(i => i.id === id);
 if(!x) return;
 if(statut === 'rejete' && !await confirmer('Rejeter ce signalement ?\n\nIl restera visible dans « Tous », marqué comme rejeté.', { ok:'Rejeter' })) return;
 const par = state.profile?.full_name || state.session?.user?.email || '';
+if(statut === 'nouveau' && x.statut === 'pris_en_charge' && !peutTraiterSignalements()){
+const { error } = await sb.rpc('retracter_prise_en_charge_signalement', { p_id: id });
+if(error){ toast('Erreur : ' + messageSignalement(error), 'erreur'); signalListe.items = null; render(); return; }
+Object.assign(x, { statut, traite_par: null, traite_le: null });
+signalListe.compteur = (signalListe.items || []).filter(i => i.statut === 'nouveau').length;
+toast('Prise en charge retirée.');
+render();
+return;
+}
+if(statut === 'pris_en_charge' && !peutTraiterSignalements()){
+// Simple membre : seule la prise en charge est permise, par la fonction dédiée (journalisée).
+const { error } = await sb.rpc('prendre_en_charge_signalement', { p_id: id });
+if(error){ toast('Erreur : ' + messageSignalement(error), 'erreur'); signalListe.items = null; render(); return; }
+Object.assign(x, { statut, traite_par: par, traite_le: new Date().toISOString() });
+signalListe.compteur = (signalListe.items || []).filter(i => i.statut === 'nouveau').length;
+toast('Panne prise en charge.');
+render();
+return;
+}
 const maj = statut === 'nouveau'
 ? { statut, traite_par: null, traite_le: null }
 : { statut, traite_par: par, traite_le: new Date().toISOString() };
@@ -391,9 +411,10 @@ const lignes = ouverts.slice(0, 5).map(x => {
 const eq = x.equipements || {};
 return `<div class="rappel-item rappel-retard sp-accueil-ligne">
 <button type="button" class="rappel-ligne" data-action="go" data-path="/equip/${esc(x.equipement_id)}"><span class="rappel-badge">${x.statut === 'nouveau' ? 'Nouveau' : 'En cours'}</span><span class="rappel-corps"><strong>${esc(eq.nom || 'Équipement')}</strong><small>${esc(x.auteur)} · ${esc(heureLisible(x.created_at))} — ${esc(x.description)}</small></span>${iconeNav('chevron',16)}</button>
-${agir ? `<div class="row wrap sp-accueil-actions">
+${true ? `<div class="row wrap sp-accueil-actions">
 ${x.statut === 'nouveau' ? `<button type="button" class="btn btn-sm" data-action="signal-statut" data-id="${esc(x.id)}" data-statut="pris_en_charge">Prendre en charge</button>` : ''}
-<button type="button" class="btn btn-sm" data-action="signal-statut" data-id="${esc(x.id)}" data-statut="traite">Marquer traité</button>
+${x.statut === 'pris_en_charge' ? `<button type="button" class="btn btn-sm" data-action="signal-statut" data-id="${esc(x.id)}" data-statut="nouveau">Se rétracter</button>` : ''}
+${agir ? `<button type="button" class="btn btn-sm" data-action="signal-statut" data-id="${esc(x.id)}" data-statut="traite">Marquer traité</button>` : ''}
 </div>` : ''}
 </div>`;
 }).join('');
