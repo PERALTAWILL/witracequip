@@ -39,6 +39,14 @@ form.querySelector('[name="nom"]')?.focus({ preventScroll:true });
 });
 }
 }
+// Après « Créer l'intervention » depuis un signalement : on descend sur le formulaire déjà rempli.
+if(typeof signalFormAReveler !== 'undefined' && signalFormAReveler){
+const f = document.querySelector('form[data-action="submit-iv"]');
+if(f){
+signalFormAReveler = false;
+requestAnimationFrame(() => { if(f.isConnected) f.scrollIntoView({ block:'start', behavior:'instant' }); });
+}
+}
 }
 
 function peindre(){

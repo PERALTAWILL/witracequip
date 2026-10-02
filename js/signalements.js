@@ -216,6 +216,7 @@ s.busy = false; render();
 
 let signalListe = { uid:null, items:null, loading:false, error:'', filtre:'ouverts', compteur:0, compteurMaj:0, compteurBusy:false };
 let signalPrefill = null;
+let signalFormAReveler = false;
 
 function signalListeVerifierCompte(){
 const uid = state.session?.user?.id || null;
@@ -338,6 +339,7 @@ if(!signalPrefill || signalPrefill.equipId !== equipId) return;
 equipDetail.showIvForm = true;
 equipDetail.brouillon = signalPrefill.brouillon;
 signalPrefill = null;
+signalFormAReveler = true;
 }
 
 async function changerStatutSignalement(id, statut){
