@@ -116,9 +116,10 @@ if(!s.code){ s.error = 'Saisissez le code.'; render(); return; }
 if(!navigator.onLine){ s.error = 'Pas de réseau : réessayez dès que vous êtes connecté.'; render(); return; }
 s.busy = true; s.error = ''; render();
 try{
-const { error } = await sb.rpc('verifier_code_signalement', { p_token: s.token, p_code: s.code });
+const { data, error } = await sb.rpc('verifier_code_signalement', { p_token: s.token, p_code: s.code });
 if(error) throw error;
-s.etape = 'form'; s.error = '';
+if(data !== true){ s.error = 'Code incorrect.'; }
+else{ s.etape = 'form'; s.error = ''; }
 }catch(e){
 s.error = messageSignalement(e);
 }
@@ -139,6 +140,11 @@ const { data, error } = await sb.rpc('signaler_panne', {
 p_token: s.token, p_code: s.code, p_auteur: s.auteur, p_description: s.description,
 });
 if(error) throw error;
+if(data && data.ok === false){
+s.error = data.erreur || 'Code incorrect.';
+s.etape = 'code'; s.code = '';
+s.busy = false; render(); return;
+}
 memoriserNomSignalement(s.auteur);
 s.deja = !!(data && data.deja_signale);
 s.recuLe = (data && data.recu_le) || null;

@@ -87,9 +87,12 @@ alter table public.signalements_tentatives enable row level security;
 revoke all on public.signalements_tentatives from anon, authenticated;
 
 -- 4) Contrôle commun : jeton du QR + code + limite d'essais.
---    Renvoie l'équipement concerné, ou lève une erreur lisible.
+--    Renvoie l'équipement concerné et code_ok. Un mauvais code n'est PAS une erreur : il est
+--    renvoyé en réponse normale, sinon l'exception annulerait aussi l'enregistrement de la
+--    tentative et la limite d'essais ne compterait jamais les échecs.
+drop function if exists public.signalement_controler(uuid, text);
 create or replace function public.signalement_controler(p_token uuid, p_code text)
-returns table (equipement_id uuid, organization_id uuid, equipement_nom text)
+returns table (equipement_id uuid, organization_id uuid, equipement_nom text, code_ok boolean)
 language plpgsql
 security definer
 set search_path = public
@@ -136,25 +139,23 @@ begin
   insert into signalements_tentatives (equipement_id, organization_id, reussi)
   values (v_e.id, v_e.organization_id, v_ok);
 
-  if not v_ok then
-    raise exception 'Code incorrect.' using errcode = 'P0001';
-  end if;
-
-  return query select v_e.id, v_e.organization_id, v_e.nom;
+  return query select v_e.id, v_e.organization_id, v_e.nom, v_ok;
 end $$;
 
 revoke execute on function public.signalement_controler(uuid, text) from public, anon, authenticated;
 
--- 5) Vérifier seulement le code (ouvre le formulaire côté appli) : renvoie vrai, ou une erreur lisible.
+-- 5) Vérifier seulement le code (ouvre le formulaire côté appli) : vrai ou faux.
+--    Les autres cas (étiquette invalide, trop d'essais) lèvent une erreur lisible.
 create or replace function public.verifier_code_signalement(p_token uuid, p_code text)
 returns boolean
 language plpgsql
 security definer
 set search_path = public
 as $$
+declare v_ok boolean;
 begin
-  perform 1 from public.signalement_controler(p_token, p_code);
-  return true;
+  select c.code_ok into v_ok from public.signalement_controler(p_token, p_code) c;
+  return coalesce(v_ok, false);
 end $$;
 
 revoke execute on function public.verifier_code_signalement(uuid, text) from public;
@@ -186,6 +187,9 @@ begin
   end if;
 
   select * into v_c from public.signalement_controler(p_token, p_code);
+  if not coalesce(v_c.code_ok, false) then
+    return jsonb_build_object('ok', false, 'erreur', 'Code incorrect.');
+  end if;
 
   select count(*) into v_nb_equip
     from signalements_panne s
@@ -208,7 +212,7 @@ begin
   values (v_c.organization_id, v_c.equipement_id, v_auteur, v_desc)
   returning id, created_at into v_id, v_le;
 
-  return jsonb_build_object('id', v_id, 'recu_le', v_le, 'deja_signale', v_deja);
+  return jsonb_build_object('ok', true, 'id', v_id, 'recu_le', v_le, 'deja_signale', v_deja);
 end $$;
 
 revoke execute on function public.signaler_panne(uuid, text, text, text) from public;
