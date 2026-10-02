@@ -21,11 +21,11 @@ function memoriserNomSignalement(nom){
 try{ localStorage.setItem(CLE_NOM_SIGNALEMENT, nom); }catch(e){}
 }
 
-let signalPublic = { token:null, etape:'ferme', code:'', auteur:'', description:'', busy:false, error:'', deja:false, recuLe:null };
+let signalPublic = { token:null, etape:'ferme', code:'', auteur:'', description:'', photo:null, photoBusy:false, busy:false, error:'', deja:false, recuLe:null };
 
 function signalPublicPour(token){
 if(signalPublic.token !== token){
-signalPublic = { token, etape:'ferme', code:'', auteur: nomSignalementMemorise(), description:'', busy:false, error:'', deja:false, recuLe:null };
+signalPublic = { token, etape:'ferme', code:'', auteur: nomSignalementMemorise(), description:'', photo:null, photoBusy:false, busy:false, error:'', deja:false, recuLe:null };
 }
 return signalPublic;
 }
@@ -89,8 +89,14 @@ ${erreur}
 <label for="sp-description">Description de la panne</label>
 <textarea id="sp-description" name="description" data-sp="description" maxlength="1000" placeholder="Ce qui ne fonctionne pas, où, depuis quand…" required>${esc(s.description)}</textarea>
 </div>
+<div class="field">
+<label for="sp-photo">Photo (facultatif, utile en cas de casse)</label>
+${s.photo ? `<div class="sp-photo-apercu"><img src="${esc(s.photo)}" alt="Photo jointe"><button type="button" class="btn btn-sm" data-action="pub-panne-photo-retirer">Retirer la photo</button></div>` : ''}
+${s.photoBusy ? '<div class="small muted">Préparation de la photo…</div>' : ''}
+<input id="sp-photo" type="file" accept="image/*" data-sp-photo="1">
+</div>
 <div class="row wrap">
-<button class="btn btn-primary" type="submit" ${s.busy ? 'disabled' : ''}>${s.busy ? 'Envoi…' : 'Envoyer le signalement'}</button>
+<button class="btn btn-primary" type="submit" ${(s.busy || s.photoBusy) ? 'disabled' : ''}>${s.busy ? 'Envoi…' : 'Envoyer le signalement'}</button>
 <button class="btn" type="button" data-action="pub-panne-fermer">Annuler</button>
 </div>
 </form>`;
@@ -107,6 +113,53 @@ ${s.deja ? `<div class="small muted">Une panne était déjà signalée sur cet �
 <button class="btn" type="button" data-action="pub-panne-fermer">Fermer</button>
 </div>
 </div>`;
+}
+
+/* Photo : réduite sur le téléphone (JPEG, 1280 px max) avant l'envoi. */
+function lireImageReduite(fichier){
+return new Promise((resolve, reject) => {
+const url = URL.createObjectURL(fichier);
+const img = new Image();
+img.onload = () => {
+try{
+const max = 1280;
+const k = Math.min(1, max / Math.max(img.width, img.height));
+const c = document.createElement('canvas');
+c.width = Math.max(1, Math.round(img.width * k)); c.height = Math.max(1, Math.round(img.height * k));
+c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+let q = 0.72, out = c.toDataURL('image/jpeg', q);
+while(out.length > 450000 && q > 0.3){ q -= 0.1; out = c.toDataURL('image/jpeg', q); }
+URL.revokeObjectURL(url);
+if(out.length > 650000) reject(new Error('Photo trop lourde.')); else resolve(out);
+}catch(e){ URL.revokeObjectURL(url); reject(e); }
+};
+img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("Photo illisible. Essayez une autre photo.")); };
+img.src = url;
+});
+}
+
+async function choisirPhotoSignalement(input){
+const f = input.files && input.files[0];
+if(!f) return;
+const s = signalPublic;
+s.photoBusy = true; s.error = ''; render();
+try{ s.photo = await lireImageReduite(f); }
+catch(e){ s.photo = null; s.error = (e && e.message) || 'Photo illisible.'; }
+s.photoBusy = false; render();
+}
+
+async function voirPhotoSignalement(id){
+if(!navigator.onLine){ toast('Pas de réseau.', 'erreur'); return; }
+const { data, error } = await sb.from('signalements_panne').select('photo').eq('id', id).single();
+if(error || !data || !data.photo){ toast('Photo indisponible.', 'erreur'); return; }
+const ov = document.createElement('div');
+ov.className = 'sp-visionneuse';
+ov.setAttribute('role', 'dialog');
+const img = document.createElement('img');
+img.src = data.photo; img.alt = 'Photo du signalement';
+ov.appendChild(img);
+ov.addEventListener('click', () => ov.remove());
+document.body.appendChild(ov);
 }
 
 async function envoyerCodeSignalement(form){
@@ -137,7 +190,7 @@ if(!navigator.onLine){ s.error = 'Pas de réseau : réessayez dès que vous ête
 s.busy = true; s.error = ''; render();
 try{
 const { data, error } = await sb.rpc('signaler_panne', {
-p_token: s.token, p_code: s.code, p_auteur: s.auteur, p_description: s.description,
+p_token: s.token, p_code: s.code, p_auteur: s.auteur, p_description: s.description, p_photo: s.photo || null,
 });
 if(error) throw error;
 if(data && data.ok === false){
@@ -149,6 +202,7 @@ memoriserNomSignalement(s.auteur);
 s.deja = !!(data && data.deja_signale);
 s.recuLe = (data && data.recu_le) || null;
 s.description = '';
+s.photo = null;
 s.etape = 'envoye';
 }catch(e){
 s.error = messageSignalement(e);
@@ -197,7 +251,7 @@ if(l.loading || (l.items !== null && !force)) return;
 if(l.error && !force) return;
 l.loading = true; l.error = '';
 sb.from('signalements_panne')
-.select('id, created_at, auteur, description, statut, traite_par, traite_le, equipement_id, organization_id, equipements(nom, serial_value), organizations(nom)')
+.select('id, created_at, auteur, description, statut, traite_par, traite_le, a_photo, equipement_id, organization_id, equipements(nom, serial_value), organizations(nom)')
 .order('created_at', { ascending:false })
 .limit(200)
 .then(({ data, error }) => {
@@ -232,6 +286,7 @@ return `
 <div class="sp-tete"><strong>${esc(nom)}</strong>${eq.serial_value ? ` <span class="muted small">${esc(eq.serial_value)}</span>` : ''} ${badgeStatutSignalement(x.statut)}</div>
 <div class="small muted">${esc(x.auteur)} · ${esc(fmtDateTime(x.created_at))}${orgNom}</div>
 <p class="sp-texte">${esc(x.description)}</p>
+${x.a_photo ? `<div><button type="button" class="btn btn-sm" data-action="signal-photo" data-id="${esc(x.id)}">📷 Voir la photo jointe</button></div>` : ''}
 ${x.traite_par && x.statut !== 'nouveau' ? `<div class="small muted">${esc(x.traite_par)}${x.traite_le ? ' · ' + esc(fmtDateTime(x.traite_le)) : ''}</div>` : ''}
 <div class="row wrap sp-actions">
 <button type="button" class="btn btn-sm" data-action="go" data-path="/equip/${esc(x.equipement_id)}">Ouvrir la fiche</button>
@@ -361,8 +416,10 @@ const t = e.target.closest('[data-action]');
 if(!t) return;
 const a = t.dataset.action;
 if(a === 'pub-panne-ouvrir'){ const s = signalPublicPour(fichePublique.token || state.route.param); s.etape = 'code'; s.error = ''; render(); setTimeout(() => document.getElementById('sp-code')?.focus(), 30); }
-else if(a === 'pub-panne-fermer'){ const s = signalPublicPour(fichePublique.token || state.route.param); s.etape = 'ferme'; s.error = ''; s.code = ''; s.description = ''; render(); }
-else if(a === 'pub-panne-nouveau'){ const s = signalPublic; s.etape = 'form'; s.error = ''; s.description = ''; render(); }
+else if(a === 'pub-panne-fermer'){ const s = signalPublicPour(fichePublique.token || state.route.param); s.etape = 'ferme'; s.error = ''; s.code = ''; s.description = ''; s.photo = null; render(); }
+else if(a === 'pub-panne-nouveau'){ const s = signalPublic; s.etape = 'form'; s.error = ''; s.description = ''; s.photo = null; render(); }
+else if(a === 'pub-panne-photo-retirer'){ signalPublic.photo = null; render(); }
+else if(a === 'signal-photo'){ voirPhotoSignalement(t.dataset.id); }
 else if(a === 'signal-filtre'){ signalListe.filtre = t.dataset.v === 'tous' ? 'tous' : 'ouverts'; render(); }
 else if(a === 'signal-recharger'){ chargerSignalements(true); render(); }
 else if(a === 'signal-statut'){ changerStatutSignalement(t.dataset.id, t.dataset.statut); }
@@ -383,4 +440,8 @@ else if(a === 'submit-pub-panne'){ e.preventDefault(); envoyerSignalement(t); }
 document.addEventListener('input', (e) => {
 const c = e.target && e.target.dataset && e.target.dataset.sp;
 if(c && (c === 'code' || c === 'auteur' || c === 'description')) signalPublic[c] = e.target.value;
+});
+
+document.addEventListener('change', (e) => {
+if(e.target && e.target.dataset && e.target.dataset.spPhoto) choisirPhotoSignalement(e.target);
 });
