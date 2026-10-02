@@ -67,3 +67,10 @@ create policy "photos iv: suppression" on storage.objects
       )
     )
   );
+
+-- 4) Journal : tous les membres de l'entreprise (utilisateur, responsable, administrateur) le lisent ;
+--    le fondateur lit celui de tous les clients. Lecture seule : personne d'autre que le fondateur ne peut le modifier.
+drop policy if exists "journal: lecture" on public.journal;
+create policy "journal: lecture" on public.journal
+  for select to public
+  using (is_super_admin() or organization_id = current_org_id());

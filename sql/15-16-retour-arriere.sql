@@ -45,3 +45,9 @@ create policy "photos iv: suppression" on storage.objects
 -- Étape 1 annulée : la commande de suppression avec motif disparaît.
 drop function if exists public.supprimer_intervention(uuid, text);
 drop function if exists public.modifier_intervention(uuid, date, text, text, text, jsonb, text);
+
+-- Journal : de nouveau réservé à l'administrateur de l'entreprise et au fondateur.
+drop policy if exists "journal: lecture" on public.journal;
+create policy "journal: lecture" on public.journal
+  for select to public
+  using (is_super_admin() or (organization_id = current_org_id() and current_profile_role() = 'admin'));
