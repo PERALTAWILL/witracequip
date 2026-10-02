@@ -2305,6 +2305,16 @@ ${renderChampPhotos(null)}
 </form>`;
 }
 
+/* Types d'intervention proposés dans le menu déroulant. Une ancienne intervention
+   saisie en texte libre garde son type : il est ajouté en tête de liste à la modification. */
+const TYPES_INTERVENTION = ['Révision annuelle', 'Panne', 'Installation', 'Essais', 'Autre'];
+function optionsTypeIntervention(valeur){
+const val = (valeur || '').trim();
+const liste = (val && !TYPES_INTERVENTION.includes(val)) ? [val, ...TYPES_INTERVENTION] : TYPES_INTERVENTION;
+return `<option value="" ${val ? '' : 'selected'} disabled>Choisir un type…</option>` +
+liste.map(t => `<option value="${esc(t)}" ${t === val ? 'selected' : ''}>${esc(t)}</option>`).join('');
+}
+
 function renderIvForm(iv){
 // iv fourni = modification d'une intervention existante ; sinon, nouvelle saisie.
 // Date du jour en heure LOCALE (toISOString donnerait la date UTC : le lendemain en soirée aux Antilles).
@@ -2327,7 +2337,7 @@ ${err ? `<div class="alert alert-error">${esc(err)}</div>` : ''}
 </div>
 <div class="field">
 <label>Type d'intervention <span class="oblig">obligatoire</span></label>
-<input type="text" name="type" value="${esc(v('type', modif ? iv.type : ''))}" placeholder="Ex : Entretien, Réparation, Contrôle…" required>
+<select name="type" required>${optionsTypeIntervention(v('type', modif ? iv.type : ''))}</select>
 </div>
 </div>
 <div class="field">
@@ -2872,13 +2882,13 @@ setTimeout(() => { const f = document.getElementById('panne-form'); if(f) f.scro
 }
 else if(action === 'panne-reparee'){
 equipDetail.modePanne = false; equipDetail.showIvForm = true; equipDetail.editIvId = null; equipDetail.ivNotice = ''; equipDetail.ivError = '';
-equipDetail.brouillon = { type:'Réparation (panne signalée)' }; render();
+equipDetail.brouillon = { type:'Panne' }; render();
 }
 else if(action === 'iv-onglet'){ equipDetail.ivOnglet = t.dataset.v === 'revision' ? 'revision' : 'intervention'; render(); }
 else if(action === 'toggle-iv-form'){
 equipDetail.modePanne = false;
 equipDetail.showIvForm = !equipDetail.showIvForm; equipDetail.editIvId = null; equipDetail.ivNotice = '';
-if(equipDetail.showIvForm && equipDetail.ivOnglet === 'revision' && !(equipDetail.brouillon && equipDetail.brouillon.type)) equipDetail.brouillon = { ...(equipDetail.brouillon || {}), type:'Révision' };
+if(equipDetail.showIvForm && equipDetail.ivOnglet === 'revision' && !(equipDetail.brouillon && equipDetail.brouillon.type)) equipDetail.brouillon = { ...(equipDetail.brouillon || {}), type:'Révision annuelle' };
 if(!equipDetail.showIvForm){ viderPhotos('nouv'); equipDetail.brouillon = {}; equipDetail.ivError = ''; }
 render();
 }
