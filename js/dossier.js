@@ -163,6 +163,40 @@ function injecterStyle(){
 
 function esc2(s){ return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
 
+/* Choix du client (compte fondateur / super-admin) : le dossier se fait pour un client à la fois.
+   Les données viennent du même chargement que « Statistiques & export » (statsState). */
+function selectClient(){
+  try{
+    if(typeof isSuperAdmin !== 'function' || !isSuperAdmin() || typeof statsState === 'undefined') return '';
+    var demo = (typeof STATS_DEMO !== 'undefined') ? STATS_DEMO : 'demo';
+    var src = (typeof statsSourceCourante === 'function') ? statsSourceCourante() : demo;
+    var liste = ((typeof reglages !== 'undefined' && reglages.clients) || []).filter(function(c){ return !c.est_mon_organisation; })
+      .sort(function(a, b){ return String(a.nom).localeCompare(String(b.nom), 'fr'); });
+    return '<label class="t">Client</label>' +
+      '<select data-dc-select="client"' + (ETAT.chargeClient ? ' disabled' : '') + '>' +
+      '<option value="' + esc2(demo) + '"' + (src === demo ? ' selected' : '') + '>Démonstration — parc simulé</option>' +
+      liste.map(function(c){ return '<option value="' + esc2(c.id) + '"' + (src === c.id ? ' selected' : '') + '>' + esc2(c.nom) + '</option>'; }).join('') +
+      '</select>' +
+      (ETAT.chargeClient ? '<p class="dc-note">Chargement du parc du client…</p>' : '') +
+      (ETAT.erreurClient ? '<p class="dc-note" style="color:#c0392b;">' + esc2(ETAT.erreurClient) + '</p>' : '') +
+      (!ETAT.chargeClient && !ETAT.erreurClient && ETAT.d && !(ETAT.d.equipements || []).length ? '<p class="dc-note" style="color:#c0392b;">Ce client n\'a encore aucun équipement : rien à mettre dans le dossier.</p>' : '');
+  }catch(e){ return ''; }
+}
+
+function changerClient(v){
+  statsState.source = v; statsState.cle = null;
+  ETAT.chargeClient = true; ETAT.erreurClient = ''; OPT.perimetre = 'all'; rendreModale();
+  try{ assurerStats(); }catch(e){ ETAT.chargeClient = false; ETAT.erreurClient = 'Chargement impossible : ' + (e.message || e); rendreModale(); return; }
+  var essais = 0;
+  var tempo = setInterval(function(){
+    essais++;
+    if(!ETAT.ouvert){ clearInterval(tempo); return; }
+    if(statsState.data){ clearInterval(tempo); ETAT.d = preparerDemo(statsState.data); ETAT.chargeClient = false; rendreModale(); }
+    else if(statsState.error){ clearInterval(tempo); ETAT.chargeClient = false; ETAT.erreurClient = statsState.error; rendreModale(); }
+    else if(essais > 120){ clearInterval(tempo); ETAT.chargeClient = false; ETAT.erreurClient = 'Le chargement est trop long : réessayez.'; rendreModale(); }
+  }, 250);
+}
+
 function rendreModale(){
   var el = document.getElementById('dc-fond'); if(!el) return;
   var d = ETAT.d, m = modele(d, OPT);
@@ -181,6 +215,7 @@ function rendreModale(){
 '<div class="dc-carte" role="dialog" aria-modal="true" aria-label="Dossier de contrôle">' +
 '<div class="dc-tete"><h3>Dossier de contrôle</h3><p>Un dossier PDF complet, prêt à remettre en cas de contrôle : registre des équipements, échéances, historique des interventions et traçabilité.</p></div>' +
 '<div class="dc-corps">' +
+selectClient() +
 '<label class="t">Périmètre</label>' +
 '<select data-dc-select="perimetre"><option value="all">Tout le parc (' + actifsTous.length + ' équipement' + (actifsTous.length > 1 ? 's' : '') + ')</option>' + optionsType + '</select>' +
 '<label class="t">Période d\'historique</label>' + puces('periode', [[6, '6 mois'], [12, '12 mois'], [24, '24 mois'], [0, 'Tout l\'historique']]) +
@@ -196,7 +231,7 @@ function rendreModale(){
 '</div></div>' +
 '<p class="dc-note">Les échéances viennent des champs « Prochain contrôle », « Prochaine VGP »… de chaque fiche. Un équipement sans échéance renseignée est indiqué comme tel, sans être compté en retard. Le PDF est fabriqué sur cet appareil : rien n\'est envoyé ailleurs.</p>' +
 '</div>' +
-'<div class="dc-pied"><button type="button" class="dc-btn s" data-dc-act="fermer">Annuler</button><button type="button" class="dc-btn p" data-dc-act="generer"' + (ETAT.enCours ? ' disabled' : '') + '>' + (ETAT.enCours ? 'Génération en cours…' : 'Générer le dossier PDF') + '</button></div>' +
+'<div class="dc-pied"><button type="button" class="dc-btn s" data-dc-act="fermer">Annuler</button><button type="button" class="dc-btn p" data-dc-act="generer"' + ((ETAT.enCours || ETAT.chargeClient || !t.n) ? ' disabled' : '') + '>' + (ETAT.enCours ? 'Génération en cours…' : 'Générer le dossier PDF') + '</button></div>' +
 '</div>';
 }
 
@@ -204,7 +239,7 @@ function ouvrir(){
   try{
     var brut = (typeof statsState !== 'undefined') ? statsState.data : null;
     if(!brut){ toast('Chargez d\'abord les statistiques.', 'erreur'); return; }
-    ETAT.d = preparerDemo(brut); ETAT.ouvert = true; injecterStyle();
+    ETAT.d = preparerDemo(brut); ETAT.ouvert = true; ETAT.chargeClient = false; ETAT.erreurClient = ''; injecterStyle();
     var el = document.getElementById('dc-fond');
     if(!el){ el = document.createElement('div'); el.id = 'dc-fond'; el.className = 'dc-fond'; document.body.appendChild(el); }
     rendreModale();
@@ -226,6 +261,7 @@ document.addEventListener('click', function(e){
 document.addEventListener('change', function(e){
   var t = e.target; if(!t || !t.getAttribute || !document.getElementById('dc-fond')) return;
   var s = t.getAttribute('data-dc-select'), c = t.getAttribute('data-dc-check');
+  if(s === 'client'){ changerClient(t.value); return; }
   if(s){ OPT[s] = t.value; rendreModale(); }
   else if(c){ OPT[c] = !!t.checked; rendreModale(); }
 });
