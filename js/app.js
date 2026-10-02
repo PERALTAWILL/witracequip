@@ -2464,14 +2464,16 @@ if(!iv) return;
 if(!peutSupprimerIntervention()) return;
 const question = `Supprimer l'intervention « ${iv.type} » du ${fmtDate(iv.date)} ?\n\nElle disparaît du carnet de cet équipement. Une copie et le motif sont conservés dans le journal.${(iv.photos||[]).length ? ' Ses photos sont supprimées.' : ''}`;
 let motif = null;
-while(true){
+if(!estResponsableSeul()){
+if(!await confirmer(question, { ok:'Supprimer', danger:true })) return;
+}else while(true){
 const saisie = await demander(question, { ok:'Supprimer', danger:true, placeholder:'Motif de la suppression (obligatoire)' });
 if(saisie === null || saisie === undefined) return;
 if(saisie.trim().length >= 3){ motif = saisie.trim(); break; }
 toast('Le motif est obligatoire.', 'erreur');
 }
 try{
-const { error } = await sb.rpc('supprimer_intervention', { p_id: id, p_motif: motif });
+const { error } = await sb.rpc('supprimer_intervention', { p_id: id, p_motif: motif || null });
 if(error) throw error;
 if((iv.photos || []).length) supprimerFichiersPhotos(iv.photos).catch(()=>{});
 await rechargerInterventions();

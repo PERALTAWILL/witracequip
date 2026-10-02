@@ -4,7 +4,8 @@
 -- Retour arrière : 15-16-retour-arriere.sql
 --
 -- Qui peut supprimer : un responsable ou un administrateur de l'entreprise (et le fondateur).
--- Le motif est obligatoire et inscrit au journal avec une copie de l'intervention.
+-- Le motif est obligatoire pour le responsable (facultatif pour l'administrateur et le fondateur) ;
+-- la suppression est toujours inscrite au journal avec une copie de l'intervention.
 
 create or replace function public.supprimer_intervention(p_id uuid, p_motif text)
 returns void
@@ -26,7 +27,8 @@ begin
   end if;
 
   v_motif := nullif(trim(coalesce(p_motif, '')), '');
-  if v_motif is null then
+  -- Seul le responsable doit justifier ; l'administrateur et le fondateur non (la trace reste au journal).
+  if v_motif is null and not v_sa and v_role = 'responsable' then
     raise exception 'Le motif de suppression est obligatoire.' using errcode = '22023';
   end if;
 
