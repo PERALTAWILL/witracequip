@@ -66,8 +66,8 @@ const ROLES_ASSIGNABLES = ['admin', 'responsable', 'utilisateur'];
 
 const ROLE_RESUME = {
 admin: "Tous les droits sur son organisation : gérer les membres, supprimer définitivement équipements et interventions.",
-responsable: "Crée, remplit, imprime, modifie les interventions et archive un équipement (avec motif).",
-utilisateur: "Crée, remplit, imprime et modifie les interventions — sans archiver ni supprimer.",
+responsable: "Crée, remplit, imprime, modifie et supprime les interventions (suppression avec motif) et archive un équipement (avec motif).",
+utilisateur: "Crée, remplit, imprime les équipements et ajoute des interventions — sans les modifier, ni archiver ni supprimer.",
 };
 
 /* Champ mot de passe avec aperçu (le petit œil) */
@@ -258,6 +258,8 @@ function isAdmin(){ return state.profile?.role === 'admin'; }
 function estResponsableSeul(){ return state.profile?.role === 'responsable' && !state.superAdmin; }
 function peutGererEquipe(){ return ['admin','responsable'].includes(state.profile?.role) || state.superAdmin === true; }
 function peutSupprimer(){ return ['admin','responsable'].includes(state.profile?.role); }
+/* Modifier / supprimer une intervention : responsable, administrateur, fondateur (la base le vérifie aussi). */
+function peutModifierIntervention(){ return ['admin','responsable'].includes(state.profile?.role) || state.superAdmin === true; }
 // Créer / modifier les types d'équipement et leurs champs : administrateur et responsable.
 // L'utilisateur simple s'en sert sans les voir (vérifié aussi par la base, sql/10).
 function peutGererTypes(){ return ['admin','responsable'].includes(state.profile?.role); }

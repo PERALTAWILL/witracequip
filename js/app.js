@@ -2036,8 +2036,8 @@ ${iv.modifie_le ? `<div class="iv-modif">Modifiée le ${fmtDateTime(iv.modifie_l
 ${vignettesIv(iv)}
 </td>
 <td class="iv-actions">
-<button class="btn btn-sm" data-action="iv-modifier" data-id="${iv.id}">Modifier</button>
-${isAdmin() ? `<button class="btn btn-sm btn-danger" data-action="iv-supprimer" data-id="${iv.id}">Supprimer</button>` : ''}
+${peutModifierIntervention() ? `<button class="btn btn-sm" data-action="iv-modifier" data-id="${iv.id}">Modifier</button>
+<button class="btn btn-sm btn-danger" data-action="iv-supprimer" data-id="${iv.id}">Supprimer</button>` : ''}
 </td>
 </tr>
 `).join('');
@@ -2410,7 +2410,7 @@ equipDetail.ivBusy = false; equipDetail.ivError = e.message; render();
 }
 }
 
-/* Modifier une intervention : ouvert à tous les rôles, mais la date et le nom
+/* Modifier une intervention : réservé au responsable, à l'administrateur et au fondateur ; la date et le nom
 de l'intervenant restent obligatoires (la base le vérifie aussi). La base
 horodate la modification au nom de l'auteur et garde l'ancienne version au
 journal : on peut corriger une saisie, pas effacer une trace. */
@@ -2436,8 +2436,9 @@ if(blobs.length){
 nouvelles = await televerserPhotos(equipDetail.item.organization_id, equipDetail.id, id, blobs);
 maj.photos = [...(iv.photos || []), ...nouvelles];
 }
-const { error } = await sb.from('interventions').update(maj).eq('id', id);
+const { data: modifiees, error } = await sb.from('interventions').update(maj).eq('id', id).select('id');
 if(error) throw error;
+if(!modifiees || !modifiees.length) throw new Error("Modification refusée : seuls un responsable ou un administrateur peuvent modifier une intervention.");
 nouvelles = [];
 viderPhotos('edit'); equipDetail.brouillonEdit = null;
 await rechargerInterventions();
@@ -2455,11 +2456,18 @@ equipDetail.editIvBusy = false; render();
 async function supprimerIntervention(id){
 const iv = (equipDetail.interventions || []).find(x => x.id === id);
 if(!iv) return;
-if(!await confirmer(`Supprimer l'intervention « ${iv.type} » du ${fmtDate(iv.date)} ?\n\nElle disparaît du carnet de cet équipement. Une copie est conservée dans le journal.${(iv.photos||[]).length ? ' Ses photos sont supprimées.' : ''}`)) return;
+if(!peutModifierIntervention()) return;
+const question = `Supprimer l'intervention « ${iv.type} » du ${fmtDate(iv.date)} ?\n\nElle disparaît du carnet de cet équipement. Une copie et le motif sont conservés dans le journal.${(iv.photos||[]).length ? ' Ses photos sont supprimées.' : ''}`;
+let motif = null;
+while(true){
+const saisie = await demander(question, { ok:'Supprimer', danger:true, placeholder:'Motif de la suppression (obligatoire)' });
+if(saisie === null || saisie === undefined) return;
+if(saisie.trim().length >= 3){ motif = saisie.trim(); break; }
+toast('Le motif est obligatoire.', 'erreur');
+}
 try{
-const { data, error } = await sb.from('interventions').delete().eq('id', id).select('id');
+const { error } = await sb.rpc('supprimer_intervention', { p_id: id, p_motif: motif });
 if(error) throw error;
-if(!data || !data.length) throw new Error("Suppression refusée : seul un administrateur peut supprimer une intervention.");
 if((iv.photos || []).length) supprimerFichiersPhotos(iv.photos).catch(()=>{});
 await rechargerInterventions();
 reglages.journal = null;
@@ -2683,8 +2691,9 @@ if(!iv) return;
 if(!await confirmer("Supprimer cette photo ?\n\nElle ne pourra plus servir de preuve pour cette intervention.", { danger:true, ok:'Supprimer' })) return;
 try{
 const reste = (iv.photos || []).filter(p => p !== o.path);
-const { error } = await sb.from('interventions').update({ photos: reste }).eq('id', iv.id);
+const { data: modifiees, error } = await sb.from('interventions').update({ photos: reste }).eq('id', iv.id).select('id');
 if(error) throw error;
+if(!modifiees || !modifiees.length) throw new Error("Modification refusée : seuls un responsable ou un administrateur peuvent modifier une intervention.");
 await supprimerFichiersPhotos([o.path]).catch(() => {});
 iv.photos = reste;
 equipDetail.photoOuverte = null;
@@ -2854,9 +2863,9 @@ else if(action === 'equip-desel'){ dashboardCache.sel = []; render(); }
 else if(action === 'modal-fermer'){ fermerModal(); }
 else if(action === 'modal-fond'){ if(e.target === t) fermerModal(); }
 else if(action === 'modal-valider'){ validerModal(); }
-else if(action === 'iv-modifier'){ equipDetail.editIvId = t.dataset.id; equipDetail.editIvError = ''; equipDetail.showIvForm = false; viderPhotos('edit'); equipDetail.brouillonEdit = null; render(); }
+else if(action === 'iv-modifier'){ if(!peutModifierIntervention()) return; equipDetail.editIvId = t.dataset.id; equipDetail.editIvError = ''; equipDetail.showIvForm = false; viderPhotos('edit'); equipDetail.brouillonEdit = null; render(); }
 else if(action === 'iv-annuler-modif'){ equipDetail.editIvId = null; equipDetail.editIvError = ''; viderPhotos('edit'); equipDetail.brouillonEdit = null; render(); }
-else if(action === 'iv-supprimer'){ supprimerIntervention(t.dataset.id); }
+else if(action === 'iv-supprimer'){ if(!peutModifierIntervention()) return; supprimerIntervention(t.dataset.id); }
 else if(action === 'nouveau-client'){ ouvrirClientForm(null); }
 else if(action === 'modifier-client'){ const c = (reglages.clients||[]).find(x => x.id === t.dataset.id); if(c) ouvrirClientForm(c); }
 else if(action === 'fermer-client-form'){ reglages.clientForm = null; render(); }
