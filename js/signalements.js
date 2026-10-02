@@ -376,6 +376,34 @@ description: `Panne signalée par ${x.auteur} le ${fmtDateTime(x.created_at)} : 
 nav('/equip/' + x.equipement_id);
 }
 
+/* Bloc de l'accueil : pannes signalées en cours (nouveau / pris en charge).
+   Visible par tous les membres ; les boutons d'action seulement pour ceux qui peuvent traiter. */
+function renderSignalementsAccueil(){
+if(!state.session || !state.profile || isSuperAdmin()) return '';
+chargerSignalements(false);
+const l = signalListe;
+if(!l.items) return '';
+const ouverts = l.items.filter(x => x.statut === 'nouveau' || x.statut === 'pris_en_charge');
+if(!ouverts.length) return '';
+const nouveaux = ouverts.filter(x => x.statut === 'nouveau').length;
+const agir = peutTraiterSignalements();
+const lignes = ouverts.slice(0, 5).map(x => {
+const eq = x.equipements || {};
+return `<div class="rappel-item rappel-retard sp-accueil-ligne">
+<button type="button" class="rappel-ligne" data-action="go" data-path="/equip/${esc(x.equipement_id)}"><span class="rappel-badge">${x.statut === 'nouveau' ? 'Nouveau' : 'En cours'}</span><span class="rappel-corps"><strong>${esc(eq.nom || 'Équipement')}</strong><small>${esc(x.auteur)} · ${esc(heureLisible(x.created_at))} — ${esc(x.description)}</small></span>${iconeNav('chevron',16)}</button>
+${agir ? `<div class="row wrap sp-accueil-actions">
+${x.statut === 'nouveau' ? `<button type="button" class="btn btn-sm" data-action="signal-statut" data-id="${esc(x.id)}" data-statut="pris_en_charge">Prendre en charge</button>` : ''}
+<button type="button" class="btn btn-sm" data-action="signal-statut" data-id="${esc(x.id)}" data-statut="traite">Marquer traité</button>
+</div>` : ''}
+</div>`;
+}).join('');
+return `<section class="rappels-zone" aria-label="Pannes signalées par le personnel">
+<button type="button" class="rappel-urgence rappel-urgence-retard sp-accueil-titre" data-action="go" data-path="/signalements"><strong>${ouverts.length} panne${ouverts.length > 1 ? 's' : ''} en cours${nouveaux ? ` · ${nouveaux} nouvelle${nouveaux > 1 ? 's' : ''}` : ''}</strong><span>Voir tout</span></button>
+${lignes}
+${ouverts.length > 5 ? `<div class="small muted">Et ${ouverts.length - 5} autre${ouverts.length - 5 > 1 ? 's' : ''}…</div>` : ''}
+</section>`;
+}
+
 /* ---------------------------------------------------------------------- */
 /* 3. Code de signalement (fondateur)                                      */
 /* ---------------------------------------------------------------------- */

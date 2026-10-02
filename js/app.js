@@ -1149,6 +1149,7 @@ return `
     <div class="hero-orbit" aria-hidden="true"><i></i><i></i><i></i><span>W</span></div>
   </section>
 
+  ${typeof renderSignalementsAccueil === 'function' ? renderSignalementsAccueil() : ''}
   ${renderPannes()}
   ${renderRappels()}
 
@@ -1209,6 +1210,7 @@ return `
     <div class="hero-orbit" aria-hidden="true"><i></i><i></i><i></i><span>W</span></div>
   </section>
 
+  ${typeof renderSignalementsAccueil === 'function' ? renderSignalementsAccueil() : ''}
   ${renderPannes()}
   ${renderRappels()}
 
