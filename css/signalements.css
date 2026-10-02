@@ -21,3 +21,6 @@
 
 .sp-accueil-titre{width:100%; text-align:left; cursor:pointer; font:inherit;}
 .sp-accueil-actions{padding:0 12px 10px; gap:8px;}
+
+.iv-onglets{margin:10px 0 12px; max-width:100%;}
+.iv-onglets button{white-space:nowrap;}
