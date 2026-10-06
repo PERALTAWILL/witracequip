@@ -71,6 +71,12 @@ if(state.accessError){
 app.innerHTML = renderAccesSuspendu();
 return;
 }
+// Double authentification : le code est demandé AVANT de charger quoi que ce soit.
+if(state.session && mfa.requis){
+app.innerHTML = renderMfaDefi();
+if(document.activeElement?.id !== 'mfa-code') setTimeout(() => document.getElementById('mfa-code')?.focus(), 30);
+return;
+}
 if(state.session && posteState.mode === 'attente'){ app.innerHTML = renderAttenteOrdinateur(); dessinerQrOrdinateur(); return; }
 if(state.session && posteState.mode === 'pause'){ app.innerHTML = renderPauseMobile(); return; }
 if(!state.session){
@@ -3462,6 +3468,14 @@ async function appliquerSession(session){
 if(session !== state.session) return; // une autre session est arrivée entre-temps
 state.accessError = '';
 if(session){
+// Double authentification : si le compte a un facteur actif, on exige le code avant tout le reste.
+if(!await mfaVerifierNiveau()){
+if(session !== state.session) return;
+mfa.requis = true; mfa.erreur = ''; mfa.busy = false;
+state.loading = false; render();
+return;
+}
+mfa.requis = false;
 // Un compte = un appareil : on vérifie AVANT de charger quoi que ce soit.
 if(navigator.onLine){
 const lien = await lierAppareil();
@@ -3507,6 +3521,7 @@ return;
 state.accessError = (e && e.message) ? e.message : 'Erreur de chargement du profil.';
 }
 } else {
+mfa.requis = false; mfa.erreur = ''; mfa.busy = false;
 state.profile = null; state.orgName = ''; state.superAdmin = false;
 arreterPoste(); posteState = posteStateInitial();
 activite = { items:null, loading:false, error:'', filtre:'recentes' };
