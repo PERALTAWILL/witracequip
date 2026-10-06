@@ -296,7 +296,7 @@ const agir = peutTraiterSignalements();
 const orgNom = (isSuperAdmin() && x.organizations && x.organizations.nom) ? ` · ${esc(x.organizations.nom)}` : '';
 return `
 <div class="card sp-ligne">
-<div class="sp-tete"><strong>${esc(nom)}</strong>${eq.serial_value ? ` <span class="muted small">${esc(eq.serial_value)}</span>` : ''} ${badgeStatutSignalement(x.statut)}</div>
+<div class="sp-tete">${agir ? `<input type="checkbox" class="case-sel sp-case" data-action="sel-signal" data-id="${esc(x.id)}" aria-label="Sélectionner ce signalement" ${(signalListe.sel || []).includes(x.id) ? 'checked' : ''}> ` : ''}<strong>${esc(nom)}</strong>${eq.serial_value ? ` <span class="muted small">${esc(eq.serial_value)}</span>` : ''} ${badgeStatutSignalement(x.statut)}</div>
 <div class="small muted">${esc(x.auteur)} · ${esc(fmtDateTime(x.created_at))}${orgNom}</div>
 <p class="sp-texte">${esc(x.description)}</p>
 ${x.a_photo ? `<div><button type="button" class="btn btn-sm" data-action="signal-photo" data-id="${esc(x.id)}">📷 Voir la photo jointe</button></div>` : ''}
@@ -318,6 +318,29 @@ ${agir ? `<button type="button" class="btn btn-sm" data-action="signal-supprimer
 </div>`;
 }
 
+/* Sélection groupée : « Tout sélectionner » + actions sur toutes les pannes cochées. */
+function barreSelectionSignalements(liste){
+const ids = liste.map(x => x.id);
+signalListe.sel = (signalListe.sel || []).filter(id => ids.includes(id));
+const n = signalListe.sel.length;
+const tous = n > 0 && n === ids.length;
+const equipe = signalEquipe.liste || [];
+return `<label class="tout-selectionner sp-tout">
+<input type="checkbox" data-action="sel-signal-tous" ${tous ? 'checked' : ''}>
+<span>Tout sélectionner (${ids.length})</span>
+</label>` + (n ? `<div class="barre-selection">
+<strong>${n} sélectionnée${n > 1 ? 's' : ''}</strong>
+${equipe.length ? `<select class="sp-attribuer" data-action="signal-attribuer-lot" aria-label="Attribuer les pannes sélectionnées">
+<option value="">Attribuer à…</option>
+${equipe.map(p => `<option value="${esc(p.id)}">${esc(p.full_name || 'Sans nom')}${p.role === 'responsable' ? ' (responsable)' : ''}</option>`).join('')}
+</select>` : ''}
+<button type="button" class="btn btn-sm" data-action="signal-lot" data-lot="traite">Marquer traité</button>
+<button type="button" class="btn btn-sm" data-action="signal-lot" data-lot="rejete">Rejeter</button>
+<button type="button" class="btn btn-sm btn-danger" data-action="signal-lot" data-lot="supprimer">Supprimer</button>
+<button type="button" class="btn btn-sm btn-lien" data-action="signal-desel">Annuler</button>
+</div>` : '');
+}
+
 function viewSignalements(){
 chargerSignalements(false);
 chargerEquipeSignal();
@@ -334,7 +357,7 @@ corps = `<div class="alert alert-error">${esc(l.error)}</div>
 }else if(!liste.length){
 corps = `<div class="card"><div class="empty small">${l.filtre === 'tous' ? 'Aucun signalement pour le moment.' : 'Aucune panne à traiter.'}</div></div>`;
 }else{
-corps = liste.map(ligneSignalement).join('');
+corps = (peutTraiterSignalements() ? barreSelectionSignalements(liste) : '') + liste.map(ligneSignalement).join('');
 }
 return `
 <div class="fiche-entete">
@@ -407,6 +430,51 @@ Object.assign(x, { assigne_a: null, statut: 'nouveau', traite_par: null, traite_
 toast('Attribution retirée.');
 }
 signalListe.compteur = (signalListe.items || []).filter(i => i.statut === 'nouveau').length;
+render();
+}
+
+async function actionLotSignalements(lot){
+const ids = [...(signalListe.sel || [])];
+if(!ids.length || !peutTraiterSignalements()) return;
+const n = ids.length, pl = n > 1 ? 's' : '';
+if(lot === 'supprimer'){
+if(!await confirmer(`Supprimer ${n} signalement${pl} ?\n\nCette action est définitive.`, { danger:true, ok:'Supprimer' })) return;
+const { error } = await sb.from('signalements_panne').delete().in('id', ids);
+if(error){ toast('Erreur : ' + error.message, 'erreur'); return; }
+signalListe.items = (signalListe.items || []).filter(i => !ids.includes(i.id));
+toast(`${n} signalement${pl} supprimé${pl}.`);
+}else{
+if(lot === 'rejete' && !await confirmer(`Rejeter ${n} signalement${pl} ?\n\nIls resteront visibles dans « Tous », marqués comme rejetés.`, { ok:'Rejeter' })) return;
+const par = state.profile?.full_name || state.session?.user?.email || '';
+const maj = { statut: lot, traite_par: par, traite_le: new Date().toISOString() };
+const { error } = await sb.from('signalements_panne').update(maj).in('id', ids);
+if(error){ toast('Erreur : ' + error.message, 'erreur'); return; }
+(signalListe.items || []).forEach(i => { if(ids.includes(i.id)) Object.assign(i, maj); });
+toast(`${n} signalement${pl} ${lot === 'traite' ? 'marqué' + pl + ' traité' + pl : 'rejeté' + pl}.`);
+}
+signalListe.sel = [];
+signalListe.compteur = (signalListe.items || []).filter(i => i.statut === 'nouveau').length;
+render();
+}
+
+async function attribuerLotSignalements(profilId){
+const ids = [...(signalListe.sel || [])];
+if(!ids.length || !profilId) return;
+const p = (signalEquipe.liste || []).find(i => i.id === profilId);
+const nom = (p && p.full_name) || 'la personne choisie';
+let ok = 0, ko = 0;
+for(const id of ids){
+const { error } = await sb.rpc('assigner_signalement', { p_id: id, p_profil: profilId });
+if(error){ ko++; continue; }
+ok++;
+const x = (signalListe.items || []).find(i => i.id === id);
+if(x) Object.assign(x, { assigne_a: profilId, statut: 'pris_en_charge', traite_par: nom, traite_le: new Date().toISOString() });
+}
+if(ok) toast(`${ok} panne${ok > 1 ? 's' : ''} attribuée${ok > 1 ? 's' : ''} à ${nom}.`);
+if(ko) toast(`${ko} signalement${ko > 1 ? 's' : ''} non attribué${ko > 1 ? 's' : ''} (déjà traité ou supprimé).`, 'erreur');
+signalListe.sel = [];
+signalListe.compteur = (signalListe.items || []).filter(i => i.statut === 'nouveau').length;
+if(ko) signalListe.items = null;
 render();
 }
 
@@ -505,7 +573,11 @@ else if(a === 'pub-panne-fermer'){ const s = signalPublicPour(fichePublique.toke
 else if(a === 'pub-panne-nouveau'){ const s = signalPublic; s.etape = 'form'; s.error = ''; s.description = ''; s.photo = null; render(); }
 else if(a === 'pub-panne-photo-retirer'){ signalPublic.photo = null; render(); }
 else if(a === 'signal-photo'){ voirPhotoSignalement(t.dataset.id); }
-else if(a === 'signal-filtre'){ signalListe.filtre = t.dataset.v === 'tous' ? 'tous' : 'ouverts'; render(); }
+else if(a === 'signal-filtre'){ signalListe.filtre = t.dataset.v === 'tous' ? 'tous' : 'ouverts'; signalListe.sel = []; render(); }
+else if(a === 'sel-signal'){ basculer(signalListe, 'sel', t.dataset.id, t.checked); render(); }
+else if(a === 'sel-signal-tous'){ const vis = (signalListe.filtre === 'tous' ? (signalListe.items || []) : (signalListe.items || []).filter(x => x.statut === 'nouveau' || x.statut === 'pris_en_charge')); signalListe.sel = t.checked ? vis.map(x => x.id) : []; render(); }
+else if(a === 'signal-desel'){ signalListe.sel = []; render(); }
+else if(a === 'signal-lot'){ actionLotSignalements(t.dataset.lot); }
 else if(a === 'signal-recharger'){ chargerSignalements(true); render(); }
 else if(a === 'signal-statut'){ changerStatutSignalement(t.dataset.id, t.dataset.statut); }
 else if(a === 'signal-supprimer'){ supprimerSignalement(t.dataset.id); }
@@ -529,5 +601,6 @@ if(c && (c === 'code' || c === 'auteur' || c === 'description')) signalPublic[c]
 
 document.addEventListener('change', (e) => {
 if(e.target && e.target.dataset && e.target.dataset.spPhoto) choisirPhotoSignalement(e.target);
+if(e.target && e.target.dataset && e.target.dataset.action === 'signal-attribuer-lot') attribuerLotSignalements(e.target.value);
 if(e.target && e.target.dataset && e.target.dataset.action === 'signal-attribuer') attribuerSignalement(e.target.dataset.id, e.target.value);
 });
