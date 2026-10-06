@@ -216,6 +216,18 @@ s.busy = false; render();
 
 let signalListe = { uid:null, items:null, loading:false, error:'', filtre:'ouverts', compteur:0, compteurMaj:0, compteurBusy:false };
 let signalPrefill = null;
+/* Équipe de l'organisation (pour attribuer une panne) : chargée une fois, responsables/admins seulement. */
+let signalEquipe = { uid:null, liste:null, busy:false };
+function chargerEquipeSignal(){
+const uid = state.session?.user?.id || null;
+if(signalEquipe.uid !== uid) signalEquipe = { uid, liste:null, busy:false };
+if(signalEquipe.liste !== null || signalEquipe.busy || !peutTraiterSignalements()) return;
+signalEquipe.busy = true;
+sb.rpc('liste_equipe').then(({ data, error }) => {
+if(state.session?.user?.id !== uid) return;
+signalEquipe.liste = error ? [] : (data || []).filter(p => p.active);
+}).catch(() => { signalEquipe.liste = []; }).finally(() => { signalEquipe.busy = false; render(); });
+}
 let signalFormAReveler = false;
 
 function signalListeVerifierCompte(){
@@ -252,7 +264,7 @@ if(l.loading || (l.items !== null && !force)) return;
 if(l.error && !force) return;
 l.loading = true; l.error = '';
 sb.from('signalements_panne')
-.select('id, created_at, auteur, description, statut, traite_par, traite_le, a_photo, equipement_id, organization_id, equipements(nom, serial_value), organizations(nom)')
+.select('id, created_at, auteur, description, statut, traite_par, traite_le, assigne_a, a_photo, equipement_id, organization_id, equipements(nom, serial_value), organizations(nom)')
 .order('created_at', { ascending:false })
 .limit(200)
 .then(({ data, error }) => {
@@ -292,6 +304,10 @@ ${x.traite_par && x.statut !== 'nouveau' ? `<div class="small muted">${esc(x.tra
 <div class="row wrap sp-actions">
 <button type="button" class="btn btn-sm" data-action="go" data-path="/equip/${esc(x.equipement_id)}">Ouvrir la fiche</button>
 ${x.statut === 'nouveau' ? `<button type="button" class="btn btn-sm" data-action="signal-statut" data-id="${esc(x.id)}" data-statut="pris_en_charge">Prendre en charge</button>` : ''}
+${agir && ouvert && signalEquipe.liste && signalEquipe.liste.length ? `<select class="sp-attribuer" data-action="signal-attribuer" data-id="${esc(x.id)}" aria-label="Attribuer à un membre de l'équipe">
+<option value="">${x.assigne_a ? 'Retirer l\'attribution' : 'Attribuer à…'}</option>
+${signalEquipe.liste.map(p => `<option value="${esc(p.id)}" ${x.assigne_a === p.id ? 'selected' : ''}>${esc(p.full_name || 'Sans nom')}${p.role === 'responsable' ? ' (responsable)' : ''}</option>`).join('')}
+</select>` : ''}
 ${agir && ouvert ? `<button type="button" class="btn btn-sm btn-primary" data-action="signal-intervention" data-id="${esc(x.id)}">Créer l'intervention</button>
 <button type="button" class="btn btn-sm" data-action="signal-statut" data-id="${esc(x.id)}" data-statut="traite">Marquer traité</button>
 <button type="button" class="btn btn-sm" data-action="signal-statut" data-id="${esc(x.id)}" data-statut="rejete">Rejeter</button>` : ''}
@@ -304,6 +320,7 @@ ${agir ? `<button type="button" class="btn btn-sm" data-action="signal-supprimer
 
 function viewSignalements(){
 chargerSignalements(false);
+chargerEquipeSignal();
 const l = signalListe;
 const tous = l.items || [];
 const ouverts = tous.filter(x => x.statut === 'nouveau' || x.statut === 'pris_en_charge');
@@ -372,6 +389,23 @@ const maj = statut === 'nouveau'
 const { error } = await sb.from('signalements_panne').update(maj).eq('id', id);
 if(error){ toast('Erreur : ' + error.message, 'erreur'); return; }
 Object.assign(x, maj);
+signalListe.compteur = (signalListe.items || []).filter(i => i.statut === 'nouveau').length;
+render();
+}
+
+async function attribuerSignalement(id, profilId){
+const x = (signalListe.items || []).find(i => i.id === id);
+if(!x) return;
+const { error } = await sb.rpc('assigner_signalement', { p_id: id, p_profil: profilId || null });
+if(error){ toast('Erreur : ' + messageSignalement(error), 'erreur'); signalListe.items = null; render(); return; }
+if(profilId){
+const p = (signalEquipe.liste || []).find(i => i.id === profilId);
+Object.assign(x, { assigne_a: profilId, statut: 'pris_en_charge', traite_par: (p && p.full_name) || 'Équipe', traite_le: new Date().toISOString() });
+toast('Panne attribuée à ' + ((p && p.full_name) || 'la personne choisie') + '.');
+}else{
+Object.assign(x, { assigne_a: null, statut: 'nouveau', traite_par: null, traite_le: null });
+toast('Attribution retirée.');
+}
 signalListe.compteur = (signalListe.items || []).filter(i => i.statut === 'nouveau').length;
 render();
 }
@@ -495,4 +529,5 @@ if(c && (c === 'code' || c === 'auteur' || c === 'description')) signalPublic[c]
 
 document.addEventListener('change', (e) => {
 if(e.target && e.target.dataset && e.target.dataset.spPhoto) choisirPhotoSignalement(e.target);
+if(e.target && e.target.dataset && e.target.dataset.action === 'signal-attribuer') attribuerSignalement(e.target.dataset.id, e.target.value);
 });

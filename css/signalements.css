@@ -24,3 +24,4 @@
 
 .iv-onglets{margin:10px 0 12px; max-width:100%;}
 .iv-onglets button{white-space:nowrap;}
+.sp-attribuer{max-width:100%;min-height:34px;padding:4px 8px;border-radius:8px;border:1px solid var(--border,#d9d2c7);background:var(--card,#fff);color:inherit;font:inherit;font-size:13px;}
