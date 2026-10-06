@@ -1,4 +1,4 @@
-// WiTracEQUIP — fonction « notifier » (v8)
+// WiTracEQUIP — fonction « notifier » (v9)
 // Envoie par Brevo l'alerte e-mail correspondant à une ligne qui vient d'être créée :
 //   - demandes_support   → e-mail au support (comportement inchangé)
 //   - demandes_contact   → e-mail au support + accusé de réception au visiteur (inchangé)
@@ -6,6 +6,7 @@
 //                          (+ l'adresse e-mail de l'organisation si elle est renseignée ;
 //                          à défaut de destinataire, l'alerte part au support)
 // Déclenchée par les triggers de la base (pg_net). Idempotente grâce à « notifie_le ».
+// v9 : l'appel doit porter l'en-tête x-notifier-secret (secret stocké dans reglages_plateforme).
 
 const K = Deno.env.get("WitracEquip");
 const U = Deno.env.get("SUPABASE_URL");
@@ -34,6 +35,24 @@ async function brevo(payload: unknown) {
 }
 
 const validMail = (m: unknown) => typeof m === "string" && /^[^@\s]+@[^@\s]+\.\w+$/.test(m);
+
+// Comparaison en temps constant (évite de révéler le secret par le temps de réponse).
+function egal(a: string, b: string) {
+  if (a.length !== b.length) return false;
+  let r = 0;
+  for (let i = 0; i < a.length; i++) r |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return r === 0;
+}
+
+// Refuse tout appel sans le bon secret. Si le secret est introuvable : on refuse aussi.
+async function appelAutorise(req: Request): Promise<boolean> {
+  const recu = req.headers.get("x-notifier-secret") ?? "";
+  if (!recu) return false;
+  const lignes = await rest("reglages_plateforme?cle=eq.notifier_secret&select=valeur");
+  const attendu = Array.isArray(lignes) ? String(lignes[0]?.valeur ?? "") : "";
+  if (!attendu) return false;
+  return egal(recu, attendu);
+}
 
 // Destinataires d'une alerte de panne : responsables + administrateurs actifs de l'organisation,
 // puis l'adresse e-mail de l'organisation. Doublons retirés.
@@ -104,6 +123,8 @@ function photoJointe(photo: unknown) {
 
 Deno.serve(async (req) => {
   try {
+    if (!(await appelAutorise(req))) return new Response("unauthorized", { status: 401 });
+
     const { id } = await req.json();
     if (!id || !/^[0-9a-f-]{36}$/i.test(id)) return new Response("bad", { status: 400 });
 

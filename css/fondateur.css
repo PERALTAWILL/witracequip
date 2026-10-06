@@ -144,3 +144,10 @@ body[data-role="fondateur"] .pied-support{border-color:rgba(224,180,99,.19);}
   body[data-role="fondateur"] .user-btn .avatar{width:40px; height:40px;}
   body[data-role="fondateur"] .topbar .badge-attente{order:3; width:100%; margin:0; text-align:center;}
 }
+/* Double authentification (js/mfa.js) */
+.mfa-panneau{max-width:440px;}
+.mfa-qr{display:block; width:190px; height:190px; margin:12px auto; padding:8px; background:#fff; border-radius:12px; box-shadow:0 0 0 1px rgba(0,0,0,.08);}
+.mfa-secret{display:block; margin:6px 0 0; padding:9px 12px; border-radius:10px; background:rgba(127,127,127,.12); font-family:ui-monospace,Menlo,Consolas,monospace; font-size:13px; letter-spacing:.06em; word-break:break-all; user-select:all;}
+.mfa-liste{margin-top:10px; display:flex; flex-direction:column; gap:8px;}
+.mfa-ligne{display:flex; align-items:center; justify-content:space-between; gap:10px; padding:9px 12px; border-radius:10px; background:rgba(127,127,127,.1);}
+.mfa-ligne small{display:block; opacity:.7; font-size:12px;}
