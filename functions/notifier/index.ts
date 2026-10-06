@@ -1,4 +1,4 @@
-// WiTracEQUIP — fonction « notifier » (v10)
+// WiTracEQUIP — fonction « notifier » (v11)
 // Envoie par Brevo l'alerte e-mail correspondant à une ligne qui vient d'être créée :
 //   - demandes_support   → e-mail au support (comportement inchangé)
 //   - demandes_contact   → e-mail au support + accusé de réception au visiteur (inchangé)
@@ -8,6 +8,8 @@
 // Déclenchée par les triggers de la base (pg_net). Idempotente grâce à « notifie_le ».
 // v10 : mode {"rappels":true} — e-mail aux responsables des échéances (révision, contrôle…) des 30 prochains jours,
 //       lancé chaque jour par pg_cron ; chaque rappel n'est envoyé qu'une fois (table rappels_envoyes).
+// v11 : les liens des e-mails ouvrent la fiche publique (#/p/<jeton>) : lisible sans compte, et un utilisateur connecté
+//       est emmené sur la fiche complète.
 // v9 : l'appel doit porter l'en-tête x-notifier-secret (secret stocké dans reglages_plateforme).
 
 const K = Deno.env.get("WitracEquip");
@@ -35,6 +37,8 @@ async function brevo(payload: unknown) {
     body: JSON.stringify(payload),
   });
 }
+
+const lienFiche = (token: unknown) => APP + "#/p/" + encodeURIComponent(String(token ?? ""));
 
 const validMail = (m: unknown) => typeof m === "string" && /^[^@\s]+@[^@\s]+\.\w+$/.test(m);
 
@@ -79,7 +83,7 @@ async function destinatairesPanne(orgId: string): Promise<string[]> {
 }
 
 async function alertePanne(d: any) {
-  const eq = (await rest("equipements?id=eq." + d.equipement_id + "&select=id,nom,serial_value"))[0] || {};
+  const eq = (await rest("equipements?id=eq." + d.equipement_id + "&select=id,nom,serial_value,public_token"))[0] || {};
   const org = (await rest("organizations?id=eq." + d.organization_id + "&select=nom,code_client"))[0] || {};
   let to = await destinatairesPanne(d.organization_id);
   const sansDestinataire = to.length === 0;
@@ -105,7 +109,7 @@ async function alertePanne(d: any) {
     lignes.map(([a, b]) => "<tr><td><b>" + a + "</b></td><td>" + esc(b) + "</td></tr>").join("") +
     "</table><p style='white-space:pre-wrap'>" + esc(d.description) + "</p>" +
     (d.photo ? "<p><b>Photo jointe.</b></p>" : "") +
-    "<p><a href='" + APP + "#/equip/" + esc(d.equipement_id) + "'>Ouvrir la fiche dans WiTracEQUIP</a></p>";
+    "<p><a href='" + lienFiche(eq.public_token) + "'>Ouvrir la fiche dans WiTracEQUIP</a></p>";
 
   return brevo({
     sender: { name: "WiTracEQUIP", email: SUPPORT },
@@ -132,6 +136,10 @@ async function envoyerRappels(): Promise<string> {
     if (!parOrg.has(l.organization_id)) parOrg.set(l.organization_id, []);
     parOrg.get(l.organization_id)!.push(l);
   }
+  // Jetons publics des équipements concernés (pour les liens des e-mails).
+  const ids = [...new Set(lignes.map((l: any) => l.equipement_id))].join(",");
+  const jetons = await rest("equipements?id=in.(" + ids + ")&select=id,public_token");
+  const jetonDe = new Map<string, string>(Array.isArray(jetons) ? jetons.map((x: any) => [x.id, x.public_token]) : []);
   let envoyes = 0;
   for (const [orgId, items] of parOrg) {
     let to = await destinatairesPanne(orgId);
@@ -147,7 +155,7 @@ async function envoyerRappels(): Promise<string> {
       "<table cellpadding='6' border='0'>" +
       items.map((l) =>
         "<tr><td><b>" + esc(l.nom) + "</b></td><td>" + esc(l.label) + "</td><td>" + esc(date(l.echeance)) +
-        "</td><td><a href='" + APP + "#/equip/" + esc(l.equipement_id) + "'>Ouvrir la fiche</a></td></tr>"
+        "</td><td><a href='" + lienFiche(jetonDe.get(l.equipement_id)) + "'>Ouvrir la fiche</a></td></tr>"
       ).join("") +
       "</table>";
     const b = await brevo({
