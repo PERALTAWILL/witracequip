@@ -1,4 +1,4 @@
-// WiTracEQUIP — fonction « notifier » (v9)
+// WiTracEQUIP — fonction « notifier » (v10)
 // Envoie par Brevo l'alerte e-mail correspondant à une ligne qui vient d'être créée :
 //   - demandes_support   → e-mail au support (comportement inchangé)
 //   - demandes_contact   → e-mail au support + accusé de réception au visiteur (inchangé)
@@ -6,6 +6,8 @@
 //                          (+ l'adresse e-mail de l'organisation si elle est renseignée ;
 //                          à défaut de destinataire, l'alerte part au support)
 // Déclenchée par les triggers de la base (pg_net). Idempotente grâce à « notifie_le ».
+// v10 : mode {"rappels":true} — e-mail aux responsables des échéances (révision, contrôle…) des 30 prochains jours,
+//       lancé chaque jour par pg_cron ; chaque rappel n'est envoyé qu'une fois (table rappels_envoyes).
 // v9 : l'appel doit porter l'en-tête x-notifier-secret (secret stocké dans reglages_plateforme).
 
 const K = Deno.env.get("WitracEquip");
@@ -115,6 +117,53 @@ async function alertePanne(d: any) {
   });
 }
 
+
+// Rappels d'échéance : un e-mail par organisation, 30 jours avant chaque date butoir.
+async function rpc(fn: string, args: unknown) {
+  const r = await fetch(U + "/rest/v1/rpc/" + fn, { method: "POST", headers: H, body: JSON.stringify(args ?? {}) });
+  return r.ok ? r.json().catch(() => null) : null;
+}
+
+async function envoyerRappels(): Promise<string> {
+  const lignes = await rpc("echeances_a_rappeler", {});
+  if (!Array.isArray(lignes) || !lignes.length) return "aucun rappel";
+  const parOrg = new Map<string, any[]>();
+  for (const l of lignes) {
+    if (!parOrg.has(l.organization_id)) parOrg.set(l.organization_id, []);
+    parOrg.get(l.organization_id)!.push(l);
+  }
+  let envoyes = 0;
+  for (const [orgId, items] of parOrg) {
+    let to = await destinatairesPanne(orgId);
+    const sansDestinataire = to.length === 0;
+    if (sansDestinataire) to = [SUPPORT];
+    const date = (d: string) => new Date(d + "T12:00:00").toLocaleDateString("fr-FR", { dateStyle: "long" });
+    const html =
+      "<h2>Echeances a venir</h2>" +
+      (sansDestinataire
+        ? "<p><b>Aucun responsable n'a d'adresse e-mail pour cet etablissement : rappel envoye au support.</b></p>"
+        : "") +
+      "<p>Les echeances suivantes arrivent dans moins de 30 jours (" + esc(items[0].organisation) + ") :</p>" +
+      "<table cellpadding='6' border='0'>" +
+      items.map((l) =>
+        "<tr><td><b>" + esc(l.nom) + "</b></td><td>" + esc(l.label) + "</td><td>" + esc(date(l.echeance)) +
+        "</td><td><a href='" + APP + "#/equip/" + esc(l.equipement_id) + "'>Ouvrir la fiche</a></td></tr>"
+      ).join("") +
+      "</table>";
+    const b = await brevo({
+      sender: { name: "WiTracEQUIP", email: SUPPORT },
+      to: to.map((email) => ({ email })),
+      replyTo: { email: SUPPORT },
+      subject: "[Echeance] " + items.length + " echeance" + (items.length > 1 ? "s" : "") + " a venir - " + items[0].organisation,
+      htmlContent: html,
+    });
+    if (!b.ok) continue; // on réessaiera demain : rien n'est noté comme envoyé
+    for (const l of items) await rpc("noter_rappel_envoye", { p_equipement: l.equipement_id, p_echeance: l.echeance });
+    envoyes++;
+  }
+  return "rappels: " + envoyes + "/" + parOrg.size;
+}
+
 // Photo facultative (data URL JPEG) -> pièce jointe Brevo.
 function photoJointe(photo: unknown) {
   const m = typeof photo === "string" ? photo.match(/^data:image\/jpeg;base64,([A-Za-z0-9+\/=]+)$/) : null;
@@ -125,7 +174,9 @@ Deno.serve(async (req) => {
   try {
     if (!(await appelAutorise(req))) return new Response("unauthorized", { status: 401 });
 
-    const { id } = await req.json();
+    const corps = await req.json();
+    if (corps && corps.rappels === true) return new Response(await envoyerRappels());
+    const { id } = corps;
     if (!id || !/^[0-9a-f-]{36}$/i.test(id)) return new Response("bad", { status: 400 });
 
     let t = "demandes_support";
