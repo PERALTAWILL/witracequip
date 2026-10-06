@@ -27,3 +27,8 @@
 .sp-attribuer{max-width:100%;min-height:34px;padding:4px 8px;border-radius:8px;border:1px solid var(--border,#d9d2c7);background:var(--card,#fff);color:inherit;font:inherit;font-size:13px;}
 .sp-tete{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
 .sp-tout{margin-bottom:8px;}
+
+.sp-codes{display:flex;flex-direction:column;gap:8px;margin:10px 0;max-height:50vh;overflow:auto}
+.sp-code-ligne{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border,#e5e7eb)}
+.sp-code-nom{display:flex;flex-direction:column;flex:1 1 140px;min-width:0}
+.sp-code-val{font-weight:600;letter-spacing:.04em}
