@@ -112,7 +112,7 @@ return `<div class="hz-tools-page">
       ${ligneOutilFondateur('key', 'Double authentification', 'Protéger votre compte par un code', null, 'fondateur-mfa')}
     </section>
     <section class="hz-tools-group"><div class="hz-tools-label">PANNES</div>
-      ${ligneOutilFondateur('key', 'Code de signalement', 'Code commun à tous les clients', null, 'fondateur-code-signalement')}
+      ${ligneOutilFondateur('key', 'Code de signalement', 'Un code différent par client', null, 'fondateur-code-signalement')}
       ${ligneOutilFondateur('inbox', 'Signalements de panne', 'Pannes signalées par le personnel', '/signalements')}
     </section>
   </div>
@@ -179,7 +179,7 @@ return `<div class="hz-sheet-handle" aria-hidden="true"></div>
       ${carte('tag','Modèles métier','Préparer les secteurs clients','go','data-path="/reglages/support/modeles"')}
       ${carte('users','Profils & accès','Comptes, rôles et accès','go','data-path="/reglages/profils"')}
       ${carte('journal','Journal d’activité','Historique des opérations','go','data-path="/reglages/journal"')}
-      ${carte('key','Code de signalement','Code de panne commun à tous les clients','fondateur-code-signalement')}
+      ${carte('key','Code de signalement','Un code de panne par client','fondateur-code-signalement')}
       ${carte('inbox','Signalements de panne','Pannes signalées par le personnel','go','data-path="/signalements"')}
       ${carte('key','Double authentification','Protéger votre compte par un code','fondateur-mfa',enLigne ? '' : 'disabled title="Connexion requise"')}
     </div>`}

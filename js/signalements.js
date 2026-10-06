@@ -533,31 +533,75 @@ ${ouverts.length > 5 ? `<div class="small muted">Et ${ouverts.length - 5} autre$
 /* 3. Code de signalement (fondateur)                                      */
 /* ---------------------------------------------------------------------- */
 
+function codeAleatoire(){
+const alpha = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+const o = crypto.getRandomValues(new Uint8Array(8));
+return Array.from(o, x => alpha[x % alpha.length]).join('');
+}
+
+/* Liste des clients avec leur code ; renvoie l'action choisie ou null. */
+function dialogueListeCodes(lignes){
+return new Promise((resolve) => {
+const fond = document.createElement('div');
+fond.className = 'dlg-fond';
+fond.innerHTML = `
+<div class="dlg" role="dialog" aria-modal="true">
+<div class="dlg-titre">Codes de signalement de panne</div>
+<div class="dlg-corps">Un code par client. Sans code propre, le client utilise le code commun. Prévenez le client quand son code change.</div>
+<div class="sp-codes">${lignes.map(l => `
+<div class="sp-code-ligne">
+<div class="sp-code-nom"><strong>${esc(l.nom)}</strong><span class="small muted">${esc(l.code_client || '')}</span></div>
+<code class="sp-code-val">${esc(l.code || '—')}</code>
+<span class="small muted">${l.propre ? 'propre' : 'commun'}</span>
+<button type="button" class="btn btn-sm" data-cs="edit" data-org="${esc(l.organization_id)}">Modifier</button>
+<button type="button" class="btn btn-sm" data-cs="alea" data-org="${esc(l.organization_id)}">Aléatoire</button>
+</div>`).join('') || '<div class="muted">Aucun client.</div>'}</div>
+<div class="dlg-actions"><button type="button" class="btn btn-primary" data-cs="fin">Fermer</button></div>
+</div>`;
+document.body.appendChild(fond);
+const fin = (v) => { document.removeEventListener('keydown', clavier, true); fond.classList.remove('visible'); setTimeout(() => fond.remove(), 180); resolve(v); };
+const clavier = (e) => { if(e.key === 'Escape'){ e.stopPropagation(); fin(null); } };
+document.addEventListener('keydown', clavier, true);
+fond.addEventListener('click', (e) => {
+const b = e.target.closest('[data-cs]');
+if(b) return fin(b.dataset.cs === 'fin' ? null : { type: b.dataset.cs, org: b.dataset.org });
+if(e.target === fond) fin(null);
+});
+requestAnimationFrame(() => fond.classList.add('visible'));
+});
+}
+
 async function ouvrirCodeSignalement(){
 if(!isSuperAdmin()) return;
-let actuel = '';
+for(;;){
+let lignes = [];
 try{
-const { data, error } = await sb.rpc('lire_code_signalement');
+const { data, error } = await sb.rpc('lire_codes_signalement');
 if(error) throw error;
-actuel = data || '';
+lignes = data || [];
 }catch(e){
-toast('Code indisponible : ' + messageSignalement(e), 'erreur');
+toast('Codes indisponibles : ' + messageSignalement(e), 'erreur');
 return;
 }
+const choix = await dialogueListeCodes(lignes);
+if(!choix) return;
+const l = lignes.find(x => x.organization_id === choix.org);
+if(!l) continue;
 const r = await ouvrirFormulaire({
-titre: 'Code de signalement de panne',
-texte: "Ce code s'applique à tous vos clients. Une fois changé, l'ancien code ne fonctionne plus : prévenez vos clients du nouveau code.",
-champs: [{ name:'code', label:'Code', type:'text', valeur: actuel }],
+titre: 'Code de ' + l.nom,
+texte: "Au moins 4 caractères, sans espace. Laissez vide pour revenir au code commun. L'ancien code ne fonctionnera plus.",
+champs: [{ name:'code', label:'Code', type:'text', valeur: choix.type === 'alea' ? codeAleatoire() : (l.propre ? l.code : '') }],
 ok: 'Enregistrer',
 verifier: async (v) => {
 const code = String(v.code || '').trim();
-if(code.length < 4) return 'Le code doit faire au moins 4 caractères.';
+if(code && code.length < 4) return 'Le code doit faire au moins 4 caractères.';
 if(/\s/.test(code)) return "Le code ne doit pas contenir d'espace.";
-const { error } = await sb.rpc('definir_code_signalement', { p_code: code });
+const { error } = await sb.rpc('definir_code_signalement_client', { p_org: l.organization_id, p_code: code });
 return error ? messageSignalement(error) : null;
 },
 });
-if(r) toast('Code de signalement enregistré.');
+if(r) toast('Code enregistré.');
+}
 }
 
 /* ---------------------------------------------------------------------- */
