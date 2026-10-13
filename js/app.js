@@ -1479,6 +1479,7 @@ const barre = selItems.length ? `
 <div class="barre-selection">
 <strong>${selItems.length} sélectionné${selItems.length > 1 ? 's' : ''}</strong>
 <button class="btn btn-sm" data-action="imprimer-qr-sel">🖨️ Imprimer les QR</button>
+<button class="btn btn-sm" data-action="exporter-etiquettes-sel">📥 Exporter les étiquettes</button>
 ${peutSupprimer() && selItems.some(e => !e.archived) ? `<button class="btn btn-sm" data-action="equip-archiver-sel">Archiver</button>` : ''}
 ${peutSupprimer() && selItems.some(e => e.archived) ? `<button class="btn btn-sm" data-action="equip-restaurer-sel">Restaurer</button>` : ''}
 ${isAdmin() ? `<button class="btn btn-sm btn-danger" data-action="equip-supprimer-sel">Supprimer définitivement</button>` : ''}
@@ -2122,6 +2123,7 @@ Adresse provisoire : ce QR code pointe vers l'adresse actuelle de l'application.
 Ne pas imprimer d'étiquettes en série avant que le domaine définitif soit en place.
 </div>` : ''}
 <button class="btn btn-primary btn-block" data-action="print-qr">🖨️ Imprimer l'étiquette</button>
+<button class="btn btn-block" data-action="exporter-etiquette">📥 Exporter l'étiquette (40 × 30 mm)</button>
 </div>
 </div>
 

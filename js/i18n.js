@@ -1081,6 +1081,8 @@ var D = {
 "← Retour à la présentation":"← Back to the presentation",
 "⚠️ Retiré du service":"⚠️ Withdrawn from service",
 "🖨️ Imprimer l'étiquette":"🖨️ Print the label",
+"📥 Exporter l'étiquette (40 × 30 mm)":"📥 Export the label (40 × 30 mm)",
+"📥 Exporter les étiquettes":"📥 Export the labels",
 "Accès :":"Access:",
 "Accès rétabli":"Access restored",
 "Accès suspendu":"Access suspended",
