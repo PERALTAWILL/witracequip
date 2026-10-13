@@ -5,8 +5,9 @@
    sélectionner »), puis « Imprimer les QR » : une étiquette par QR, une par page,
    au format défini dans ETIQUETTE (config.js : largeur_mm x hauteur_mm).
    Export : « Exporter l'étiquette » (fiche) = image PNG ; « Exporter les étiquettes »
-   (sélection) = PDF, une étiquette par page. Pensé pour l'appli Phomemo en Bluetooth :
-   on importe le fichier dans l'appli, qui l'envoie à l'imprimante.
+   (sélection) = une image PNG par étiquette (partage direct sur téléphone, ZIP sur
+   ordinateur). Pensé pour l'appli Phomemo en Bluetooth : on importe les images dans
+   l'appli, qui les envoie à l'imprimante.
    Le QR porte le petit « W » central, comme sur la fiche.
    Module additif : s'il échoue, le reste de l'application n'est pas touché.
    ====================================================================== */
@@ -165,38 +166,85 @@ function exporterUne(){
   });
 }
 
-function chargerJsPdf(){
-  if(window.jspdf && window.jspdf.jsPDF) return Promise.resolve(window.jspdf.jsPDF);
+/* ZIP minimal (sans compression : les PNG sont déjà compressés), écrit à la main
+   pour ne dépendre d'aucune bibliothèque externe — marche donc aussi hors ligne. */
+var CRC_TABLE = null;
+function crc32(u8){
+  if(!CRC_TABLE){
+    CRC_TABLE = [];
+    for(var n = 0; n < 256; n++){ var c = n; for(var k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1); CRC_TABLE[n] = c >>> 0; }
+  }
+  var crc = 0xFFFFFFFF;
+  for(var i = 0; i < u8.length; i++) crc = CRC_TABLE[(crc ^ u8[i]) & 0xFF] ^ (crc >>> 8);
+  return (crc ^ 0xFFFFFFFF) >>> 0;
+}
+
+function creerZip(fichiers){ // fichiers : [{ nom, data:Uint8Array }]
+  var enc = new TextEncoder(), morceaux = [], centrale = [], offset = 0;
+  var d = new Date();
+  var heure = (d.getHours() << 11) | (d.getMinutes() << 5) | (d.getSeconds() >> 1);
+  var date = ((d.getFullYear() - 1980) << 9) | ((d.getMonth() + 1) << 5) | d.getDate();
+  fichiers.forEach(function(f){
+    var nom = enc.encode(f.nom), crc = crc32(f.data), taille = f.data.length;
+    var lh = new DataView(new ArrayBuffer(30));
+    lh.setUint32(0, 0x04034b50, true); lh.setUint16(4, 20, true); lh.setUint16(6, 0x0800, true); lh.setUint16(8, 0, true);
+    lh.setUint16(10, heure, true); lh.setUint16(12, date, true); lh.setUint32(14, crc, true);
+    lh.setUint32(18, taille, true); lh.setUint32(22, taille, true); lh.setUint16(26, nom.length, true); lh.setUint16(28, 0, true);
+    var ch = new DataView(new ArrayBuffer(46));
+    ch.setUint32(0, 0x02014b50, true); ch.setUint16(4, 20, true); ch.setUint16(6, 20, true); ch.setUint16(8, 0x0800, true); ch.setUint16(10, 0, true);
+    ch.setUint16(12, heure, true); ch.setUint16(14, date, true); ch.setUint32(16, crc, true);
+    ch.setUint32(20, taille, true); ch.setUint32(24, taille, true); ch.setUint16(28, nom.length, true);
+    ch.setUint32(42, offset, true);
+    morceaux.push(new Uint8Array(lh.buffer), nom, f.data);
+    centrale.push(new Uint8Array(ch.buffer), nom);
+    offset += 30 + nom.length + taille;
+  });
+  var tailleCentrale = centrale.reduce(function(t, m){ return t + m.length; }, 0);
+  var fin = new DataView(new ArrayBuffer(22));
+  fin.setUint32(0, 0x06054b50, true); fin.setUint16(8, fichiers.length, true); fin.setUint16(10, fichiers.length, true);
+  fin.setUint32(12, tailleCentrale, true); fin.setUint32(16, offset, true);
+  return new Blob(morceaux.concat(centrale, [new Uint8Array(fin.buffer)]), { type:'application/zip' });
+}
+
+function canvasEnPng(cv){
   return new Promise(function(ok, ko){
-    var s = document.createElement('script');
-    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
-    s.onload = function(){ (window.jspdf && window.jspdf.jsPDF) ? ok(window.jspdf.jsPDF) : ko(new Error('module PDF introuvable')); };
-    s.onerror = function(){ ko(new Error('module PDF indisponible (hors ligne ?)')); };
-    document.head.appendChild(s);
+    cv.toBlob(function(b){ b ? ok(b) : ko(new Error('image non générée')); }, 'image/png');
   });
 }
 
-/* Sélection de plusieurs équipements : un PDF, une étiquette par page. */
+/* Sélection de plusieurs équipements : une image PNG par étiquette.
+   Téléphone : toutes les images partent d'un coup vers l'appli Phomemo (feuille de
+   partage). Ordinateur, ou partage refusé : un seul fichier ZIP. */
 function exporterLot(){
   var liste = selection();
   if(!liste.length){ try{ toast('Cochez d’abord des équipements.', 'erreur'); }catch(e){} return; }
   if(typeof QRious === 'undefined'){ try{ toast('Générateur de QR indisponible : réessayez en ligne.', 'erreur'); }catch(e){} return; }
-  var d = dims();
-  chargerJsPdf().then(function(JsPDF){
-    var pdf = new JsPDF({ orientation: d.L >= d.H ? 'landscape' : 'portrait', unit:'mm', format:[d.L, d.H], compress:true });
-    var suite = Promise.resolve();
-    liste.forEach(function(e, i){
-      suite = suite.then(function(){
-        var url = (typeof lienPublic === 'function') ? lienPublic(e.public_token) : '';
-        return dessinerEtiquette(url).then(function(cv){
-          if(i > 0) pdf.addPage([d.L, d.H], d.L >= d.H ? 'landscape' : 'portrait');
-          pdf.addImage(cv.toDataURL('image/png'), 'PNG', 0, 0, d.L, d.H);
-        });
+  var items = [];
+  var suite = Promise.resolve();
+  liste.forEach(function(e, i){
+    suite = suite.then(function(){
+      var url = (typeof lienPublic === 'function') ? lienPublic(e.public_token) : '';
+      return dessinerEtiquette(url).then(canvasEnPng).then(function(blob){
+        var rang = String(i + 1); while(rang.length < String(liste.length).length) rang = '0' + rang;
+        items.push({ nom: rang + '-' + nomFichier(e) + '.png', blob: blob });
       });
     });
-    return suite.then(function(){
-      livrer(pdf.output('blob'), 'etiquettes-' + liste.length + '-qr.pdf', 'application/pdf');
-    });
+  });
+  suite.then(function(){
+    var fichiers = [];
+    try{ fichiers = items.map(function(it){ return new File([it.blob], it.nom, { type:'image/png' }); }); }catch(e){}
+    var telephone = /Android|iPhone|iPad/i.test(navigator.userAgent);
+    var zipper = function(){
+      return Promise.all(items.map(function(it){ return it.blob.arrayBuffer().then(function(buf){ return { nom: it.nom, data: new Uint8Array(buf) }; }); }))
+        .then(function(fs){ enregistrer(creerZip(fs), 'etiquettes-' + items.length + '-qr.zip'); });
+    };
+    if(telephone && fichiers.length === items.length && navigator.canShare && navigator.canShare({ files:fichiers })){
+      return navigator.share({ files:fichiers }).catch(function(err){
+        if(err && err.name === 'AbortError') return;
+        return zipper(); // partage refusé par le navigateur : on retombe sur le ZIP
+      });
+    }
+    return zipper();
   }).catch(function(err){ try{ toast('Export impossible : ' + err.message, 'erreur'); }catch(e){} });
 }
 
