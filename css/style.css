@@ -331,6 +331,16 @@ position:absolute; top:max(16px, env(safe-area-inset-top)); left:16px; z-index:1
 height:42px; padding:0 16px; border-radius:21px; background:rgba(20,27,30,.7); color:#fff;
 border:none; font-size:14px; font-weight:700; cursor:pointer;
 }
+.scanner-outils{
+position:absolute; left:0; right:0; bottom:max(150px, calc(env(safe-area-inset-bottom) + 130px));
+display:flex; flex-direction:column; align-items:center; gap:6px; z-index:1;
+}
+.scanner-outils-rangee{ display:flex; gap:10px; }
+.scanner-outils button{
+min-width:46px; height:42px; padding:0 14px; border-radius:21px; border:none;
+background:rgba(20,27,30,.72); color:#fff; font-size:18px; font-weight:700; cursor:pointer;
+}
+.scanner-outils small{ color:#fff; font-size:11.5px; text-shadow:0 1px 4px rgba(0,0,0,.7); }
 .scanner-fermer{
 position:absolute; top:max(16px, env(safe-area-inset-top)); right:16px; z-index:1;
 width:42px; height:42px; border-radius:50%; background:rgba(20,27,30,.6); color:#fff;

@@ -1253,6 +1253,7 @@ return `
 <div class="scanner-cadre"></div>
 <button class="scanner-fermer" data-action="fermer-scanner" title="Fermer">✕</button>
 <button class="scanner-photo" data-action="scanner-photo" type="button">📷 Prendre une photo</button>
+${renderOutilsScanner()}
 <div class="scanner-consigne">Placez le QR code dans le cadre<br><span style="font-weight:500;opacity:.9;">Image floue ? Touchez « Prendre une photo » : l'appareil photo du téléphone fait la mise au point</span></div>
 ${scannerState.erreur ? `<div class="scanner-erreur">${esc(scannerState.erreur)}</div>` : ''}
 </div>`;
@@ -1265,7 +1266,7 @@ chaque image est décodée avec jsQR, et dès qu'un QR WiTracEQUIP est reconnu
 on navigue directement sur la fiche (même logique de routage qu'une étiquette
 scannée avec l'appareil photo natif — voir lienPublic() / le hash-routing
 plus haut). */
-let scannerState = { ouvert:false, busy:false, erreur:'', stream:null, raf:null };
+let scannerState = { ouvert:false, busy:false, erreur:'', stream:null, raf:null, cameras:[], camIdx:0 };
 
 async function ouvrirScanner(){
 if(scannerState.ouvert || scannerState.busy) return;
@@ -1298,6 +1299,7 @@ scannerState.busy = false;
 if(!scannerState.ouvert){ stream.getTracks().forEach(t=>t.stop()); return; } // fermé pendant l'attente
 scannerState.stream = stream;
 await regleMiseAuPointScanner(stream);
+await listerCamerasScanner(stream);
 render();
 }catch(e){
 scannerState.busy = false;
@@ -1320,6 +1322,95 @@ if(caps && caps.focusMode && caps.focusMode.includes('continuous')){
 await piste.applyConstraints({ advanced:[{ focusMode:'continuous' }] });
 }
 }catch(e){ /* réglage non supporté : on garde celui du navigateur */ }
+// Zoom au minimum (champ le plus large) : certaines caméras démarrent déjà
+// zoomées, d'où l'impression de devoir reculer à plusieurs mètres.
+try{
+const piste = stream.getVideoTracks()[0];
+const caps = piste && piste.getCapabilities ? piste.getCapabilities() : null;
+if(caps && caps.zoom && typeof caps.zoom.min === 'number'){
+await piste.applyConstraints({ advanced:[{ zoom:caps.zoom.min }] });
+}
+}catch(e){ /* zoom non supporté : sans effet */ }
+}
+
+// Liste les caméras arrière (ou toutes, à défaut) pour pouvoir en changer :
+// sur un téléphone à plusieurs objectifs, Chrome peut ouvrir un téléobjectif
+// ou un objectif macro qui ne convient pas pour une étiquette.
+async function listerCamerasScanner(stream){
+try{
+const tous = await navigator.mediaDevices.enumerateDevices();
+const videos = tous.filter(d => d.kind === 'videoinput');
+const arriere = videos.filter(d => /back|rear|arri|environment/i.test(d.label));
+scannerState.cameras = arriere.length ? arriere : videos;
+const courant = stream.getVideoTracks()[0].getSettings().deviceId;
+const i = scannerState.cameras.findIndex(d => d.deviceId === courant);
+scannerState.camIdx = i >= 0 ? i : 0;
+}catch(e){ scannerState.cameras = []; scannerState.camIdx = 0; }
+}
+
+async function changerCameraScanner(){
+const cams = scannerState.cameras || [];
+if(cams.length < 2 || scannerState.busy || !scannerState.ouvert) return;
+scannerState.busy = true;
+scannerState.camIdx = (scannerState.camIdx + 1) % cams.length;
+if(scannerState.raf){ cancelAnimationFrame(scannerState.raf); scannerState.raf = null; }
+if(scannerState.stream) scannerState.stream.getTracks().forEach(t => t.stop());
+scannerState.stream = null;
+scannerState.erreur = '';
+render();
+try{
+const stream = await navigator.mediaDevices.getUserMedia({
+video:{ deviceId:{ exact:cams[scannerState.camIdx].deviceId }, width:{ ideal:1920 }, height:{ ideal:1080 } },
+audio:false
+});
+scannerState.busy = false;
+if(!scannerState.ouvert){ stream.getTracks().forEach(t => t.stop()); return; }
+scannerState.stream = stream;
+await regleMiseAuPointScanner(stream);
+render();
+}catch(e){
+scannerState.busy = false;
+if(!scannerState.ouvert) return;
+scannerState.erreur = "Cette caméra ne démarre pas : " + (e.message || e.name || 'erreur inconnue');
+render();
+}
+}
+
+// Zoom avant (+) ou arrière (−) quand la caméra l'expose.
+async function reglerZoomScanner(sens){
+try{
+const piste = scannerState.stream && scannerState.stream.getVideoTracks()[0];
+const caps = piste && piste.getCapabilities ? piste.getCapabilities() : null;
+if(!caps || !caps.zoom) return;
+const actuel = (piste.getSettings().zoom) || caps.zoom.min || 1;
+const cible = Math.min(caps.zoom.max, Math.max(caps.zoom.min, sens > 0 ? actuel * 1.4 : actuel / 1.4));
+await piste.applyConstraints({ advanced:[{ zoom:cible }] });
+render();
+}catch(e){ /* zoom non supporté */ }
+}
+
+// Boutons zoom − / + et changement de caméra, affichés seulement si possibles.
+function renderOutilsScanner(){
+if(!scannerState.stream) return '';
+let caps = null, rg = null;
+try{
+const piste = scannerState.stream.getVideoTracks()[0];
+caps = piste.getCapabilities ? piste.getCapabilities() : null;
+rg = piste.getSettings ? piste.getSettings() : null;
+}catch(e){ /* pas d'infos */ }
+const aZoom = !!(caps && caps.zoom);
+const nbCam = (scannerState.cameras || []).length;
+if(!aZoom && nbCam < 2) return '';
+const info = [];
+if(nbCam > 1) info.push('Caméra ' + (scannerState.camIdx + 1) + '/' + nbCam);
+if(aZoom && rg && rg.zoom) info.push('zoom ×' + (Math.round(rg.zoom * 10) / 10));
+return `<div class="scanner-outils">
+<div class="scanner-outils-rangee">
+${aZoom ? `<button type="button" data-action="scanner-zoom-moins" aria-label="Dézoomer">−</button><button type="button" data-action="scanner-zoom-plus" aria-label="Zoomer">+</button>` : ''}
+${nbCam > 1 ? `<button type="button" data-action="scanner-camera">↻ Changer de caméra</button>` : ''}
+</div>
+${info.length ? `<small>${info.join(' · ')}</small>` : ''}
+</div>`;
 }
 
 // Un appui sur l'image relance la mise au point (là où c'est supporté).
@@ -3093,6 +3184,9 @@ else if(action === 'rendre-main-telephone'){ actionRendreMainTelephone(); }
 else if(action === 'fermer-scanner'){ fermerScanner(); }
 else if(action === 'scanner-focus'){ refaireMiseAuPointScanner(); }
 else if(action === 'scanner-photo'){ ouvrirPhotoScanner(); }
+else if(action === 'scanner-zoom-plus'){ reglerZoomScanner(1); }
+else if(action === 'scanner-zoom-moins'){ reglerZoomScanner(-1); }
+else if(action === 'scanner-camera'){ changerCameraScanner(); }
 else if(action === 'connexion-depuis-scan'){ connexionDepuisScan(); }
 else if(action === 'vitrine-connexion'){ state.authError = ''; state.authNotice = ''; nav('/connexion'); window.scrollTo(0,0); }
 else if(action === 'vitrine-retour'){ nav('/'); window.scrollTo(0,0); }
