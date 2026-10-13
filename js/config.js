@@ -29,7 +29,9 @@ d'autre, pour tenir sur une imprimante thermique.
 Ajustez la taille selon le format de vos étiquettes.
 ========================================================================= */
 const ETIQUETTE = {
-taille_qr_mm: 14, // côté du QR imprimé, en millimètres — étiquette thermique 2 cm x 2 cm
+largeur_mm: 40, // format de l'étiquette (rouleau Phomemo 40 x 30 mm)
+hauteur_mm: 30,
+taille_qr_mm: 22, // côté du QR imprimé, en millimètres (QR + « WitracEquip.fr » dessous)
 afficher_identifiant: false, // n° de série / immatriculation sous le QR (désactivé : trop de place)
 texte_site: 'WitracEquip.fr', // petite mention sous le QR ('' pour ne rien afficher)
 };
