@@ -133,7 +133,7 @@ var D = {
 "Nouvel équipement":"New equipment",
 "ORGANISATION":"ORGANIZATION",
 "Ordinateur ouvert jusqu'à":"Computer open until",
-"Ouvrez sa fiche en un geste, caméra directe":"Open its record in one move, direct camera",
+"Ouvrez sa fiche en un geste : caméra ou photo":"Open its record in one move: camera or photo",
 "Ouvrir les demandes clients et demandes à traiter":"Open client requests and requests to handle",
 "PDF téléchargés (autorisez les téléchargements multiples si le navigateur le demande)":"PDFs downloaded (allow multiple downloads if your browser asks)",
 "Partir d'un modèle métier":"Start from a trade template",

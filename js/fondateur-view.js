@@ -88,7 +88,7 @@ return `
   </div>
   <button type="button" class="hz-scan-card" data-action="ouvrir-scanner" aria-label="Scanner un QR code pour ouvrir directement une fiche équipement">
     <span class="hz-scan-frame" aria-hidden="true"><i></i><i></i><i></i><i></i>${iconeNav('scan',24)}</span>
-    <span class="hz-scan-copy"><strong>Scanner un équipement</strong><small>Ouvrez sa fiche en un geste, caméra directe</small></span>
+    <span class="hz-scan-copy"><strong>Scanner un équipement</strong><small>Ouvrez sa fiche en un geste : caméra ou photo</small></span>
     <span class="hz-scan-arrow" aria-hidden="true">${iconeNav('chevron',18)}</span>
   </button>
 </div>`;

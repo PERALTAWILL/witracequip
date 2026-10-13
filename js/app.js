@@ -1252,7 +1252,8 @@ return `
 <canvas id="scanner-canvas"></canvas>
 <div class="scanner-cadre"></div>
 <button class="scanner-fermer" data-action="fermer-scanner" title="Fermer">✕</button>
-<div class="scanner-consigne">Placez le QR code dans le cadre<br><span style="font-weight:500;opacity:.9;">Restez à 15-20 cm : s'il est flou, éloignez le téléphone · touchez l'écran pour refaire la netteté</span></div>
+<button class="scanner-photo" data-action="scanner-photo" type="button">📷 Prendre une photo</button>
+<div class="scanner-consigne">Placez le QR code dans le cadre<br><span style="font-weight:500;opacity:.9;">Image floue ? Touchez « Prendre une photo » : l'appareil photo du téléphone fait la mise au point</span></div>
 ${scannerState.erreur ? `<div class="scanner-erreur">${esc(scannerState.erreur)}</div>` : ''}
 </div>`;
 }
@@ -1319,16 +1320,6 @@ if(caps && caps.focusMode && caps.focusMode.includes('continuous')){
 await piste.applyConstraints({ advanced:[{ focusMode:'continuous' }] });
 }
 }catch(e){ /* réglage non supporté : on garde celui du navigateur */ }
-// Zoom x2 quand la caméra l'expose : on peut ainsi rester à 15-20 cm de
-// l'étiquette (distance minimale de mise au point) et voir le QR assez grand.
-try{
-const piste = stream.getVideoTracks()[0];
-const caps = piste && piste.getCapabilities ? piste.getCapabilities() : null;
-if(caps && caps.zoom && caps.zoom.max > 1){
-const cible = Math.min(caps.zoom.max, Math.max(caps.zoom.min || 1, 2));
-await piste.applyConstraints({ advanced:[{ zoom:cible }] });
-}
-}catch(e){ /* zoom non supporté : sans effet */ }
 }
 
 // Un appui sur l'image relance la mise au point (là où c'est supporté).
@@ -1417,6 +1408,64 @@ return;
 scannerState.raf = requestAnimationFrame(boucle);
 }
 scannerState.raf = requestAnimationFrame(boucle);
+}
+
+// Secours quand la caméra en direct ne fait pas la mise au point (certains
+// Android sous Chrome) : on ouvre l'appareil photo natif du téléphone, qui fait
+// une vraie mise au point, puis on lit le QR sur la photo prise.
+function ouvrirPhotoScanner(){
+document.querySelectorAll('input[data-scanner-photo]').forEach(x => x.remove());
+fermerScanner(); // libère la caméra en direct avant d'ouvrir l'appareil photo
+const inp = document.createElement('input');
+inp.type = 'file'; inp.accept = 'image/*'; inp.setAttribute('capture', 'environment');
+inp.setAttribute('data-scanner-photo', '1');
+inp.style.display = 'none';
+document.body.appendChild(inp);
+inp.addEventListener('change', async () => {
+const f = inp.files && inp.files[0];
+inp.remove();
+if(!f) return;
+try{
+const texte = await decoderQrDepuisPhoto(f);
+const brut = (texte || '').trim();
+const idx = brut.indexOf('#');
+const chemin = idx !== -1 ? brut.slice(idx + 1) : brut;
+if(!brut){ toast("QR code non lu sur la photo. Reprenez-la bien nette, le QR bien visible.", 'erreur'); return; }
+if(!/^WTE-ORDI:[0-9a-f]{20,}$/i.test(brut) && !/^\/(p|equip)\//.test(chemin)){
+toast("Ce QR code ne correspond pas à un équipement WiTracEQUIP.", 'erreur'); return;
+}
+traiterResultatScan(brut);
+}catch(e){
+toast("Photo illisible : " + (e.message || e), 'erreur');
+}
+});
+inp.click();
+}
+
+async function decoderQrDepuisPhoto(fichier){
+if(typeof jsQR === 'undefined') throw new Error("le lecteur de QR code n'est pas chargé");
+const url = URL.createObjectURL(fichier);
+try{
+const img = await new Promise((ok, ko) => {
+const i = new Image();
+i.onload = () => ok(i);
+i.onerror = () => ko(new Error('image illisible'));
+i.src = url;
+});
+const canvas = document.createElement('canvas');
+const ctx = canvas.getContext('2d', { willReadFrequently:true });
+// Plusieurs tailles : une photo très grande ou très petite se lit parfois mieux réduite.
+for(const max of [1600, 1000, 600]){
+const echelle = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight));
+canvas.width = Math.max(1, Math.round(img.naturalWidth * echelle));
+canvas.height = Math.max(1, Math.round(img.naturalHeight * echelle));
+ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+const data = ctx.getImageData(0, 0, canvas.width, canvas.height);
+const r = jsQR(data.data, data.width, data.height, { inversionAttempts:'attemptBoth' });
+if(r && r.data) return r.data;
+}
+return null;
+}finally{ URL.revokeObjectURL(url); }
 }
 
 // Un QR WiTracEQUIP encode toujours .../#/p/<jeton> (ou plus rarement
@@ -3043,6 +3092,7 @@ else if(action === 'reprendre-mobile'){ actionReprendreMobile(); }
 else if(action === 'rendre-main-telephone'){ actionRendreMainTelephone(); }
 else if(action === 'fermer-scanner'){ fermerScanner(); }
 else if(action === 'scanner-focus'){ refaireMiseAuPointScanner(); }
+else if(action === 'scanner-photo'){ ouvrirPhotoScanner(); }
 else if(action === 'connexion-depuis-scan'){ connexionDepuisScan(); }
 else if(action === 'vitrine-connexion'){ state.authError = ''; state.authNotice = ''; nav('/connexion'); window.scrollTo(0,0); }
 else if(action === 'vitrine-retour'){ nav('/'); window.scrollTo(0,0); }
