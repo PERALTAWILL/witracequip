@@ -1247,12 +1247,12 @@ return `
 
 function renderScannerOverlay(){
 return `
-<div class="scanner-overlay">
+<div class="scanner-overlay" data-action="scanner-focus">
 <video id="scanner-video" playsinline muted autoplay></video>
 <canvas id="scanner-canvas"></canvas>
 <div class="scanner-cadre"></div>
 <button class="scanner-fermer" data-action="fermer-scanner" title="Fermer">✕</button>
-<div class="scanner-consigne">Cadrez le QR code de l'équipement</div>
+<div class="scanner-consigne">Cadrez le QR code de l'équipement<br><span style="font-weight:500;opacity:.85;">Gardez 10 à 15 cm · touchez l'écran pour refaire la mise au point</span></div>
 ${scannerState.erreur ? `<div class="scanner-erreur">${esc(scannerState.erreur)}</div>` : ''}
 </div>`;
 }
@@ -1280,10 +1280,23 @@ scannerState.busy = true; scannerState.erreur = ''; scannerState.ouvert = true;
 render();
 
 try{
-const stream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:{ ideal:'environment' } }, audio:false });
+// Sans consigne de résolution, beaucoup de téléphones donnent un flux 640×480
+// étiré plein écran (image floue, petit QR illisible) : on demande du Full HD.
+let stream;
+try{
+stream = await navigator.mediaDevices.getUserMedia({
+video:{ facingMode:{ ideal:'environment' }, width:{ ideal:1920 }, height:{ ideal:1080 } },
+audio:false
+});
+}catch(err){
+// Caméra qui refuse les contraintes : on retente avec le réglage minimal.
+if(/NotAllowedError|Permission denied/i.test(err.name || err.message || '')) throw err;
+stream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:{ ideal:'environment' } }, audio:false });
+}
 scannerState.busy = false;
 if(!scannerState.ouvert){ stream.getTracks().forEach(t=>t.stop()); return; } // fermé pendant l'attente
 scannerState.stream = stream;
+await regleMiseAuPointScanner(stream);
 render();
 }catch(e){
 scannerState.busy = false;
@@ -1293,6 +1306,34 @@ scannerState.erreur = /NotAllowedError|Permission denied/i.test(e.name || e.mess
 : "Impossible d'accéder à la caméra : " + (e.message || e.name || 'erreur inconnue');
 render();
 }
+}
+
+// Mise au point automatique en continu quand la caméra le permet (Chrome
+// Android surtout) : indispensable pour une petite étiquette tenue près de
+// l'objectif. Sans effet, et sans erreur, sur les navigateurs qui ne l'exposent pas.
+async function regleMiseAuPointScanner(stream){
+try{
+const piste = stream.getVideoTracks()[0];
+const caps = piste && piste.getCapabilities ? piste.getCapabilities() : null;
+if(caps && caps.focusMode && caps.focusMode.includes('continuous')){
+await piste.applyConstraints({ advanced:[{ focusMode:'continuous' }] });
+}
+}catch(e){ /* réglage non supporté : on garde celui du navigateur */ }
+}
+
+// Un appui sur l'image relance la mise au point (là où c'est supporté).
+async function refaireMiseAuPointScanner(){
+try{
+const piste = scannerState.stream && scannerState.stream.getVideoTracks()[0];
+const caps = piste && piste.getCapabilities ? piste.getCapabilities() : null;
+if(!caps || !caps.focusMode) return;
+if(caps.focusMode.includes('single-shot')){
+await piste.applyConstraints({ advanced:[{ focusMode:'single-shot' }] });
+}
+if(caps.focusMode.includes('continuous')){
+await piste.applyConstraints({ advanced:[{ focusMode:'continuous' }] });
+}
+}catch(e){ /* non supporté */ }
 }
 
 function fermerScanner(){
@@ -1334,13 +1375,24 @@ if(scannerState.raf) return; // la boucle de décodage tourne déjà
 
 const ctx = canvas.getContext('2d', { willReadFrequently:true });
 
+let dernierDecodage = 0;
 function boucle(){
 if(!scannerState.ouvert || !scannerState.stream){ scannerState.raf = null; return; }
 
+// ~8 décodages par seconde suffisent et ménagent la batterie en Full HD.
+const maintenant = performance.now();
+if(maintenant - dernierDecodage < 120){ scannerState.raf = requestAnimationFrame(boucle); return; }
+
 if(video.readyState >= video.HAVE_ENOUGH_DATA && video.videoWidth){
-canvas.width = video.videoWidth;
-canvas.height = video.videoHeight;
-ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+dernierDecodage = maintenant;
+// On ne décode que la zone centrale (là où l'utilisateur cadre le QR) :
+// plus rapide qu'une image entière en Full HD, donc plus d'essais par seconde.
+const vw = video.videoWidth, vh = video.videoHeight;
+const cote = Math.floor(Math.min(vw, vh) * 0.9);
+const sx = Math.floor((vw - cote) / 2), sy = Math.floor((vh - cote) / 2);
+canvas.width = cote;
+canvas.height = cote;
+ctx.drawImage(video, sx, sy, cote, cote, 0, 0, cote, cote);
 let resultat = null;
 try{
 const image = ctx.getImageData(0, 0, canvas.width, canvas.height);
@@ -2980,6 +3032,7 @@ else if(action === 'poste-nouveau-code'){ nouveauCodeOrdinateur(); }
 else if(action === 'reprendre-mobile'){ actionReprendreMobile(); }
 else if(action === 'rendre-main-telephone'){ actionRendreMainTelephone(); }
 else if(action === 'fermer-scanner'){ fermerScanner(); }
+else if(action === 'scanner-focus'){ refaireMiseAuPointScanner(); }
 else if(action === 'connexion-depuis-scan'){ connexionDepuisScan(); }
 else if(action === 'vitrine-connexion'){ state.authError = ''; state.authNotice = ''; nav('/connexion'); window.scrollTo(0,0); }
 else if(action === 'vitrine-retour'){ nav('/'); window.scrollTo(0,0); }
