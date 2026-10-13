@@ -1252,7 +1252,7 @@ return `
 <canvas id="scanner-canvas"></canvas>
 <div class="scanner-cadre"></div>
 <button class="scanner-fermer" data-action="fermer-scanner" title="Fermer">✕</button>
-<div class="scanner-consigne">Cadrez le QR code de l'équipement<br><span style="font-weight:500;opacity:.85;">Gardez 10 à 15 cm · touchez l'écran pour refaire la mise au point</span></div>
+<div class="scanner-consigne">Placez le QR code dans le cadre<br><span style="font-weight:500;opacity:.9;">Restez à 15-20 cm : s'il est flou, éloignez le téléphone · touchez l'écran pour refaire la netteté</span></div>
 ${scannerState.erreur ? `<div class="scanner-erreur">${esc(scannerState.erreur)}</div>` : ''}
 </div>`;
 }
@@ -1319,6 +1319,16 @@ if(caps && caps.focusMode && caps.focusMode.includes('continuous')){
 await piste.applyConstraints({ advanced:[{ focusMode:'continuous' }] });
 }
 }catch(e){ /* réglage non supporté : on garde celui du navigateur */ }
+// Zoom x2 quand la caméra l'expose : on peut ainsi rester à 15-20 cm de
+// l'étiquette (distance minimale de mise au point) et voir le QR assez grand.
+try{
+const piste = stream.getVideoTracks()[0];
+const caps = piste && piste.getCapabilities ? piste.getCapabilities() : null;
+if(caps && caps.zoom && caps.zoom.max > 1){
+const cible = Math.min(caps.zoom.max, Math.max(caps.zoom.min || 1, 2));
+await piste.applyConstraints({ advanced:[{ zoom:cible }] });
+}
+}catch(e){ /* zoom non supporté : sans effet */ }
 }
 
 // Un appui sur l'image relance la mise au point (là où c'est supporté).
