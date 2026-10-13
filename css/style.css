@@ -317,14 +317,14 @@ position:fixed; inset:0; z-index:200; background:#000;
 display:flex; align-items:center; justify-content:center; overflow:hidden;
 }
 .scanner-overlay video{
-position:absolute; inset:0; width:100%; height:100%; object-fit:cover;
+position:absolute; inset:0; width:100%; height:100%; object-fit:contain;
 background:#000;
 }
 .scanner-overlay canvas{ display:none; }
 .scanner-cadre{
 position:relative; width:min(72vw, 280px); height:min(72vw, 280px);
 border:3px solid rgba(255,255,255,.85); border-radius:20px;
-box-shadow:0 0 0 2000px rgba(0,0,0,.45);
+box-shadow:0 0 0 2000px rgba(0,0,0,.28);
 }
 .scanner-fermer{
 position:absolute; top:max(16px, env(safe-area-inset-top)); right:16px; z-index:1;
