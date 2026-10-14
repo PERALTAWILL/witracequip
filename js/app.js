@@ -1284,7 +1284,23 @@ render();
 try{
 // Sans consigne de résolution, beaucoup de téléphones donnent un flux 640×480
 // étiré plein écran (image floue, petit QR illisible) : on demande du Full HD.
-let stream;
+let stream = null;
+// Caméra choisie auparavant sur ce téléphone (bouton « Changer de caméra ») :
+// on la rouvre directement, sans que la personne ait à la rechoisir.
+const memo = cameraMemoriseeScanner();
+if(memo){
+try{
+stream = await navigator.mediaDevices.getUserMedia({
+video:{ deviceId:{ exact:memo }, width:{ ideal:1920 }, height:{ ideal:1080 } },
+audio:false
+});
+}catch(err){
+if(/NotAllowedError|Permission denied/i.test(err.name || err.message || '')) throw err;
+oublierCameraScanner(); // caméra introuvable (données effacées…) : on repart du choix par défaut
+stream = null;
+}
+}
+if(!stream){
 try{
 stream = await navigator.mediaDevices.getUserMedia({
 video:{ facingMode:{ ideal:'environment' }, width:{ ideal:1920 }, height:{ ideal:1080 } },
@@ -1294,6 +1310,7 @@ audio:false
 // Caméra qui refuse les contraintes : on retente avec le réglage minimal.
 if(/NotAllowedError|Permission denied/i.test(err.name || err.message || '')) throw err;
 stream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:{ ideal:'environment' } }, audio:false });
+}
 }
 scannerState.busy = false;
 if(!scannerState.ouvert){ stream.getTracks().forEach(t=>t.stop()); return; } // fermé pendant l'attente
@@ -1348,6 +1365,12 @@ scannerState.camIdx = i >= 0 ? i : 0;
 }catch(e){ scannerState.cameras = []; scannerState.camIdx = 0; }
 }
 
+// Mémoire de la caméra choisie, propre à ce téléphone (stockage local du navigateur).
+const CLE_CAMERA_SCANNER = 'wte-camera-scanner';
+function cameraMemoriseeScanner(){ try{ return localStorage.getItem(CLE_CAMERA_SCANNER) || ''; }catch(e){ return ''; } }
+function memoriserCameraScanner(id){ try{ if(id) localStorage.setItem(CLE_CAMERA_SCANNER, id); }catch(e){ /* stockage indisponible */ } }
+function oublierCameraScanner(){ try{ localStorage.removeItem(CLE_CAMERA_SCANNER); }catch(e){ /* stockage indisponible */ } }
+
 async function changerCameraScanner(){
 const cams = scannerState.cameras || [];
 if(cams.length < 2 || scannerState.busy || !scannerState.ouvert) return;
@@ -1366,6 +1389,7 @@ audio:false
 scannerState.busy = false;
 if(!scannerState.ouvert){ stream.getTracks().forEach(t => t.stop()); return; }
 scannerState.stream = stream;
+memoriserCameraScanner(cams[scannerState.camIdx].deviceId); // choix retenu pour la prochaine ouverture
 await regleMiseAuPointScanner(stream);
 render();
 }catch(e){
