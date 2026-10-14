@@ -16,11 +16,15 @@ state.profile = retry.data;
 } else {
 state.profile = profile;
 }
-const { data: org } = await sb.from('organizations').select('nom').eq('id', state.profile.organization_id).maybeSingle();
-state.orgName = org?.nom || '';
-// Thème de couleur : lu à part pour que la connexion ne dépende jamais de la colonne
+// Nom de l'organisation et thème de couleur ne dépendent que du profil déjà lu :
+// on les demande en même temps (un seul aller-retour réseau au lieu de deux).
+// Thème lu à part pour que la connexion ne dépende jamais de la colonne
 // (tant que le script SQL 10-theme n'est pas passé, tout continue de marcher en local).
-try{ await synchroniserTheme(); }catch(e){}
+const [resOrg] = await Promise.all([
+sb.from('organizations').select('nom').eq('id', state.profile.organization_id).maybeSingle(),
+(async () => { try{ await synchroniserTheme(); }catch(e){} })()
+]);
+state.orgName = resOrg.data?.nom || '';
 }
 
 /* --- Thème de couleur : mémorisé dans le profil pour suivre la personne --- */
@@ -276,12 +280,17 @@ return state.modeleCle ? tous.filter(m => m.cle === state.modeleCle) : [];
 }
 
 async function chargerModeles(){
-const { data, error } = await sb.from('modeles_metiers').select('cle, nom, description, types, ordre').order('ordre').order('nom');
-if(error) throw error;
-state.modeles = data || [];
-if(!state.superAdmin){
-try{ const r = await sb.rpc('mon_modele_cle'); state.modeleCle = r.error ? null : (r.data || null); }
-catch(e){ state.modeleCle = null; }
+// La liste des modèles et le modèle attribué à ce client sont indépendants :
+// demandés en même temps (un seul aller-retour réseau au lieu de deux).
+const clientSimple = !state.superAdmin;
+const [resListe, resCle] = await Promise.all([
+sb.from('modeles_metiers').select('cle, nom, description, types, ordre').order('ordre').order('nom'),
+clientSimple ? sb.rpc('mon_modele_cle').then(r => r, () => null) : Promise.resolve(null)
+]);
+if(resListe.error) throw resListe.error;
+state.modeles = resListe.data || [];
+if(clientSimple){
+state.modeleCle = (resCle && !resCle.error) ? (resCle.data || null) : null;
 }
 return state.modeles;
 }
