@@ -3721,10 +3721,17 @@ posteState = { ...posteStateInitial(), mode: lien === 'ordinateur_ok' ? 'ordinat
 if(lien === 'ordinateur_ok') demarrerMinuteurOrdinateur();
 }
 try{
-await loadProfileAndOrg();
-await chargerStatutSuperAdmin();
-await loadTypes(true);
-try{ await chargerModeles(); }catch(err){ console.error('[modèles]', err); }
+// Le profil et le statut super-admin sont indépendants : demandés en même temps.
+// allSettled (et non all) : on attend les DEUX réponses avant de réagir à une erreur,
+// pour qu'une réponse tardive ne vienne pas écraser l'état de secours hors-ligne.
+const [rProfil, rSuper] = await Promise.allSettled([loadProfileAndOrg(), chargerStatutSuperAdmin()]);
+if(rProfil.status === 'rejected') throw rProfil.reason;
+if(rSuper.status === 'rejected') throw rSuper.reason;
+// Types et modèles dépendent des deux résultats ci-dessus, mais pas l'un de l'autre.
+await Promise.all([
+loadTypes(true),
+chargerModeles().catch(err => { console.error('[modèles]', err); })
+]);
 state.horsLigne = false;
 sauverInstantane({ profile: state.profile, orgName: state.orgName, superAdmin: state.superAdmin, types: state.types, modeles: state.modeles, modeleCle: state.modeleCle });
 if(state.profile?.mdp_a_changer) setTimeout(imposerNouveauMotDePasse, 400);
